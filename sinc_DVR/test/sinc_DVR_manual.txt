@@ -1,0 +1,72 @@
+Manual for the program sinc_DVR
+
+This program calculates the vibrational frequencies of a one dimensional problem using the sinc DVR method.
+
+
+How to compile the program
+******************************
+
+We need a fortran 90 compiler like pgf90. All necessary subroutines are included except blas and lapack. See makefile. 
+
+
+How to run the program
+*****************************
+we need:
+
+1) inputfile (sinc_DVR.inp in this example)
+2) file with potential energy surface (initial_PES_spline.dat in this example)
+
+
+run it like
+
+sinc_DVR < sinc_DVR.inp > out
+
+ 
+Main input file (sinc_DVR.inp)
+***********************************
+the input file is read like:
+
+  read(5,*) pes_file
+  read(5,*) npoints_in
+  read(5,*) nstates, dvr_start, dx 
+  read(5,*) my
+
+  ! pes_file: the file with the potential energy surface, in Angstroms and Hartree units
+  ! npoints_in; the number of points in pes_file
+  ! nstates: the number of dvr points, and the number of eigenstates
+  ! dvr_start: the atarting dvr point, in Angstroms
+  ! dx: the spacing betwen dvr points, in Angstroms
+  ! my: reduced mass, in atomic units
+
+
+Other Input files
+***********************************
+
+The pes_file is read like this
+
+  do i=1,npoints_in
+     read(10,*) x_in(i), E_in(i)
+  end do
+
+x_in: position [A]
+E_in: energy [Hartree]
+
+Example:
+**************
+sinc_DVR.inp:
+
+initial_PES_spline.dat
+295
+295 0.8 0.1
+0.972222222222222
+
+
+output looks like following:
+
+qcllx22:~/fortranfiler/Wave_packet_dynamics/sinc_DVR/test$ ../sinc_DVR < sinc_DVR.inp
+ solve_sinc_dvr: nstates=          295
+ Inital state fundamental    2843.422112866562     
+ 1:st overtone    2716.280104973991     
+ 2:nd overtone    2664.705269465597     
+ 3:rd overtone    2680.217913388421     
+

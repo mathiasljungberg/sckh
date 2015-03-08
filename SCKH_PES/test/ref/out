@@ -1,0 +1,31 @@
+ projvector            1  -6.2084971723250861E-002  -0.8086276317086075      
+   0.5850357335440732     
+ projvector            2  -1.1378998262000384E-002  -0.5855549105638137      
+  -0.8105528761981894     
+ projvector            3   0.9980060090593996       -5.6980000517235965E-002 
+   2.7153000246481360E-002
+ gamma_FWHM (fwhm of lorentzian broadening)   0.1800000000000000     
+ gamma_FWHM_2 (fwhm of lorentzian broadening)   0.1800000000000000     
+ gamma (hwhm of lorentzian broadening)   9.0000000000000000E-002
+ gamma (hwhm of lorentzian broadening)   9.0000000000000000E-002
+ ntsteps          161
+ tstep   0.2500000000000000     
+ time_l   4.0000000000000027E-014
+ ntsteps_pad          256 = 2 **            8
+ time_l2 (padded time)   6.3750000000000018E-014
+
+ Fundamental frequency resolution   0.1033916900385040     
+ Padded frequency resolution   6.4873217279061324E-002
+ new delta t   2.5000000000000018E-016
+ max freq    8.271335203080319     
+ Semi-Classical Kramers-Heisenberg
+ E_fn_mean   -529.2254399151625     
+ Computed trajectory            1
+ Semi-Classical Kramers-Heisenberg
+ E_fn_mean   -529.2254399151625     
+ Computed trajectory            2
+ Semi-Classical Kramers-Heisenberg
+ E_fn_mean   -529.2254399151625     
+ Computed trajectory            3
+
+ Averaged over            3 trajectories
