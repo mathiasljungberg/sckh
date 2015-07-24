@@ -51,8 +51,8 @@ contains
         do k =1,nstates
           !p = 2.0_wp * const % pi * (k-1) / (dx*nstates) 
           !r_diff = (i-j) !dx * (i-j)
-          H_mat(i,j) =  H_mat(i,j) + exp( dcmplx(0,2* const % pi * (i-j)*(k-1) / nstates)) * &
-               ((k-1)**2) * (hbar**2/ (2.0_wp * mu)) * (2*const % pi)**2 / (dx * nstates)**3 
+          H_mat(i,j) =  H_mat(i,j) + exp( dcmplx(0,2.0_wp * const % pi * (i-j) * (k-1) / nstates)) * &
+               ((k-1)**2) * (hbar**2/ (2.0_wp * mu)) * (2.0_wp * const % pi)**2 / (dx * nstates)**3 
           !write(6,*) exp( dcmplx(0,r_diff * p)) * &
           !     (-p**2) * (-hbar**2)/ (2.0_wp * mu) / nstates
 
@@ -63,7 +63,7 @@ contains
     eigval =0.0_wp
     call zHermitianEigen(H_mat, eigval, eigvec)
     
-    !write(6,*)
+    write(6,*) eigval * const % cm 
 
   end subroutine solve_fourier_grid
 
