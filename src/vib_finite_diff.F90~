@@ -1,0 +1,22 @@
+program vib_finite_diff
+  implicit none 
+
+  ! input/output
+  character(75)::inputfile,outputfile
+  integer::nin,npoints,nstates
+  real(kind=wp), dimension(:),allocatable:: x,y
+
+  ! loop variables
+  integer::i,j
+
+  real(kind=wp)::mu_in
+  
+  ! read from standard input
+  read(5,*) inputfile
+  read(5,*) outputfile
+  read(5,*) nin, npoints, nstates
+  read(5,*) mu_in
+  
+
+
+end program vib_finite_diff
