@@ -1,0 +1,105 @@
+program sinc_DVR
+  use parameters
+  use KH_functions
+  use spline_m
+  implicit none
+
+  ! input/output
+  character(80)::pes_file, outfile
+  real(kind=wp):: my, dvr_start, dx
+  integer::npoints_in, nstates
+
+  ! loop variables
+  integer::i,ii
+
+  ! other variables
+  integer:: npoints
+  real(kind=wp):: my_SI
+  real(kind=wp), dimension(:), allocatable:: X_dvr, x_in, E_in,eig_i,x_pot, E_pot
+  real(kind=wp), dimension(:,:), allocatable:: c_i
+
+
+  !
+  ! This progam calculates the frequencies and eigenfunctions of a sinc DVR
+  !
+
+  !
+  ! read input
+  !*******************************************************************
+  !
+  read(5,*) pes_file
+  read(5,*) npoints_in
+  read(5,*) nstates, dvr_start, dx 
+  read(5,*) outfile
+  read(5,*) my
+
+
+  allocate(X_dvr(nstates), x_in(npoints_in), E_in(npoints_in), eig_i(nstates), c_i(nstates,nstates))
+  allocate(x_pot(nstates), E_pot(nstates))
+
+  !
+  ! set up DVR points
+  !
+
+  if (mod(nstates,2).ne.1 ) then
+     write(6,*) "nstates must be an odd number"
+     stop
+  end if
+
+  npoints = (nstates-1)/2
+  my_SI = my * amu
+  dvr_start = dvr_start * 1.0d-10
+  dx = dx * 1.0d-10
+  
+  do i = -npoints,npoints
+     ii = i + npoints +1
+     X_dvr(ii) = (ii-1)*dx + dvr_start
+  end do
+
+  !
+  ! read pes from file
+  !
+
+  !initial state
+  open(10,file=pes_file,status='unknown')
+
+  do i=1,npoints_in
+     read(10,*) x_in(i), E_in(i)
+     
+     ! check that the points match the DVR points
+     !if (abs(x(i)*1.0d-10-X_dvr(i)) .gt. 1.d-13) then
+     !   write(6,*) "i point x(", i, ")=",x(i),"does not match the DVR point X_dvr(",i,")=",X_dvr(i) 
+     !end if
+  end do
+  
+  close(10) 
+  
+  ! use SI units
+  x_in = x_in*1d-10
+  E_in = E_in *hartree
+  
+  if(X_dvr(1).lt.x_in(1)) then
+     write(6,*) "dvr point lower than supplied potential range!"
+     stop
+  end if
+  if(X_dvr(nstates).gt.x_in(npoints_in)) then
+     write(6,*) "dvr point higher than supplied potential range!"
+     stop
+  end if
+  call spline_easy(x_in, E_in, npoints_in, x_pot, E_pot, nstates)
+    
+  !
+  ! Solve the vibrational problem for all eigenfunctions
+  !
+  
+  call solve_sinc_DVR(dx,my_SI, E_pot, c_i, eig_i)
+  
+  ! eV units
+  eig_i =eig_i /eV
+
+  ! write output
+  
+  write(6,*) "Inital state fundamental", (eig_i(2)-eig_i(1))*eV*cm
+  
+  
+end program sinc_DVR

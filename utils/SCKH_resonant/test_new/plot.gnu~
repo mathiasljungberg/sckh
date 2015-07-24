@@ -1,0 +1,27 @@
+
+d=1.0
+#set nokey
+
+plot [2000:2100] "spectrum_resonant_sc180.58.dat" u 1:($2)  w l\
+,"spectrum_resonant_sc190.70.dat" w l\
+,"spectrum_resonant_sc196.77.dat" w l\
+,"spectrum_resonant_sc199.30.dat" w l\
+,"spectrum_resonant_sc200.31.dat" w l\
+,"spectrum_resonant_sc202.33.dat" w l\
+,"spectrum_resonant_sc203.34.dat" w l\
+,"spectrum_resonant_sc206.88.dat" w l\
+
+#,"" w l\
+
+#plot [2200:2400] "spectrum_resonant_sc208.56.dat" u 1:($2 - 1*d)  w l\
+#,"spectrum_resonant_sc207.54.dat" w l\
+#,"spectrum_resonant_sc205.51.dat" u 1:($2 + 1*d) w l\
+#,"spectrum_resonant_sc202.46.dat" u 1:($2 + 2**d) w l\
+#,"spectrum_resonant_sc200.42.dat" u 1:($2 + 3**d) w l\
+#,"spectrum_resonant_sc199.40.dat" u 1:($2 + 4**d) w l\
+#,"spectrum_resonant_sc196.86.dat" u 1:($2 + 5**d) w l\
+#,"spectrum_resonant_sc192.79.dat" u 1:($2 + 6**d) w l\
+#,"spectrum_resonant_sc188.72.dat" u 1:($2 + 7**d) w l\
+#,"spectrum_resonant_sc183.12.dat" u 1:($2 + 8**d) w l\
+##,"spectrum_resonant_sc261.99.dat" u 1:($2 + 8**d) w l\
+

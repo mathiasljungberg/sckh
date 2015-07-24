@@ -1,0 +1,974 @@
+module m_XAS_nonadiabatic
+  use parameters
+  use m_XAS_io
+  use KH_functions
+  use spline_m
+  !use qsort_c_module
+
+  implicit none
+
+contains
+
+subroutine calculate_XAS_nonadiabatic(inp)
+  type(input_params), intent(in):: inp
+
+  ! loop variables
+  integer::i,j,ii,jj,k,l,m
+
+  ! other variables
+  character(80):: file,string
+  real(kind=wp):: my_SI, dx,dvr_start, gamma, E_n_mean 
+  integer:: npoints, nstates_na 
+  real(kind=wp), dimension(:),allocatable:: X_dvr,E_i, eig_i, eig_na
+  real(kind=wp), dimension(:),allocatable::  sigma, omega
+  real(kind=wp), dimension(:,:),allocatable::  c_i, &
+       eig_f, E_f, sigma_states
+  real(kind=wp), dimension(:,:,:),allocatable:: c_f, dipole, D_fi, c_na
+  real(kind=wp), dimension(:,:,:,:),allocatable::  nac
+ 
+  ! test
+ !integer, dimension(:), allocatable:: sort_ind  
+ !real(kind=wp), dimension(:),allocatable:: eig_sort
+
+  !complex(kind=wp), dimension(:,:),allocatable:: 
+
+  !
+  ! This progam calculates the XAS cross section including non-adiabatic couplings
+  !
+
+  gamma = inp % gamma_FWHM /  2 
+  nstates_na = inp % npesfile_f *inp % nstates
+
+  ! allocate everything
+  allocate( X_dvr(inp % nstates), E_i(inp % nstates), &
+       E_f(inp % npesfile_f,inp % nstates), eig_i(inp % nstates), eig_f(inp % npesfile_f,inp % nstates))
+  allocate( omega(inp % n_omega), sigma(inp % n_omega) )
+  allocate(c_i(inp % nstates,inp % nstates),c_f(inp % npesfile_f,inp % nstates,inp % nstates) )
+  allocate(dipole(inp % npesfile_f, inp % nstates, 3), sigma_states(inp % npesfile_f,inp % n_omega))
+  allocate(D_fi(inp % npesfile_f,inp % nstates,3) )
+  
+  !if (inp % nonadiabatic .eq. 1) then
+     allocate(nac(inp % npesfile_f, inp % npesfile_f, inp % nstates, 2) )
+     allocate(eig_na(nstates_na), c_na(inp % npesfile_f, inp % nstates, nstates_na) )
+ ! end if
+
+  !test
+  !allocate(sort_ind(nstates_na), eig_sort(nstates_na))
+
+
+  if (mod(inp % nstates,2).ne.1 ) then
+     write(6,*) "nstates must be an odd number"
+   end if
+
+  npoints = (inp % nstates-1)/2
+  my_SI = inp % my * amu
+  dvr_start = inp % dvr_start_in * 1.0d-10
+  dx = inp % dx_in * 1.0d-10
+
+  !
+  ! set up DVR points
+  !
+
+  do i = -npoints,npoints
+     ii = i + npoints +1
+     X_dvr(ii) = (ii-1)*dx + dvr_start
+  end do
+
+  ! read PES files
+  call read_PES_file(inp % pes_file_i, inp % npoints_in, inp % nstates, X_dvr, E_i)
+  
+  do j=1,inp % npesfile_f
+     call read_PES_file(inp % pes_file_f(j), inp % npoints_in, inp % nstates, X_dvr, E_f(j,:))
+     call read_dipole_file(inp % dipolefile_f(j), inp % npoints_in, inp % nstates, X_dvr, dipole(j,:,:))
+  end do
+
+  if (inp % nonadiabatic .eq. 1) then
+     !call read_nac_file(inp % nac_file, inp % npoints_in, inp %nstates, X_dvr, inp % npesfile_f, nac)
+  end if
+
+  !create omega
+  call linspace(omega, inp % omega_start,inp % omega_end, inp % n_omega ) 
+
+  !
+  ! Solve the vibrational problem for all eigenfunctions
+  !
+
+
+  ! initial state
+  call solve_sinc_DVR(dx,my_SI, E_i, c_i, eig_i)
+  write(6,*) "Initial state fundamental", (eig_i(2) -eig_i(1))*cm
+
+  ! final states
+  do j=1,inp % npesfile_f
+     call solve_sinc_DVR(dx,my_SI, E_f(j,:), c_f(j,:,:), eig_f(j,:))
+     write(6,*) "Final state fundamental",j, (eig_f(j,2) -eig_f(j,1))*cm
+  end do
+
+  ! solve non-adiabatic problem
+  if (inp % nonadiabatic .eq. 1) then  
+     nac = 0.0_wp
+     nac(1,2,:,2) = 1d-19     
+     nac(2,1,:,2) = 1d-19     
+     call solve_non_adiabatic(eig_f, c_f, nac, eig_na, c_na)
+  end if
+
+  ! ! sort eigenvalues of f and put in eig_na to test if the diagonalization destroys num precision
+  ! do i=1, inp %npesfile_f
+  !    do j=1, inp % nstates
+  !       ii= (i-1)* inp % nstates +j
+  !       eig_sort(ii) = eig_f(i,j)
+  !    end do
+  ! end do
+  !
+  ! call qsort(eig_sort, sort_ind)
+  
+
+  ! should return the same eigenvalues as eig_f
+  !do i=1, nstates_na
+  !   !write(7,*) i, eig_f(1,i), eig_na(i)
+  !   write(7,*) i, c_na(1,i,1)
+  !end do
+
+  !do i=1, nstates_na
+  !   write(7,'(I5,G30.20 )') i, (eig_sort(i)- eig_na(i))/eV
+  !end do
+ 
+
+  !! print out coefficients
+  !
+  !do i=1, inp %npesfile_f
+  !   do j=1, inp % nstates
+  !      do k=1, nstates_na
+  !         write(8,*) i,j,k, c_na(i,j,k)
+  !      end do
+  !   end do
+  !end do
+
+
+  ! calculate transition dipoles
+  call calculate_dipoles_XAS( c_i, c_f, dipole, D_fi)
+
+  ! convert eigenvalues to eV units
+  eig_i =eig_i / eV
+  eig_f =eig_f / eV
+  eig_na =eig_na / eV
+
+  write(6,*) eig_i(1) -eig_f(1,1)
+
+  ! calculate spectrum
+  if (inp % nonadiabatic .eq. 1) then
+     call spectrum_XAS_nonadiabatic(eig_na, eig_i, c_na, D_fi, omega, sigma, sigma_states, gamma)
+  else
+     call spectrum_XAS(eig_f, eig_i, D_fi, omega, sigma, sigma_states, gamma)
+  end if
+
+  !
+  ! Write to files
+  ! 
+
+  ! write sigma to file
+  file="_sigma"
+  file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) // ".dat"
+
+  write(6,*) "Writing:  ", file
+  
+  open(10,file=file,status='unknown')
+  
+  do i=1,inp % n_omega
+     write(10,*) omega(i), sigma(i)
+  end do
+  
+  close(10) 
+
+  do j= 1,inp % npesfile_f
+     file="vib_eigenvalues_final_"
+     write(string,*) j
+     file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"     
+
+     open(10,file=file,status='unknown')
+
+     do i=1,inp % nstates
+        write(10,*) eig_f(j,i)
+     end do
+
+     write(10,*) 
+     write(10,*) 
+
+     close(10)
+  end do
+ 
+end subroutine calculate_XAS_nonadiabatic
+
+subroutine calculate_XES_nonadiabatic(inp)
+  type(input_params), intent(in):: inp 
+
+  ! loop variables
+  integer::i,j,ii,jj,k,l,m,t 
+
+  ! other variables
+  character(80):: file,string
+  real(kind=wp):: my_SI, dx,dvr_start, gamma, E_n_mean 
+  integer:: npoints 
+  real(kind=wp), dimension(:),allocatable:: X_dvr,E_i, E_n, E_lp_corr, eig_i, eig_n, shift
+  real(kind=wp), dimension(:),allocatable::  sigma, omega, D_ni
+  real(kind=wp), dimension(:,:),allocatable::  c_i, c_n, &
+       eig_f, E_f, sigma_states
+  real(kind=wp), dimension(:,:,:),allocatable:: c_f, dipole, D_fi
+  real(kind=wp), dimension(:,:,:,:),allocatable:: D_fn, nac
+  !complex(kind=wp), dimension(:,:),allocatable:: 
+
+  !
+  ! This progam calculates the XES cross section including non-adiabatic couplings
+  !
+
+  gamma = inp % gamma_FWHM /  2 
+
+  ! allocate everything
+  allocate( X_dvr(inp % nstates), E_i(inp % nstates), E_n(inp % nstates), E_lp_corr(inp % nstates), &
+       E_f(inp % npesfile_f,inp % nstates), eig_i(inp % nstates),eig_n(inp % nstates),eig_f(inp % npesfile_f,inp % nstates), &
+       shift(inp % nstates))
+  allocate( omega(inp % n_omega), sigma(inp % n_omega), D_ni(inp % nstates) )
+  allocate(c_i(inp % nstates,inp % nstates),c_f(inp % npesfile_f,inp % nstates,inp % nstates),c_n(inp % nstates,inp % nstates), &
+       D_fn(inp % npesfile_f,inp % nstates,inp % nstates,3))
+  allocate(dipole(inp % npesfile_f, inp % nstates, 3), sigma_states(inp % npesfile_f,inp % n_omega))
+  allocate(D_fi(inp % npesfile_f,inp % nstates,3) )
+  
+  if (inp % nonadiabatic .eq. 1) then
+     allocate(nac(inp % npesfile_f, inp % npesfile_f, inp % nstates, 2) )
+  end if
+
+  if (mod(inp % nstates,2).ne.1 ) then
+     write(6,*) "nstates must be an odd number"
+     stop
+  end if
+
+  npoints = (inp % nstates-1)/2
+  my_SI = inp % my * amu
+  dvr_start = inp % dvr_start_in * 1.0d-10
+  dx = inp % dx_in * 1.0d-10
+
+  !
+  ! set up DVR points
+  !
+
+  do i = -npoints,npoints
+     ii = i + npoints +1
+     X_dvr(ii) = (ii-1)*dx + dvr_start
+  end do
+
+  ! read PES files
+  call read_PES_file(inp % pes_file_i, inp % npoints_in, inp % nstates, X_dvr, E_i)
+  call read_PES_file(inp % pes_file_n, inp % npoints_in, inp % nstates, X_dvr, E_n)
+
+  do j=1,inp % npesfile_f
+     call read_PES_file(inp % pes_file_f(j), inp % npoints_in, inp % nstates, X_dvr, E_f(j,:))
+     call read_dipole_file(inp % dipolefile_f(j), inp % npoints_in, inp % nstates, X_dvr, dipole(j,:,:))
+  end do
+
+  if (inp % nonadiabatic .eq. 1) then
+     call read_nac_file(inp % nac_file, inp % npoints_in, inp %nstates, X_dvr, inp % npesfile_f, nac)
+  end if
+
+  ! Shift orbital energies so that E_f(1,:) have energies E_lp_corr
+  ! and the spacing between the intermediate and final states are preserved
+
+  if( inp % shift_PES .eq.  1) then
+     call read_PES_file(inp % pes_file_lp_corr, inp % npoints_in, inp % nstates, X_dvr, E_lp_corr)
+
+     shift = E_lp_corr -E_f(1,:) 
+
+     do j=1,inp % npesfile_f
+        E_f(j,:) = E_f(j,:) + shift
+     end do
+     write(6,*) "Shifted PES:s"
+  end if
+
+  !create omega
+  call linspace(omega, inp % omega_start,inp % omega_end, inp % n_omega ) 
+
+  !
+  ! Solve the vibrational problem for all eigenfunctions
+  !
+
+
+  ! initial state
+  call solve_sinc_DVR(dx,my_SI, E_i, c_i, eig_i)
+  write(6,*) "Initial state fundamental", (eig_i(2) -eig_i(1))*cm
+
+  ! intermediate state
+  call solve_sinc_DVR(dx,my_SI, E_n, c_n, eig_n)
+  write(6,*) "Intermediate state fundamental", (eig_n(2) -eig_n(1))*cm
+
+  ! final states
+  do j=1,inp % npesfile_f
+     call solve_sinc_DVR(dx,my_SI, E_f(j,:), c_f(j,:,:), eig_f(j,:))
+     write(6,*) "Final state fundamental",j, (eig_f(j,2) -eig_f(j,1))*cm
+  end do
+
+  ! solve non-adiabatic problem
+  !call solve_non_adiabatic(eig_f, c_f, eig_na, c_na)
+
+  ! calculate transition dipoles
+  call calculate_dipoles_XES( c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
+
+  ! convert eigenvalues to eV units
+  eig_i =eig_i / eV
+  eig_n =eig_n / eV
+  eig_f =eig_f / eV
+
+  write(6,*) eig_n(1) -eig_f(1,1)
+
+  ! calculate "mean energy" for intermediate state
+  E_n_mean = sum(eig_n(:) * D_ni(:) ** 2) 
+
+  write(6,*) "sum (D_ni(:)**2)", sum( D_ni(:) ** 2)
+  write(6,*) "E_n_mean", E_n_mean
+
+  ! calculate spectrum
+  if (inp % nonadiabatic .eq. 1) then
+     !call spectrum_XES_nonadiabatic(eig_na, eig_n, c_na, D_ni, D_fn, D_fi, omega, sigma, sigma_states)
+     stop
+  else
+     call spectrum_XES(eig_f, eig_n, D_ni, D_fn, D_fi, omega, sigma, sigma_states, gamma)
+  end if
+
+  !
+  ! Write to files
+  ! 
+
+  ! write sigma to file
+  file="_sigma"
+  file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) // ".dat"
+  
+  open(10,file=file,status='unknown')
+  
+  do i=1,inp % n_omega
+     write(10,*) omega(i), sigma(i)
+  end do
+  
+  close(10) 
+
+
+  !! write sigma_dir to file
+  !
+  !file="_sigma_direct"
+  !file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) //  ".dat"
+  !
+  !!write(string,*) i
+  !!file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+  !
+  !open(10,file=file,status='unknown')
+  !
+  !do i=1,inp % n_omega
+  !   write(10,*) omega(i), sigma_dir(i)
+  !end do
+  !
+  !close(10)
+  !
+  !! write sigma_max_int to file
+  !file="sigma_max_int"
+  !file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) //  ".dat"
+  !
+  !open(10,file=file,status='unknown')
+  !
+  !do i=1,inp % n_omega
+  !   write(10,*) omega(i), sigma_max_int(i)
+  !end do
+  !
+  !close(10)
+  !
+  !! write sigma_states
+  !do j= 1,inp % npesfile_f
+  !   file="_sigma_states_"
+  !   write(string,*) j
+  !   file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+  !
+  !   open(10,file=file,status='unknown')
+  !
+  !   do i=1,inp % n_omega
+  !      write(10,*) omega(i), sigma_states(j,i)
+  !   end do
+  !
+  !   close(10)
+  !end do
+  !
+  !! write sigma_dir_states
+  !do j= 1,inp % npesfile_f
+  !   file="_sigma_dir_states_"
+  !   write(string,*) j
+  !   file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+  !
+  !   open(10,file=file,status='unknown')
+  !
+  !   do i=1,inp % n_omega
+  !      write(10,*) omega(i), sigma_dir_states(j,i)
+  !   end do
+  !
+  !   close(10)
+  !end do
+  !
+  !! write sigma_max_int_states
+  !do j= 1,inp % npesfile_f
+  !   file="_sigma_max_int_states_"
+  !   write(string,*) j
+  !   file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+  !
+  !   open(10,file=file,status='unknown')
+  !
+  !   do i=1,inp % n_omega
+  !      write(10,*) omega(i), sigma_max_int_states(j,i)
+  !   end do
+  !
+  !   close(10)
+  !end do
+  !
+  !! write vibrational eigenvalues
+  !file="_vib_eigenvalues_initial"
+  !file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) //  ".dat"
+  !
+  !open(10,file=file,status='unknown')
+  !do i=1,inp % nstates
+  !   write(10,*) eig_i(i), 1 ,10
+  !end do
+  !close(10)
+  !
+  !file="_vib_eigenvalues_intermediate"
+  !file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) //  ".dat"
+  !
+  !open(10,file=file,status='unknown')
+  !do i=1,inp % nstates
+  !   write(10,*) eig_n(i), 1 , D_ni(i)
+  !end do
+  !close(10)
+
+
+  !! a lot of output disabled
+  !if (0) then
+  !   
+  !   do j= 1,inp % npesfile_f
+  !      file="_vib_eigenvalues_final_"
+  !      write(string,*) j
+  !      file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"     
+  !      
+  !      open(10,file=file,status='unknown')
+  !      
+  !      do i=1,inp % nstates
+  !         write(10,*) eig_f(j,i), 1, 10
+  !      end do
+  !      
+  !      close(10)
+  !   end do
+  !   
+  !
+  !
+  !   ! write transition moments
+  !   file="_transition_moments_i_to_n"
+  !   file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) //  ".dat"
+  !   
+  !   open(10,file=file,status='unknown')
+  !   do i=1,inp % nstates
+  !      write(10,*) D_ni(i)
+  !   end do
+  !   close(10)
+  !   
+  !   !file="transition_moments_n_to_f"
+  !   !do i=1,inp % npesfile_f
+  !   !   do j=1,inp % nstates ! final
+  !   !      do k=1,inp % nstates ! intermediate
+  !   !         do l=1,3
+  !   !            D_fn(i,j,k,l) = sum(dipole(i,:,l) * c_f(i,:,j) * c_n(:,k))   ! true dipole moment
+  !   !         end do
+  !   !      end do
+  !   !   end do
+  !   !end  do
+  !        
+  !
+  !
+  !   ! write transition energies for the 10 first intermediate states
+  !   do j= 1,10
+  !      file="_delta_e_lp_"
+  !      write(string,*) j
+  !      file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"     
+  !      
+  !      open(10,file=file,status='unknown')
+  !      
+  !      do i=1,inp % nstates
+  !         write(10,*) delta_e_lp(j,i)
+  !      end do
+  !      close(10)
+  !   end do
+  !   
+  !end if
+  !
+  !! write vibrational eigenfucntions, normally disabled
+  !if(0) then 
+  !
+  !   file="_vib_eigenfunctions_initial"
+  !   file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) //  ".dat"     
+  !
+  !   open(10,file=file,status='unknown')
+  !   do i=1,inp % nstates
+  !      do j=1,inp % nstates
+  !         write(10,*) X_dvr(j), c_i(j,i)
+  !      end do
+  !      write(10,*) 
+  !      write(10,*) 
+  !   end do
+  !   close(10)
+  !
+  !   file="_vib_eigenfunctions_intermediate"
+  !   file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) //  ".dat"
+  !
+  !  open(10,file=file,status='unknown')
+  !   do i=1,inp % nstates
+  !      do j=1,inp % nstates
+  !         write(10,*) X_dvr(j), c_n(j,i)
+  !      end do
+  !      write(10,*) 
+  !      write(10,*) 
+  !   end do
+  !   close(10)
+  !
+  !   ! write 10 first eigenfunctions to seprate files
+  !   do i=1,10
+  !      file="_vib_eigenfunctions_intermediate_"
+  !      write(string,*) i
+  !      file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"     
+  !      
+  !      open(10,file=file,status='unknown')
+  !
+  !      do j=1,inp % nstates
+  !         write(10,*) X_dvr(j), c_n(j,i)
+  !      end do
+  !      write(10,*)
+  !      write(10,*)
+  !      close(10)
+  !   end do! i
+  !
+  !   ! write 10 first eigenfunctions of first final state to separate files
+  !   do i=1,10
+  !      file="_vib_eigenfunctions_final_1_"
+  !      write(string,*) i
+  !      file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"     
+  !
+  !      open(10,file=file,status='unknown')
+  !
+  !      do j=1,inp % nstates
+  !         write(10,*) X_dvr(j), c_f(1,j,i)
+  !      end do
+  !      write(10,*)
+  !      write(10,*)
+  !      close(10)
+  !   end do
+  !
+  !   do k= 1,inp % npesfile_f
+  !      file="_vib_eigenfunctions_final_"
+  !      write(string,*) k
+  !      file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"     
+  !
+  !      open(10,file=file,status='unknown')
+  !
+  !      do i=1,inp % nstates
+  !         do j=1,inp % nstates
+  !            write(10,*) X_dvr(j), c_f(k,j,i)
+  !         end do
+  !
+  !         write(10,*) 
+  !         write(10,*) 
+  !
+  !      end do
+  !      close(10)
+  !   end do
+  !
+  !
+  !end if ! if(1) 
+
+  do j= 1,inp % npesfile_f
+     file="vib_eigenvalues_final_"
+     write(string,*) j
+     file = trim(adjustl(inp % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"     
+
+     open(10,file=file,status='unknown')
+
+     do i=1,inp % nstates
+        write(10,*) eig_f(j,i)
+     end do
+
+     write(10,*) 
+     write(10,*) 
+
+     close(10)
+  end do
+
+end subroutine calculate_XES_nonadiabatic
+
+subroutine solve_non_adiabatic(eig_f, c_f, nac, eig_na, c_na) 
+  real(kind=wp), intent(in):: eig_f(:,:), c_f(:,:,:), nac(:,:,:,:)
+  real(kind=wp), intent(out):: eig_na(:), c_na(:,:,:)
+
+  !! local variables
+  integer:: i,j,i1,j1,i2,j2, ii,jj
+  integer:: npesfiles_f,npoints,nstates, nstates_na
+  real(kind=wp), dimension(:,:), allocatable::Mat_tmp
+  real(kind=wp), dimension(:),allocatable:: W
+  real(kind=wp), dimension(:),allocatable:: WORK
+  integer:: INFO, LWORK
+
+  npesfiles_f = size(eig_f,1)
+  nstates = size(eig_f,2)
+  nstates_na = size(eig_na,1)
+
+  write(6,*) "solving nonadiabatic matrix elements", nstates_na
+
+
+  !write(6,*) "solve_sinc_dvr: nstates=", nstates
+ 
+  LWORK = 3*nstates_na
+  
+  !
+  allocate(Mat_tmp(nstates_na,nstates_na), W(nstates_na),&
+       WORK(LWORK))
+  
+  ! set up hamiltonan matrix
+  Mat_tmp = 0.0_wp
+  do i1=1, npesfiles_f
+     do j1=1, nstates
+        
+        ii = (i1 -1) * nstates + j1  
+
+        do i2=1, npesfiles_f
+           do j2=1, nstates
+
+              jj = (i2 -1) * nstates + j2  
+
+              Mat_tmp(ii,jj) = eig_f(i1, j1) * delta(i1,i2) * delta(j1,j2) + &
+                   sum(c_f(i1, :, j1) * c_f(i2, : , j2) * nac(i1,i2,:,2) )
+
+              ! here should be a term + 2 * <g_G|<G| d/dR |F> d/dR |f_F> (cannot yet compute it) 
+
+           end do ! j2
+        end do ! i2
+     end do ! j1
+  end do ! i1
+  
+  write(6,*) "done setting up Hamiltonian"
+
+  ! solve eigenvalue problem 
+  call dsyev( "V", "U", nstates_na, Mat_tmp, nstates_na, W, WORK, LWORK, INFO)
+  
+  ! obs c_gs = U^T, i.e. the transpose unitary matrix. n:th eigenvector: c_gs(:,n)
+  ! put c_na in a good order
+
+  do i1=1, npesfiles_f
+     do j1=1, nstates
+        ii = (i1 -1) * nstates + j1  
+
+        c_na(i1, j1, :) = Mat_tmp(ii, :)
+     end do
+  end do
+
+  eig_na = W
+
+end subroutine solve_non_adiabatic
+
+
+subroutine calculate_dipoles_XAS(c_i, c_f, dipole, D_fi)
+  real(kind=wp), intent(in):: c_i(:,:), c_f(:,:,:), dipole(:,:,:)
+  real(kind=wp), intent(out)::  D_fi(:,:,:)
+
+  integer:: nstates, npesfile_f,i,j,l
+
+  nstates = size(c_i,2)
+  npesfile_f = size(c_f,1)
+
+  !
+  ! calculate dipole matrix elements between states 
+  !
+
+  ! transitions from ground state to final states
+  do i=1,npesfile_f
+     do j=1,nstates ! final
+        do l=1,3
+           D_fi(i,j,l) = sum(dipole(i,:,l) * c_f(i,:,j) * c_i(:,1))   ! true dipole moment
+        end do
+     end do
+  end do
+  
+  write(6,*) "Calculated dipole matrix elements"
+
+end subroutine calculate_dipoles_XAS
+
+
+subroutine spectrum_XAS(eig_f, eig_i, D_fi, omega, sigma, sigma_states, gamma)
+  real(kind=wp), intent(in):: eig_f(:,:), eig_i(:), D_fi(:,:,:), omega(:)
+  real(kind=wp), intent(out):: sigma(:), sigma_states(:,:)
+  real(kind=wp),intent(in):: gamma
+
+  integer:: nstates, npesfile_f, n_omega, i,j,k,l,m
+  complex(kind=wp),allocatable:: F(:,:)
+  real(kind=wp):: norm
+
+  nstates = size(eig_f,2)
+  npesfile_f = size(eig_f,1)
+  n_omega = size(omega)
+
+  write(6,*) "n_omega", n_omega
+
+  allocate(F(n_omega, 3))
+
+  !
+  ! Fermi golden rule 
+  !
+
+
+  sigma = 0.0_wp
+  sigma_states = 0.0_wp
+
+  do j= 1,npesfile_f ! F
+     do l=1,nstates ! f_F
+
+        F=0.0_wp        
+        do i =1, n_omega 
+           do m=1,3 ! polarization
+              
+              F(i,m) = F(i,m) + D_fi(j,l ,m)   / ( omega(i) - &
+                   (eig_f(j,l) -eig_i(1)) + dcmplx(0,gamma) )
+
+           end do
+        end do
+        
+        !square F
+        sigma_states(j,:) = sigma_states(j,:)  + real(conjg(F(:,1))*F(:,1)) + real(conjg(F(:,2))*F(:,2)) &
+             + real(conjg(F(:,3))*F(:,3)) 
+
+     end do ! l
+     
+     sigma = sigma  + sigma_states(j,:)
+     
+  end do !j
+  
+  write(6,*) "Calculated XAS spectrum"
+
+  ! normalize spectrum
+  norm=sum(sigma) *(omega(2) -omega(1)) 
+  sigma = sigma/norm
+  
+  do j= 1, npesfile_f
+     sigma_states(j,:) = sigma_states(j,:)/norm
+  end do
+
+  deallocate(F)
+
+end subroutine spectrum_XAS
+
+subroutine spectrum_XAS_nonadiabatic(eig_na, eig_i, c_na, D_fi, omega, sigma, sigma_states, gamma)
+  real(kind=wp), intent(in):: eig_na(:), eig_i(:), c_na(:,:,:), D_fi(:,:,:), omega(:)
+  real(kind=wp), intent(out):: sigma(:), sigma_states(:,:)
+  real(kind=wp),intent(in):: gamma
+
+
+  integer:: nstates, nstates_na, npesfile_f, n_omega, i,j,k,l,m
+  complex(kind=wp),allocatable:: F(:,:)
+  real(kind=wp):: norm
+
+  nstates = size(eig_i)
+  nstates_na = size(eig_na)
+  npesfile_f = size(D_fi,1)
+  n_omega = size(omega)
+
+  allocate(F(n_omega, 3))
+
+
+  !
+  ! Fermi golden rule 
+  !
+
+  write(6,*) "Computing nonadiabatic XAS spectrum", npesfile_f, nstates, nstates_na
+
+  sigma=0.0_wp
+  
+  do j= 1,nstates_na ! F'
+     
+      do k= 1, npesfile_f ! F
+        do l=1, nstates ! f_F
+
+           F=0.0_wp         
+           do i =1, n_omega 
+              do m=1,3 ! polarization
+                 
+                 F(i,m) = F(i,m) + c_na(k,l,j) *  D_fi(k, l ,m)  / ( omega(i) - &
+                      (eig_na(j) -eig_i(1)) + dcmplx(0,gamma) )
+                 
+
+              end do !i
+           end do ! m
+
+           !square F
+           ! the summation is put here to avoid possible interference effects, not sure if they should be there or not
+           sigma = sigma  + real(conjg(F(:,1))*F(:,1)) + real(conjg(F(:,2))*F(:,2)) &
+                + real(conjg(F(:,3))*F(:,3)) 
+
+           
+        end do ! l
+     end do ! k
+
+  end do !j
+  
+  write(6,*) "Calculated spectrum"
+
+  ! normalize spectrum
+  norm=sum(sigma) *(omega(2) -omega(1)) 
+  sigma = sigma/norm
+
+  deallocate(F)
+ 
+end subroutine spectrum_XAS_nonadiabatic
+
+subroutine calculate_dipoles_XES(c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
+  real(kind=wp), intent(in):: c_i(:,:), c_n(:,:), c_f(:,:,:), dipole(:,:,:)
+  real(kind=wp), intent(out):: D_ni(:), D_fn(:,:,:,:), D_fi(:,:,:)
+
+  integer:: nstates, npesfile_f,i,j,k,l
+
+  nstates = size(c_i,2)
+  npesfile_f = size(c_f,1)
+
+  !
+  ! calculate dipole matrix elements between states 
+  !
+
+  do i=1,nstates 
+     D_ni(i) = sum(c_n(:,i)*c_i(:,1))
+  end do
+     
+  do i=1, npesfile_f
+     do j=1, nstates ! final
+        do k=1, nstates ! intermediate
+           do l=1,3
+              D_fn(i,j,k,l) = sum(dipole(i,:,l) * c_f(i,:,j) * c_n(:,k))   ! true dipole moment
+              !D_fn(i,j,k,l) = dipole(i,21,l) * sum(c_f(i,:,j) * c_n(:,k)) ! FC, dipole moment at eq geom
+              !D_fn(i,j,k,l) = sum(c_f(i,:,j) * c_n(:,k))                  ! no dipole moment
+           end do
+        end do
+     end do
+  end  do
+
+  ! transitions from ground state directly to final states
+  do i=1, npesfile_f
+     do j=1, nstates ! final
+        do l=1,3
+           D_fi(i,j,l) = sum(dipole(i,:,l) * c_f(i,:,j) * c_i(:,1))   ! true dipole moment
+        end do
+     end do
+  end do
+
+  write(6,*) "Calculated XES dipole matrix elements"
+
+end subroutine calculate_dipoles_XES
+
+
+
+subroutine spectrum_XES(eig_f, eig_n,  D_ni, D_fn, D_fi, omega, sigma, sigma_states, gamma)
+  real(kind=wp), intent(in):: eig_f(:,:), eig_n(:), D_ni(:), D_fn(:,:,:,:), D_fi(:,:,:), omega(:)
+  real(kind=wp), intent(out):: sigma(:), sigma_states(:,:)
+  real(kind=wp), intent(in):: gamma
+
+  complex(kind=wp), dimension(:,:),allocatable:: F
+  integer:: npesfile_f, nstates, n_omega
+  integer:: i,j,k,l,m
+  real(kind=wp):: norm
+
+
+  npesfile_f = size(eig_f,1)
+  nstates = size(eig_f,2)
+  n_omega = size(omega)
+
+
+  allocate(F(n_omega,3))
+
+
+  !
+  ! Full Kramers-Heisenberg    
+  !
+
+
+  write(6,*) "Full Kramers-Heisenberg"
+
+  sigma=0
+  !sigma_dir=0
+  !sigma_max_int = 0
+
+  do j= 1,npesfile_f ! final el
+     sigma_states(j,:) = 0
+     !sigma_dir_states(j,:) = 0
+     !sigma_max_int_states(j,:) = 0
+     do l=1,nstates ! final vib
+
+        F=0.0_wp
+        !F2_dir=0
+        !F2_max_int =0
+
+        do i =1,  n_omega 
+           do k=1,nstates ! intermediate vib
+              do m=1,3 ! polarization
+
+                 F(i,m) = F(i,m) + D_fn(j,l,k,m) * D_ni(k) / ( omega(i) - &
+                      (eig_n(k) - eig_f(j,l)) + dcmplx(0,gamma) )
+
+                 ! direct contribution (no interference)
+                 !F2_dir(i,m) = F2_dir(i,m) + D_fn(j,l,k,m) ** 2 * D_ni(k) ** 2 / (( omega(i) - &
+                 !     (eig_n(k) - eig_f(j,l)))**2  + gamma**2 ) 
+
+              end do
+           end do
+
+           ! maximal interference, direct transition from initial to final states
+           !do m=1,3 ! polarization 
+!
+!              F2_max_int(i,m) =  F2_max_int(i,m) + D_fi(j,l,m) ** 2 / (( omega(i) - &
+!                   (E_n_mean - eig_f(j,l)) )**2  + gamma**2 )
+!           end do
+
+        end do
+
+        !square F
+        sigma_states(j,:) = sigma_states(j,:)  + real(conjg(F(:,1))*F(:,1)) + real(conjg(F(:,2))*F(:,2)) &
+             + real(conjg(F(:,3))*F(:,3)) 
+
+        !sigma_dir_states(j,:) = sigma_dir_states(j,:) + F2_dir(:,1) +F2_dir(:,2) +F2_dir(:,3)
+        !sigma_max_int_states(j,:) = sigma_max_int_states(j,:) + F2_max_int(:,1) + F2_max_int(:,2) + F2_max_int(:,3)
+
+     end do !l
+
+     sigma = sigma + sigma_states(j,:)
+     !sigma_dir = sigma_dir + sigma_dir_states(j,:)
+     !sigma_max_int = sigma_max_int + sigma_max_int_states(j,:)
+
+  end do ! j
+
+  write(6,*) "Calculated XES spectrum"
+
+  ! normalize spectrum
+  norm=sum(sigma) *(omega(2) -omega(1)) 
+  sigma = sigma/norm
+  !sigma_dir = sigma_dir/norm
+  !sigma_max_int = sigma_max_int/norm
+
+  !sigma_lp = sigma_lp/norm
+
+  do j= 1,npesfile_f
+     sigma_states(j,:) = sigma_states(j,:)/norm
+     !sigma_dir_states(j,:) = sigma_dir_states(j,:)/norm
+     !sigma_max_int_states(j,:) = sigma_max_int_states(j,:)/norm
+  end do
+
+  deallocate(F)
+
+end subroutine spectrum_XES
+
+!subroutine print_output()
+!end subroutine print_output
+
+end module m_XAS_nonadiabatic
+
+

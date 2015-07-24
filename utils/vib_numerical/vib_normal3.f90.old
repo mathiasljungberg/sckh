@@ -1,0 +1,708 @@
+program vib_normal3
+  use parameters
+  implicit none
+
+  ! input/output
+  character(75)::inputfile,outputfile
+  integer::npoints,alt1,alt2, pdeg,pstart, maxdeg_inp,alt_state
+  real(kind=wp)::c0
+  real(kind=wp), dimension(:,:),allocatable:: q
+  real(kind=wp), dimension(:),allocatable:: V
+  real(kind=wp), dimension(3)::hfreq,my
+  integer, dimension(3)::nstates
+  
+  ! loop variables
+  integer::i,j,k,l,m ,n, deg, point, ind1, ind2, count, ii, deg1, deg2, ind
+  
+  ! other variables
+  integer::nstates3, pot1,pot2,pot3,ncols, pot_tot,maxdeg
+  integer, dimension(:),allocatable:: q1_vec, q2_vec, q3_vec
+  real(kind=wp), dimension(:),allocatable:: V_SI, sol, rhs
+  real(kind=wp), dimension(:,:),allocatable:: p_elem1, p_elem2, p_elem3
+  real(kind=wp), dimension(:,:),allocatable:: Hmatrix, Htmp,q_SI, matrix
+  integer, dimension(:,:),allocatable::ind_to_ijk
+  real(kind=wp), dimension(:,:,:),allocatable:: Mx1, Mx2, Mx3
+  real(kind=wp), dimension(3):: my_SI, coeff2_h, coeff2_SI, omega_h, omega_SI 
+  real(kind=wp):: Hupdate
+
+  ! test varibles
+  real(kind=wp), dimension(:,:),allocatable:: tmp1,tmp2,tmp3
+  real(kind=wp):: tol
+
+  ! LAPACK variables
+  integer::INFO, LWORK
+  real(kind=wp), dimension(:),allocatable::W,WORK 
+  
+  
+  !functions
+  integer::delta
+     !         write(11,*) i,j,k
+  !real(kind=wp):: harm_eigenfun
+  ! real(kind=wp)::dlamch
+
+  ! read from standard input
+  read(5,*) inputfile
+  !read(5,*) outputfile
+  !read(5,*) alt1, alt2
+  !read(5,*) nin, npoints, nstates, nfit_p, nfit_s
+  !read(5,*) x_new_min, x_new_max
+  read(5,*) npoints, pdeg, alt1, alt2
+  read(5,*) nstates(1),nstates(2), nstates(3), maxdeg_inp, alt_state
+  read(5,*) hfreq(1), hfreq(2), hfreq(3)
+  read(5,*) my(1), my(2), my(3)
+  read(5,*) c0
+
+  ! alt1=0, use analytical omegas, al1=1, use omegas from polynomial fitting
+  ! alt_state =0, do nothing, =1,2,3 only use mode 1,2, or three, set all other non-diagonal matrix elements=0
+  ! maxdeg= max number of exitations
+
+
+write(6,*) hfreq
+  
+  if(alt1.eq.0) then
+   
+     ! use analytical omegas, fit from 3 degree
+     pstart=3
+     !if(pdeg.eq.2) ncols=0
+     if(pdeg.eq.3) ncols=10
+     if(pdeg.eq.4) ncols=25
+     if(pdeg.eq.5) ncols=46
+     if(pdeg.eq.6) ncols=74
+
+  else if(alt1.eq.1) then
+     
+     ! fit second degree terms
+     if(pdeg.eq.2) ncols=6
+     if(pdeg.eq.3) ncols=16
+     if(pdeg.eq.4) ncols=31
+     if(pdeg.eq.5) ncols=52
+     if(pdeg.eq.6) ncols=80
+ 
+     if(alt2.eq.1) then
+
+        ! also fit x,y,z terms
+        ncols = ncols +3
+        pstart=1
+
+     else if(alt2.eq.0) then
+        ! dont fit x,y,z terms
+        pstart=2
+     end if
+
+  end if
+
+
+!ncols=25 !6!52
+
+
+
+  ! allocate
+  !allocate( x(nin),y(nin), x_SI(npoints),y_SI(npoints),x_new(npoints), &
+  !     y_new(npoints))
+
+  ! allocate
+  allocate( q(3,npoints), q_SI(3,npoints), V(npoints), V_SI(npoints))
+  allocate(q1_vec(ncols), q2_vec(ncols), q3_vec(ncols), matrix(npoints,ncols) )
+  allocate( rhs(npoints), sol(npoints))
+
+  ! read file with values of q1, q2, q3 [Å] and V, hartree
+  open(10,file=inputfile,status='old')
+  
+  
+  do i=1,npoints
+     read(10,*) q(1,i), q(2,i), q(3,i), V(i)
+  enddo
+
+  close(10)
+
+ !!write(6,*) "1"
+
+  ! my
+  my_SI = my*amu
+
+  ! maxdeg
+  maxdeg =  maxdeg_inp+3
+
+
+  ! calculate nstates3
+  ind=0
+  do i=1,nstates(1)
+     do j=1,nstates(2)
+        do k=1,nstates(3)
+           if(i+j+k <= maxdeg) then
+              ind=ind+1
+           end if
+        end do
+     end do
+  end do
+
+  ! nstates3
+  !nstates3 = nstates(1)* nstates(2)* nstates(3)
+  nstates3= ind
+
+  ! go to SI units
+  V_SI=V*hartree
+  q_SI=q*1.0e-10
+  coeff2_SI = ((hfreq/(hbar*cm))**2)*0.5*my_SI
+  coeff2_h = coeff2_SI*1.0d-20/hartree  !((hfreq/(hbar))**2)*0.5*my*1.0d20 
+!coeff2_SI*1.0d-20/amu ! helt fel, kolla snarast!
+  omega_SI = hfreq/(hbar*cm)
+  omega_h = hfreq/(hbar*cm*hartree)
+  
+write(6,*) coeff2_h
+  
+  ! fit a sixth degree polynomial, linear least squares
+  !*********************************************************************  
+  
+  ! sätter upp matrisen med coefficienter, q [Å]
+   
+  do point=1,npoints
+     count=0
+     
+     do deg=pstart,pdeg
+        ! loopar igenom alla n,m,l med summa deg
+        do i=0,deg
+           do j=0,deg-i
+
+              k=deg-(i+j)
+              count = count +1
+              
+              if(point.eq.1) then
+                 q1_vec(count) = i
+                 q2_vec(count) = j
+                 q3_vec(count) = k                 
+              end if
+
+
+              matrix(point,count)= (q(1,point)**i)*(q(2,point)**j)*(q(3,point)**k)
+
+     !         write(11,*) i,j,k
+     !         write(11,*) q(1,point),q(2,point),q(3,point)
+     !         write(11,*) (q(1,point)**i)*(q(2,point)**j)*(q(3,point)**k) 
+
+           end do
+        end do
+     end do
+  end do
+
+write(6,*) "count", count
+
+!do i=1,npoints
+!   write(11,*) "row number", i
+!   write(11,*) matrix(i,:)
+!end do
+
+  ! sätter upp right hand side, hartree
+
+if(alt1.eq.0) then
+  
+   do point = 1,npoints
+     rhs(point) = V(point) - c0 - sum(coeff2_h*(q(:,point)**2))  
+  end do
+
+else if(alt1.eq.1) then
+   
+   do point = 1,npoints
+      rhs(point) = V(point) - c0
+   end do
+   
+end if
+
+!do i=1,count
+!write(6,*)
+!     write(6,*) q1_vec(i),q2_vec(i),q3_vec(i)
+!     write(6,*) matrix(:,i)
+!end do
+  
+ !write(6,*) coeff2_h
+ !write(6,*) q(:,1)**2
+
+
+!write(6,*) q1_vec(1),q2_vec(1),q3_vec(1)
+!write(6,*) q(1,1), q(2,1),q(3,1)
+!write(6,*) (q(1,1)**0)*(q(2,1)**0)*(q(3,1)**3)
+!write(6,*) V
+!write(6,*)
+!write(6,*) c0
+!write(6,*) sum(coeff2_h*(q(:,1)**2))
+
+!write(6,*) 
+!write(6,*)
+
+!write(6,*) rhs
+
+
+
+  ! solve the  lsq problem 
+  !*************************************
+ 
+  sol =rhs
+
+  LWORK = npoints*ncols +100
+  allocate( WORK(LWORK))
+
+  ! DGELS( TRANS, M, N, NRHS, A, LDA, B, LDB, WORK, LWORK, INFO )
+  call  DGELS( 'N', npoints, ncols, 1, matrix, npoints, sol, npoints, WORK, LWORK, INFO )
+
+  deallocate( WORK )
+
+write(12,*) INFO
+write(12,*) sol(1:ncols)
+write(12,*)
+
+!write(6,*) "sol" , hbar*cm*sqrt(hartree*1.0d20*2*sol(1)/my_SI(3)),&
+!     hbar*cm*sqrt(hartree*1.0d20*2*sol(3)/my_SI(2)),&
+!     hbar*cm*sqrt(hartree*1.0d20*2*sol(6)/my_SI(1))
+
+
+! coeff2_SI = ((hfreq/(hbar*cm))**2)*0.5*my_SI
+!  coeff2_h = coeff2_SI*1.0d-20/hartree
+
+! hfreq = hbar*cm*sqrt(hartree*1.0d20*2*coeff2_h/(my_SI))
+
+
+! write cuts of PES to file
+tol=1.d-10
+allocate(tmp1(11,2),tmp2(11,2),tmp3(11,2) )
+
+j=1
+k=1
+l=1
+
+write(6,*) "test 1"
+do i=1,npoints
+
+   if(abs(q(2,i))<tol.and.abs(q(3,i))<tol) then
+      tmp1(j,1) = q(1,i)
+      tmp1(j,2)= V(i)
+      j=j+1
+      write(6,*) q(2,i),q(3,i)
+   end if
+   if(abs(q(1,i))<tol.and.abs(q(3,i))<tol) then
+      tmp2(k,1) = q(2,i)
+      tmp2(k,2)= V(i)
+      k=k+1
+   end if
+   if(abs(q(1,i))<tol.and.abs(q(2,i))<tol) then
+      tmp3(l,1) = q(3,i)
+      tmp3(l,2)= V(i)
+      l=l+1
+   end if
+   
+enddo
+write(6,*) i,j,k,l
+write(6,*) "test 2"
+do i=1,11
+   write(16,*)  tmp1(i,:)
+   write(17,*)  tmp2(i,:)
+   write(18,*)  tmp3(i,:)
+end do
+write(6,*) "test 3"
+
+
+
+
+
+
+
+  ! set up Hamiltonian
+  !*********************************************************************  
+
+  !allocate
+  allocate( Hmatrix(nstates3, nstates3) , p_elem1(nstates(1),nstates(1)), p_elem2(nstates(2),nstates(2)) &
+       , p_elem3(nstates(3),nstates(3)), ind_to_ijk(nstates3,3))
+
+  Hmatrix=0
+
+
+  ! basis functions | i >| j >| k > , nstates(1)*nstates(3)*nstates(3) number of them
+  ! no need to precompute the matrix elements < i | p^2/2m | j >, or?
+
+
+
+
+
+  ! Fitted omegas if alt1=1
+  !****************************
+  ! momentum part, < m |p^2/(2m)  | n >, watch out for the fence post!
+  !precompute it 
+
+if(alt1.eq.1) then
+   
+  ! diagonal part
+  do i=1,nstates(1)
+     p_elem1(i,i) = (2*i-1)*hbar*omega_h(1)/4.
+  end do
+
+  do i=1,nstates(2)
+     p_elem2(i,i) = (2*i-1)*hbar*omega_h(2)/4.
+  end do
+
+  do i=1,nstates(3)
+     p_elem3(i,i) = (2*i-1)*hbar*omega_h(3)/4.
+  end do
+
+
+  !non diagonal part
+  do i=1,nstates(1)-2 
+     p_elem1(i,i+2) = -sqrt(dfloat(i+1))*sqrt(dfloat(i))*hbar*omega_h(1)/4.
+  end do
+
+  do i=1,nstates(2)-2 
+     p_elem2(i,i+2) = -sqrt(dfloat(i+1))*sqrt(dfloat(i))*hbar*omega_h(2)/4.
+  end do
+  
+  do i=1,nstates(3)-2 
+     p_elem3(i,i+2) = -sqrt(dfloat(i+1))*sqrt(dfloat(i))*hbar*omega_SI(3)/4.
+  end do
+
+end if
+
+
+
+
+! Potential energy part, both fitted and analytical omegas
+!********************************
+
+allocate( Htmp(nstates(1),nstates(1)),  Mx1(7,nstates(1),nstates(1))  )
+
+do i=0,pdeg
+   
+   call mat_elem_xn(Htmp,nstates(1),i)
+   
+   !Mx1(i+1,:,:) = (1.0d10)**i*(hbar/(2*my_SI(1)*omega_SI(1)))**(dfloat(i)/2.d0)*Htmp
+   Mx1(i+1,:,:) = (hbar/(2*my_SI(1)*omega_SI(1)) )**(dfloat(i)/2.d0)*Htmp
+
+end do
+ 
+
+  deallocate(Htmp)
+  allocate( Htmp(nstates(2),nstates(2)), Mx2(7,nstates(2),nstates(2)))
+  
+  do i=0,pdeg
+     
+     call mat_elem_xn(Htmp,nstates(2),i)
+   
+        Mx2(i+1,:,:) = (hbar/(2*my_SI(2)*omega_SI(2) ))**(dfloat(i)/2.d0)*Htmp
+     
+  end do
+  
+  deallocate(Htmp)
+  allocate( Htmp(nstates(3),nstates(3)) , Mx3(7,nstates(3),nstates(3)))
+  
+  do i=0,pdeg
+     
+     call mat_elem_xn(Htmp,nstates(3),i)
+     
+        Mx3(i+1,:,:) = (hbar/(2*my_SI(3)*omega_SI(3)) )**(dfloat(i)/2.d0)*Htmp
+     
+  end do
+
+deallocate(Htmp)
+
+
+
+! reset matrix elements if alt_state=1,2,3
+!  
+if(alt_state.eq.1) then
+   
+   Mx2(2:7,:,:)=0
+   Mx3(2:7,:,:)=0
+   
+else if(alt_state.eq.2) then
+   
+   Mx1(2:7,:,:)=0
+   Mx3(2:7,:,:)=0
+   
+else if(alt_state.eq.3) then
+   
+   Mx1(2:7,:,:)=0
+   Mx2(2:7,:,:)=0
+   
+end if
+
+
+!   
+!   do i=1,nstates(2)
+!      Mx2(1,i,i)=1
+!   end do
+!   
+!   do i=1,nstates(3)
+!      Mx3(1,i,i)=1
+!   end do
+!
+!
+!else if(alt_state.eq.2) then
+!
+!   Mx1=0
+!   Mx3=0
+!   
+!   do i=1,nstates(1)
+!      Mx1(1,i,i)=1
+!   end do
+!   
+!   do i=1,nstates(3)
+!      Mx3(1,i,i)=1
+!   end do
+!
+!else if(alt_state.eq.3) then
+! 
+!   Mx1=0
+!   Mx2=0
+!   
+!   do i=1,nstates(1)
+!      Mx1(1,i,i)=1
+!   end do
+!   
+!   do i=1,nstates(2)
+!      Mx2(1,i,i)=1
+!   end do!!
+!!!
+!!
+!
+!end if
+
+
+
+
+
+  ! Set up Hamiltonian Matrix
+  !******************************  
+
+ind1=0
+!ind2=0
+  do i=1,nstates(1)
+     do j=1,nstates(2)
+        do k=1,nstates(3)
+
+!           ind1 = k + (j-1)*nstates(3) + (i-1)*nstates(2)*nstates(3)
+
+           if(i+j+k <= maxdeg) then
+
+        ind1 = ind1 + 1
+           
+        ind2=0
+        do l=1,nstates(1)
+              do m=1,nstates(2)
+                 do n=1,nstates(3)
+                    
+                    !ind2 = n + (m-1)*nstates(3) + (l-1)*nstates(2)*nstates(3)
+   
+                    if(l+m+n <= maxdeg) then
+                       
+                       ind2 = ind2 + 1
+                    
+                    ! only upper triangular part of matrix 
+                    if(ind1 <= ind2) then 
+                       
+                       if(alt1.eq.0) then
+                          Hmatrix(ind1,ind2) =  ( (0.5 + i-1)*omega_h(1) +(0.5 + j-1)*omega_h(2) &
+                            + (0.5 + k-1)*omega_h(3) )*hbar*delta(i,l)*delta(j,m)*delta(k,n) 
+                       
+                       else if(alt1.eq.1) then
+                          Hmatrix(ind1,ind2) = p_elem1(i,l)*delta(j,m)*delta(k,n) + p_elem2(j,m)*delta(i,l)*delta(k,n) &
+                               + p_elem3(k,n)*delta(i,l)*delta(j,m) 
+                      
+                       end if
+
+                       
+                       do ii=1,ncols
+                          pot1 = q1_vec(ii)+1
+                          pot2 = q2_vec(ii)+1
+                          pot3 = q3_vec(ii)+1
+                          
+                          pot_tot = q1_vec(ii) + q2_vec(ii) + q3_vec(ii)
+                          !write(6,*) "ijklmn", i,j,k,l,m,n
+                          !write(6,*) "pot",pot1,pot2,pot3
+                          !write(6,*) Mx1(pot1,i,l)*Mx2(pot2,j,m)*Mx3(pot3,k,n)
+                          !write(6,*) sol(ii)
+                          !write(6,*) sol(ii)*Mx1(pot1,i,l)*Mx2(pot2,j,m)*Mx3(pot3,k,n)
+                  
+                          !Hmatrix(ind1,ind2)= Hmatrix(ind1,ind2) + &
+                          !     ((1.0d10)**pot_tot)*sol(ii)*Mx1(pot1,i,l)*Mx2(pot2,j,m)*Mx3(pot3,k,n)
+                          
+
+                          !if alt_state=1,2,3 force matrix elements to be 0
+
+                          Hupdate=  ((1.0d10)**pot_tot)*sol(ii)*Mx1(pot1,i,l)*Mx2(pot2,j,m)*Mx3(pot3,k,n)                          
+
+
+                          !write(13,*) pot1-1, pot2-1, pot3-1, Hupdate
+
+                          !if(alt_state.eq.1) then
+                          !   
+                          !   if(pot2.ne.1.or.pot3.ne.1)then
+                          !      Hupdate=0
+                          !   end if
+
+!                          else if(alt_state.eq.2) then
+!
+!                             if(pot1.ne.1.or.pot3.ne.1)then
+!                                Hupdate=0
+!                             end if
+!!
+!
+ !                         else if(alt_state.eq.3) then
+  !                         
+   !                          if(pot1.ne.1.or.pot2.ne.1)then
+    !                            
+   !                             write(13,*) pot1, pot2, pot3, Hupdate!
+!
+!                                Hupdate=0
+!                             end if
+!                             
+!                          end if
+                          
+                          
+                          Hmatrix(ind1,ind2)= Hmatrix(ind1,ind2) + Hupdate
+
+
+                       end do
+                       
+                    end if ! if(ind1 <= ind2) then 
+
+                    end if !l+m+n <= maxdeg
+                    
+                 end do
+              end do
+           end do
+           
+        end if !i+j+k <= maxdeg
+           
+        end do
+     end do
+  end do
+
+
+write(6,*) "ind1", ind1, "ind2",ind2
+
+! mapping from ind to i,j,k
+ind=0
+do i=1,nstates(1)
+   do j=1,nstates(2)
+      do k=1,nstates(3)
+         
+         if(i+j+k <= maxdeg) then
+            
+            ind=ind+1
+            
+            ind_to_ijk(ind,1) = i
+            ind_to_ijk(ind,2) = j
+            ind_to_ijk(ind,3) = k
+         end if
+
+      end do
+   end do
+end do
+
+! mapping from ind to i,j,k
+!  do i=1,nstates(1)
+!     do j=1,nstates(2)
+!        do k=1,nstates(3)
+!           
+!           ind1 = k + (j-1)*nstates(3) + (i-1)*nstates(2)*nstates(3)
+!           
+!           ind_to_ijk(ind1,1) = i
+!           ind_to_ijk(ind1,2) = j
+!           ind_to_ijk(ind1,3) = k
+!           
+!        end do
+!     end do
+!  end do
+  
+
+!  write(6,*) "Hmatrix after"
+!  do i=1,nstates3
+!     write(6,*) (Hmatrix(i,j), j=1, nstates3)
+!  end do
+
+!  write(6,*) "second degree"
+!  write(6,*) "Mx1(1,:,:)"
+!  write(6,*) Mx1(1,:,:)
+!  write(6,*) "Mx1(2,:,:)"
+!  write(6,*) Mx1(2,:,:)
+!  write(6,*) "Mx1(3,:,:)"
+!  write(6,*) Mx1(3,:,:)
+!  write(6,*) "Mx1(4,:,:)"
+!  write(6,*) Mx1(4,:,:)
+!  write(6,*) "Mx1(5,:,:)"
+!  write(6,*) Mx1(5,:,:)
+!  write(6,*) "Mx1(6,:,:)"
+!  write(6,*) Mx1(6,:,:)
+!  write(6,*) "Mx1(7,:,:)"
+!  write(6,*) Mx1(7,:,:)
+
+!write(6,*) "third degree"
+!write(6,*) "Mx1"
+!  write(6,*) Mx1(4,:,:)
+!  write(6,*) "Mx2"
+!  write(6,*) Mx2(4,:,:)
+!  write(6,*) "Mx3"
+!  write(6,*) Mx3(4,:,:)
+
+!write(6,*) "fourth degree"
+!write(6,*) "Mx1"
+!  write(6,*) Mx1(5,:,:)
+!  write(6,*) "Mx2"
+!  write(6,*) Mx2(5,:,:)
+!  write(6,*) "Mx3"
+!  write(6,*) Mx3(5,:,:)
+!write(6,*) 
+ ! write(6,*) "Mx1 (1)"
+ ! write(6,*) Mx1(1,:,:)
+ ! write(6,*) "Mx2 (1)"
+ ! write(6,*) Mx2(1,:,:)
+ ! write(6,*) "Mx3 (1)"
+ ! write(6,*) Mx3(1,:,:)
+
+  
+  ! solve eigenvalue problem
+  !*********************************************************************    
+   
+  ! allocate workvectors for lapack
+  !nstates3 = ind1
+  LWORK=3*nstates3
+  allocate( W(nstates3), WORK(LWORK) )!, Hmatrixtmp(nstates3,nstates3))
+  
+ ! hmatrixtmp=Hmatrix(1:ind1,1:ind1)
+
+
+  ! call lapack routine
+  call dsyev( "V", "U", nstates3, Hmatrix, nstates3, W, WORK, LWORK, INFO)
+ 
+
+  !write(6,*) W
+
+  ! print eigenvalues and first frequency
+  write(6,*) "fundamental frequency", (W-W(1))*cm*hartree
+
+  do i=1,nstates3
+     write(11,*) "eigenvector ", i
+
+     do j=1,nstates3
+        write(11,*) ind_to_ijk(j,1), ind_to_ijk(j,2), ind_to_ijk(j,3), Hmatrix(j,i)
+
+     end do
+
+  end do
+  ! print the first eigenfunction(s)
+  
+  !  allocate( eigenfun1(npoints) )
+  
+  !  do j=1,10
+  !     
+   !     eigenfun1=0
+  !     do i=1,nstates
+  !        eigenfun1 = eigenfun1 + Hmatrix(j,i)*eigenfun(:,i)
+  !     end do
+  !     
+  !     do i=1,npoints
+  !        write(10+j,*) x_new(i), eigenfun1(i), eigenfun(i,j)
+  !     end do
+  !     
+  !  end do
+  
+  
+  
+  
+end program vib_normal3

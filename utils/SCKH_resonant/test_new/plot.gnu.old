@@ -1,0 +1,71 @@
+
+d=1.0
+set nokey
+
+plot [170:190] "spectrum_resonant_sc192.16.dat" w l\
+,"spectrum_resonant_sc192.24.dat" u 1:($2 + 1*d) w l\
+,"spectrum_resonant_sc192.48.dat" u 1:($2 + 4*d) w l\
+,"spectrum_resonant_sc192.73.dat" u 1:($2 + 7*d) w l\
+,"spectrum_resonant_sc192.97.dat" u 1:($2 + 10*d) w l\
+,"spectrum_resonant_sc193.14.dat" u 1:($2 + 13*d) w l\
+,"spectrum_resonant_sc193.38.dat" u 1:($2 + 16*d) w l\
+,"spectrum_resonant_sc193.62.dat" u 1:($2 + 19*d) w l\
+,"spectrum_resonant_sc193.87.dat" u 1:($2 + 22*d) w l\
+,"spectrum_resonant_sc194.11.dat" u 1:($2 + 25*d) w l\
+,"spectrum_resonant_sc194.36.dat" u 1:($2 + 28*d) w l\
+,"spectrum_resonant_sc194.60.dat" u 1:($2 + 31*d) w l\
+,"spectrum_resonant_sc194.84.dat" u 1:($2 + 34*d) w l\
+,"spectrum_resonant_sc195.09.dat" u 1:($2 + 37*d) w l\
+,"spectrum_resonant_sc195.25.dat" u 1:($2 + 40*d) w l\
+,"spectrum_resonant_sc195.50.dat" u 1:($2 + 43*d) w l\
+,"spectrum_resonant_sc195.74.dat" u 1:($2 + 46*d) w l\
+,"spectrum_resonant_sc195.98.dat" u 1:($2 + 49*d) w l\
+,"spectrum_resonant_sc196.23.dat" u 1:($2 + 52*d) w l\
+,"spectrum_resonant_sc196.47.dat" u 1:($2 + 55*d) w l\
+,"spectrum_resonant_sc196.72.dat" u 1:($2 + 58*d) w l\
+,"spectrum_resonant_sc196.96.dat" u 1:($2 + 61*d) w l\
+,"spectrum_resonant_sc197.09.dat" u 1:($2 + 64*d) w l\
+,"spectrum_resonant_sc197.21.dat" u 1:($2 + 67*d) w l\
+,"spectrum_resonant_sc197.37.dat" u 1:($2 + 70*d) w l\
+,"spectrum_resonant_sc197.53.dat" u 1:($2 + 73*d) w l\
+,"spectrum_resonant_sc197.65.dat" u 1:($2 + 76*d) w l\
+,"spectrum_resonant_sc197.86.dat" u 1:($2 + 79*d) w l\
+,"spectrum_resonant_sc198.10.dat" u 1:($2 + 82*d) w l\
+,"spectrum_resonant_sc198.35.dat" u 1:($2 + 85*d) w l\
+,"spectrum_resonant_sc198.59.dat" u 1:($2 + 88*d) w l\
+,"spectrum_resonant_sc198.83.dat" u 1:($2 + 91*d) w l\
+,"spectrum_resonant_sc199.08.dat" u 1:($2 + 94*d) w l\
+,"spectrum_resonant_sc199.32.dat" u 1:($2 + 97*d) w l\
+,"spectrum_resonant_sc199.52.dat" u 1:($2 + 100*d) w l\
+,"spectrum_resonant_sc199.73.dat" u 1:($2 + 103*d) w l\
+,,"spectrum_resonant_sc199.97.dat" u 1:($2 + 106*d) w l\
+,,"spectrum_resonant_sc200.22.dat" u 1:($2 + 109*d) w l\
+,"spectrum_resonant_sc200.30.dat" u 1:($2 + 110*d) w l\
+#
+#,"spectrum_resonant_sc200.38.dat" u 1:($2 + 111*d) w l\
+#,"spectrum_resonant_sc200.46.dat" u 1:($2 + 112*d) w l\
+#,"spectrum_resonant_sc200.54.dat" u 1:($2 + 113*d) w l\
+#,"spectrum_resonant_sc200.62.dat" u 1:($2 + 114*d) w l\
+#,"spectrum_resonant_sc200.71.dat" u 1:($2 + 115*d) w l\
+#,"spectrum_resonant_sc200.79.dat" u 1:($2 + 116*d) w l\
+#,"spectrum_resonant_sc200.87.dat" u 1:($2 + 117*d) w l\
+#,"spectrum_resonant_sc200.95.dat" u 1:($2 + 118*d) w l\
+#,"spectrum_resonant_sc201.03.dat" u 1:($2 + 119*d) w l\
+#,"spectrum_resonant_sc201.11.dat" u 1:($2 + 120*d) w l\
+#,"spectrum_resonant_sc201.19.dat" u 1:($2 + 121*d) w l\
+#,"spectrum_resonant_sc201.28.dat" u 1:($2 + 122*d) w l\
+#,"spectrum_resonant_sc201.36.dat" u 1:($2 + 123*d) w l\
+#,"spectrum_resonant_sc201.44.dat" u 1:($2 + 124*d) w l\
+#,"spectrum_resonant_sc201.52.dat" u 1:($2 + 125*d) w l\
+#,"spectrum_resonant_sc201.60.dat" u 1:($2 + 126*d) w l\
+#,"spectrum_resonant_sc201.68.dat" u 1:($2 + 127*d) w l\
+#,"spectrum_resonant_sc201.76.dat" u 1:($2 + 128*d) w l\
+#,"spectrum_resonant_sc201.85.dat" u 1:($2 + 129*d) w l\
+#,"spectrum_resonant_sc201.93.dat" u 1:($2 + 130*d) w l\
+#,"spectrum_resonant_sc202.01.dat" u 1:($2 + 131*d) w l\
+#,"spectrum_resonant_sc202.09.dat" u 1:($2 + 132*d) w l\
+#,"spectrum_resonant_sc202.17.dat" u 1:($2 + 133*d) w l\
+#,"spectrum_resonant_sc202.25.dat" u 1:($2 + 134*d) w l\
+#,"spectrum_resonant_sc202.33.dat" u 1:($2 + 135*d) w l\
+#,"spectrum_resonant_sc202.42.dat" u 1:($2 + 136*d) w l\
+#,"spectrum_resonant_sc202.50.dat" u 1:($2 + 137*d) w l\

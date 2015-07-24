@@ -1,0 +1,124 @@
+module FFT_m
+  use parameters
+  implicit none
+  interface
+     SUBROUTINE SFFTEU( X, Y, N, M, ITYPE )
+       INTEGER  N, M, ITYPE
+       REAL(8)  X(*), Y(*)
+     END SUBROUTINE SFFTEU
+  end interface
+contains
+
+subroutine FFT_complex(x, f, f_out, omega_out)
+  real(kind=wp), intent(in), dimension(:)::x
+  complex(kind=wp), intent(in), dimension(:):: f
+  complex(kind=wp), intent(out), dimension(:):: f_out
+  real(kind=wp), intent(out), dimension(:)::omega_out
+
+  real(kind=wp), dimension(:),allocatable:: f_out_real, f_out_imag
+  real(kind=wp):: x_l
+  integer:: npoints, npoints_pad, i
+
+  npoints = size(x)
+
+  if(npoints .ne. size(f) &
+       .or. npoints .ne. size(f_out) &
+       .or. npoints .ne. size(omega_out) ) then
+     write(6,*) "error in FFT_complex", npoints, size(f_out), size(omega_out)
+     stop
+  end if
+  
+
+  allocate(f_out_real(npoints), f_out_imag(npoints))
+
+  f_out_real = f
+  f_out_imag = 0
+
+  call FFT(f_out_real, f_out_imag, npoints_pad, 1)
+
+  f_out = dcmplx(f_out_real, f_out_imag)
+
+  x_l = x(npoints_pad)-x(1)
+
+  do i=1,npoints
+     omega_out(i) = 2 * pi * (i-1) / x_l
+  end do
+
+  deallocate(f_out_real, f_out_imag )
+
+end subroutine FFT_complex
+
+
+subroutine FFT_real(x, f, f_out_real, f_out_imag, omega_out)
+  real(kind=wp), intent(in), dimension(:)::x,f
+  real(kind=wp), intent(out), dimension(:)::f_out_real, f_out_imag,omega_out
+
+  complex(kind=wp), dimension(:), allocatable:: f_compl_in, f_compl_out
+  real(kind=wp):: x_l
+  integer:: npoints, npoints_pad, i
+
+  npoints = size(x)
+
+  if(npoints .ne. size(f) &
+       .or. npoints .ne. size(f_out_real) &
+       .or. npoints .ne. size(f_out_imag) &
+       .or. npoints .ne. size(omega_out) ) then
+     write(6,*) "error in FFT_real"
+     stop
+  end if
+ 
+  allocate(f_compl_in(npoints), f_compl_out(npoints))
+
+  f_compl_in = dcmplx(f)
+  
+  call FFT_complex(x,f_compl_in, f_compl_out, omega_out)
+
+  f_out_real = dreal(f_compl_out)
+  f_out_imag = dimag(f_compl_out)
+
+  deallocate(f_compl_in, f_compl_out)
+ 
+end subroutine FFT_real
+
+
+
+subroutine FFT(f_real, f_imag, npoints_pad, itype)
+  real(kind=wp), intent(inout), dimension(:)::f_real,f_imag
+  integer, intent(out):: npoints_pad
+  integer, intent(in):: itype
+  
+  real(kind=wp), dimension(:),allocatable:: fpad_real,fpad_imag
+  integer:: npoints, npoints_pad_pow, i
+  
+  npoints = size(f_real)
+  if(npoints .ne. size(f_imag)) then
+     write(6,*) "error in FFT"
+     stop
+  end if
+  
+  ! pad npoints to be  apower of 2 for fourier transform
+  do i=1,100
+     if( 2 ** i .ge. npoints) then
+        npoints_pad_pow = i        
+        exit
+     end if
+  end do
+  npoints_pad = 2 ** npoints_pad_pow ! 2**12
+
+  allocate(fpad_real(npoints_pad), fpad_imag(npoints_pad))
+
+  fpad_real = 0
+  fpad_real(1:npoints) =f_real(1:npoints)
+  fpad_imag = 0
+  fpad_imag(1:npoints) =f_imag(1:npoints)
+  
+  call SFFTEU( fpad_real, fpad_imag, npoints_pad, npoints_pad_pow, itype)
+  
+  f_real = fpad_real(1:npoints) 
+  f_imag = fpad_imag(1:npoints) 
+  
+  deallocate(fpad_real, fpad_imag)
+
+end subroutine FFT
+
+end module FFT_m

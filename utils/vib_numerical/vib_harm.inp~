@@ -1,0 +1,24 @@
+fort.19
+test.out
+1 2
+0 0
+2500 10000 20 5 1
+0.3 2.0
+
+
+
+fort.18
+test.out
+1 2
+1 1.07290800337445    
+11 1000 10 5 1
+-0.1 0.1
+
+
+  ! read from standard input
+  read(5,*) inputfile
+  read(5,*) outputfile
+  read(5,*) alt1, alt2
+  read(5,*) alt3, my_in
+  read(5,*) nin, npoints, nstates, nfit_p, nfit_s
+  read(5,*) x_new_min, x_new_max

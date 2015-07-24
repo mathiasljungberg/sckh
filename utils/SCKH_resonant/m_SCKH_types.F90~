@@ -1,0 +1,25 @@
+module m_SCKH_types
+  implicit none
+
+  type pes_num_t
+
+  end type pes_num_t
+
+
+  type pes_poly_t
+  end type pes_poly_t
+
+
+  type traj_t
+     integer:: ntsteps
+     real(kind=wp), allocatable:: x(:)
+     real(kind=wp), allocatable:: v(:)
+     real(kind=wp), allocatable:: a(:)
+     real(kind=wp), allocatable:: time(:)
+     real(kind=wp), allocatable:: E_i(:)
+     real(kind=wp), allocatable:: E_n(:,:) ! ninterm, ntsteps
+     real(kind=wp), allocatable:: E_f(:,:) ! nfinal, ntsteps
+     real(kind=wp), allocatable:: D_ni(:,:,:,:) ! ninterm, m1, m2, ntsteps
+     real(kind=wp), allocatable:: D_nf(:,:,:,:,:) ! ninterm, nfinal, m1, m2, ntsteps
+
+end module m_SCKH_types

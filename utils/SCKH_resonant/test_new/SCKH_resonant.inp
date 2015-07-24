@@ -1,0 +1,64 @@
+KH                                                 ! runmode KH or SCKH  
+initial_PES_spline_2001.dat                            !pes_file_i      
+intermediate_PES_spline_2001.dat           !pes_file_dyn
+1                                                 !npesfile_n
+intermediate_PES_spline_2001.dat dipole_dummy_2001          !pes_file_n dipolefile_n
+1                                                 !npesfile_f
+final_PES_spline_2001.dat dipole_dummy_2001                 !pes_file_n dipolefile_n
+spectrum_resonant                        !outfile 
+0.972222222222222                                 !approximate reduced mass for HCL
+
+401 0.8 0.0146                                       !nstates, dvr_start_in, dx_in
+199 207  11                                         !omega_in_start, omega_in_end, n_omega_in  
+180 200 1000                                       !omega_out_start, omega_out_end, n_omega_out
+1 1 1                                             !theta_start, theta end, n_theta
+0.045 0.1 0.3                                      ! gamma_FWHM, instrument_FWHM, detector_FWHM
+1 1 1                                          ! samplemode, npoints_x_sampl, npoints_mom_sampl
+0.8 2048 4                                       ! delta_t, ntsteps, nskip 
+
+#0.01 4096 1 !0.8 1024 1                                       ! delta_t, ntsteps, nskip 
+
+
+
+read(5,*) pes_file_i
+read(5,*) pes_file_dyn
+read(5,*) npesfile_n
+
+allocate(pes_file_n(npesfile_n), dipolefile_n(npesfile_n))
+
+do i=1,npesfile_n
+   read(5,*) pes_file_n(i), dipolefile_n(i)
+end do
+  read(5,*) npesfile_f
+
+  allocate(pes_file_f(npesfile_f), dipolefile_f(npesfile_f))
+
+  do i=1,npesfile_f
+     read(5,*) pes_file_f(i), dipolefile_f(i)
+
+  end do
+
+  read(5,*) outfile
+  read(5,*) my
+  read(5,*) runmode   ! runmode=1,KH, =2, SCKH  
+  read(5,*) nstates, dvr_start_in, dx_in
+  read(5,*) omega_in_start, omega_in_end, n_omega_in
+  read(5,*) omega_out_start, omega_out_end, n_omega_out
+  read(5,*) theta_start, theta_end, n_theta
+  read(5,*) gamma_FWHM, instrument_FWHM
+  read(5,*) samplemode, npoints_x_sampl, npoints_mom_sampl, delta_t, ntsteps
+
+initial_PES_spline_2001.dat                            !pes_file_i      
+1                                                 !npesfile_n
+intermediate_PES_spline_2001.dat dipole_dummy_2001          !pes_file_n dipolefile_n
+1                                                 !npesfile_f
+final_PES_spline_2001.dat dipole_dummy_2001                 !pes_file_n dipolefile_n
+spectrum_resonant_test.dat                        !outfile 
+0.972222222222222                                 !approximate reduced mass for HCL
+401 0.8 0.0146                                       !nstates, dvr_start_in, dx_in
+199 207  11                                         !omega_in_start, omega_in_end, n_omega_in  
+180 200 1000                                       !omega_out_start, omega_out_end, n_omega_out
+1 1 1                                             !theta_start, theta end, n_theta
+0.045 0.1                                      !gamma_FWHM, instrument_FWHM
+
+

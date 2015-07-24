@@ -1,0 +1,83 @@
+subroutine mat_elem_xn(A,n,xn)
+  implicit none
+  
+  !passed variables
+  integer, intent(in)::  n, xn
+  !real(8), dimension(n,n), intent(in):: A
+  real(8), dimension(n,n), intent(out):: A
+
+  !local variables
+  integer:: i
+  real(8), dimension(n,n)::C1,C2
+  
+  ! this subroutine calculates the matrix elements of x^n with harmonic 
+  ! oscillator basis functions, i.e. < m | x^n | k >, xn is the exponent 
+  ! n is the number of basis functions. The returned matrix A should
+  ! be multiplied by (hbar/(2*m*omega))^(xn/2) 
+  !
+  ! Mathias Ljungberg, 2006-10-02
+
+  A=0
+
+  do i=1,n
+     A(i,i) = 1
+  end do
+
+  do i=1,xn
+     call raising(A,C1,n)
+     call lowering(A,C2,n)
+     A = C1 + C2
+  end do
+
+end subroutine mat_elem_xn
+
+
+
+subroutine raising(A,B,n)
+  implicit none
+  
+  !passed variables
+  integer, intent(in)::  n
+  real(8), dimension(n,n), intent(in):: A
+  real(8), dimension(n,n), intent(out):: B
+
+  !local variables
+  integer:: i,j
+
+  B=0
+  
+  do i=1,n
+     do j=1,n-1
+        
+        B(j+1,i) = sqrt(dfloat(j))*A(j,i) 
+
+     end do
+  end do
+
+end subroutine raising
+
+
+
+subroutine lowering(A,B,n)
+  implicit none
+  
+  !passed variables
+  integer, intent(in)::  n
+  real(8), dimension(n,n), intent(in):: A
+  real(8), dimension(n,n), intent(out):: B
+
+  !local variables
+  integer:: i,j
+  
+  B=0
+
+  do i=1,n
+     do j=2,n
+        
+        B(j-1,i) = sqrt(dfloat(j-1))*A(j,i) 
+
+     end do
+  end do
+
+
+end subroutine lowering

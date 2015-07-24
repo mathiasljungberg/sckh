@@ -1,0 +1,593 @@
+program SCKH
+  use KH_functions  
+  use parameters  
+  use SCKH_functions
+  use spline_m
+  use hist_class
+  use FFT_m
+
+  implicit none
+
+  ! input/output
+  character(80):: files_file, outfile,dummy, pes_file_i, pes_file_n, pes_file_lp_corr
+  character(80), dimension(:),allocatable:: pes_file_f, dipolefile_f
+  integer:: ntraj, ntsteps_inp, nfinal, ntsteps , n_omega, ntsteps_pad,samplemode
+  integer:: ntsteps_pad_pow, runmode, nfreq_inp,nproj, npoints_pes, shift_PES 
+  real(kind=wp),dimension(:),allocatable:: x,  time_inp2, E_n_inp, time, E_n, traj_weight 
+  real(kind=wp),dimension(:,:),allocatable:: E_f_inp, E_f, E_trans, projvec
+  real(kind=wp),dimension(:,:,:),allocatable:: D_fn_inp, D_fn 
+  real(kind=wp):: freq_min,  freq_max, gamma_FWHM, gamma_FWHM_2, tstep,my
+
+  !loop variables
+  integer::i,j,k,l,m,traj, ll,t, traj_x, traj_mom
+
+  ! other variables
+  character(80)::  string, file
+  real(kind=wp),dimension(:),allocatable:: sigma_tot, time_inp, freq, funct_real, funct_imag, funct,e_i
+  real(kind=wp),dimension(:),allocatable:: x_sampl, mom_sampl, x_new, omega
+  real(kind=wp),dimension(:,:),allocatable:: int_W_I, sigma, sigma_proj, c_i, x_mom_sampl
+  real(kind=wp):: gamma, gamma2, time_l, E, delta_t, time_l2, norm, E_fn_mean, D_proj, my_SI, dx
+  integer:: freq_min_i, freq_max_i,nfreq, ntrans, npoints_x_sampl, npoints_mom_sampl, npoints_x_mom_sampl
+  integer, dimension(:), allocatable:: freq_ind
+  complex(kind=wp), dimension(:,:),allocatable::   sigma_tmp
+  complex(kind=wp), dimension(:,:,:),allocatable::  sigma_m
+  real(kind=wp),dimension(:),allocatable:: E_IP1s, E_i_inp, E_lp_corr,shift 
+  type(hist), dimension(:), allocatable:: time_h
+  type(hist):: time_h_0, mom_h, time_h_0_mom
+  integer, dimension(1)::ind  
+
+  !functions
+  real(kind=wp):: dnrm2
+
+  ! this version reads the PES:es and uses them to interpolate the time dependent energies
+  read(5,*) npoints_pes
+  read(5,*) pes_file_i   ! initial state
+  read(5,*) pes_file_n   ! core ionized state  
+  read(5,*) shift_PES, pes_file_lp_corr
+  read(5,*) nfinal
+  allocate(pes_file_f(nfinal), dipolefile_f(nfinal))
+  do i=1,nfinal
+     read(5,*) pes_file_f(i), dipolefile_f(i)
+  end do
+
+  read(5,*) outfile
+  read(5,*) my
+  read(5,*) gamma_FWHM, gamma_FWHM_2     
+  read(5,*) runmode
+  read(5,*) samplemode, npoints_x_sampl, npoints_mom_sampl, delta_t, ntsteps
+  read(5,*) nproj
+ 
+  allocate(projvec(nproj,3))
+
+  do i=1, nproj
+     read(5,*) projvec(i,1),projvec(i,2),projvec(i,3)
+     
+     !normalize projvec
+     projvec(i,:) = projvec(i,:) / dnrm2(3,projvec(i,:),1)
+
+     write(6,*) "projvector", i,  projvec(i,:) 
+  end do
+
+
+  my_SI = my * amu
+
+  !
+  ! Input parameters
+  !
+  ! nfinal  :  number of final states 
+  ! ntraj : number of trajectories
+  ! tstep : time step in the trajectories 
+  ! ntsteps : the number of timesteps in the input trajectories 
+  ! ntsteps : number of timesteps, interpolated from the ones in trajectory. For runmode=1 this can to be like 500, 
+  !           since the number of time steps determines the maximum frequency. for runmode=2 don't use more than makes
+  !           a smooth spectrum, often nsteps = nsteps_inp will do
+  ! files_file  :  a file containing the names of the trajectroy files and their weights 
+  ! outfile : the file where the spectrum is written
+  ! freq_min : minimum frequency (only for runmode = 2 ) in eV
+  ! freq_max : maximum frequency (only for runmode = 2 ) in eV 
+  ! nfreq_inp : number of frequency bins (only for runmode = 2 ) 
+  ! gamma_FWHM : FWHM of Loretzian in eV
+  ! gamma_FWHM_2 : empirical broadening parameter (only for runmode 2). For rigorous results gamma_FWHM_2 = gamma_FWHM in eV
+  ! runmode :  1: Semi-classical Kramers-Heisenberg, 2: method of Odelius / Takahashi
+  ! nproj: number of projection vectors
+
+  ! The filenames of the trajectories
+  !allocate( trajfile(ntraj) )
+
+
+  call next_power_of_2(ntsteps, ntsteps_pad, ntsteps_pad_pow)
+
+  write(6,*) "ntsteps_pad_pow", ntsteps_pad, ntsteps_pad_pow
+
+  if(samplemode .eq. 1) then
+     npoints_x_mom_sampl = npoints_x_sampl * npoints_mom_sampl
+  else if(samplemode .eq. 2) then
+     npoints_x_mom_sampl = npoints_x_sampl !* 2 !npoints_x_sampl * npoints_mom_sampl
+     npoints_mom_sampl = npoints_x_sampl
+  else
+     write(6,*) "samplemode muste be either 1 or 2!"
+     stop
+  end if
+
+  ! allocate everything (changed dimension of E_n_inp etc) 
+  allocate(x(npoints_pes), time_inp(ntsteps),time_inp2(ntsteps), E_i_inp(npoints_pes),E_n_inp(npoints_pes), &
+       E_f_inp(nfinal,npoints_pes), D_fn_inp(nfinal,npoints_pes,3), time(ntsteps),&
+       E_n(ntsteps), E_f(nfinal,ntsteps), D_fn(nfinal,ntsteps,3), int_W_I(nfinal,ntsteps),&
+       E_IP1s(npoints_pes), E_trans(nfinal,npoints_pes),E_lp_corr(npoints_pes),&
+       shift(npoints_pes), &
+       c_i(npoints_pes,npoints_pes), E_i(npoints_pes), &
+       x_sampl(npoints_x_sampl), mom_sampl(npoints_mom_sampl), x_new(ntsteps),&
+       time_h(ntsteps), &
+       x_mom_sampl(npoints_x_mom_sampl, 2))
+
+
+  
+  ! use HWHM internally
+  gamma = gamma_FWHM / 2 
+
+  ! gamma2 is an empirical broadening parameter different from gamma for the purpose of 
+  ! computing spectra in the old (erronous) way
+  gamma2 = gamma_FWHM_2 / 2 
+
+  
+  !
+  ! Read PES:es (like old K-H program), remember now E_n_inp(npoints_pes)
+  !
+     
+  ! ground state
+  open(10,file=pes_file_i,status='unknown')
+  
+  do i=1,npoints_pes
+     read(10,*) x(i), E_i_inp(i)
+  end do
+     
+     
+  close(10) 
+
+  ! intermediate state, koopmans
+  open(10,file=pes_file_n,status='unknown')
+  
+  do i=1,npoints_pes
+     read(10,*) x(i), E_n_inp(i)
+  end do     
+     
+  close(10) 
+     
+  ! correct core hole lone pair  PES
+  if( shift_PES .eq.  1 ) then
+     
+     open(10,file=pes_file_lp_corr,status='unknown')
+     
+     do i=1,npoints_pes
+        read(10,*) x(i), E_lp_corr(i)
+     end do
+        
+     close(10)
+     
+  end if
+     
+  ! final states
+     
+  do j=1,nfinal
+     
+     !pes file
+     open(10,file=pes_file_f(j),status='unknown')
+     
+     do i=1,npoints_pes
+        read(10,*) x(i), E_f_inp(j,i)
+     end do
+        
+     close(10) 
+        
+     !dipole file
+        
+     open(10,file=dipolefile_f(j),status='unknown')
+        
+     do i=1,npoints_pes
+        read(10,*) x(i), D_fn_inp(j,i,1), D_fn_inp(j,i,2), D_fn_inp(j,i,3) !dipole(j,i,1),dipole(j,i,2),dipole(j,i,3)
+           
+     end do
+        
+     close(10) 
+        
+  end do
+     
+  write(6,*) "Done reading PES:s"
+     
+     
+  ! Shift orbital energies so that V_n have energies V_lp_corr
+  ! and the spacing between the intermediate and final states are preserved
+     
+  if( shift_PES .eq.  1) then
+        
+     shift = E_lp_corr -E_f_inp(1,:) 
+        
+     do j=1,nfinal
+        E_f_inp(j,:) = E_f_inp(j,:) + shift
+     end do
+        
+     write(6,*) "Shifted PES:s"
+        
+  end if
+
+  ! convert to eV units
+  write(6,*) E_n_inp(30) -E_f_inp(1,30)
+  write(6,*) hartree/eV
+
+  E_i_inp = E_i_inp * hartree / eV
+  E_n_inp = E_n_inp * hartree / eV
+     
+  do j=1,nfinal
+     E_f_inp(j,:) = E_f_inp(j,:) * hartree / eV
+  end do
+  
+  write(6,*) E_n_inp(30) -E_f_inp(1,30)
+
+  x=x*1.0d-10
+
+  dx=(x(2)-x(1)) !*1.0d-10
+  write(6,*) "dx: ", dx
+
+  !pes_l =  (npoints_pes-1) * dx
+     
+
+  !
+  ! Solve the vibrational problem for initial state to be able to sample initial distribution
+  !  
+
+  call solve_sinc_DVR(dx, my_SI, E_i_inp*eV, c_i, e_i)
+  write(6,*) "Calculated initial state eigenfunctions"
+  write(6,*) "First vibrational transition", (e_i(2)-e_i(1)) * cm 
+
+
+  ! alt 1: do an 'even' sampling of N points
+  
+  if(samplemode .eq. 1) then  
+     call sample_x_mom(x, c_i(:,1), x_sampl, mom_sampl, x_mom_sampl, 1)
+  else if(samplemode .eq. 2) then  
+     call sample_x_mom(x, c_i(:,1), x_sampl, mom_sampl, x_mom_sampl, 2)
+  end if
+
+  write(6,*) "Sampling done"
+
+  !check
+  do i=1,npoints_x_sampl
+     write(17,*) x_sampl(i)
+  end do
+
+  do i=1,npoints_x_mom_sampl
+     write(22,*) x_mom_sampl(i,1), x_mom_sampl(i,2)
+  end do
+
+  do i=1,npoints_pes
+     write(20,'3ES16.6') x(i), c_i(i,1), c_i(i,1) ** 2
+  end do
+  
+  delta_t = delta_t * 1.d-15
+  time_l = (ntsteps-1) * delta_t
+  time_l2 = (ntsteps_pad-1) * delta_t 
+
+  ! some output
+  write(6,*) "gamma_FWHM (fwhm of lorentzian broadening)", gamma_FWHM
+  write(6,*) "gamma_FWHM_2 (fwhm of lorentzian broadening)", gamma_FWHM_2
+  write(6,*) "gamma (hwhm of lorentzian broadening)", gamma
+  write(6,*) "gamma (hwhm of lorentzian broadening)", gamma2
+  !write(6,*) "ntsteps", ntsteps
+  !write(6,*) "tstep", tstep
+  write(6,*) "my_SI", my_SI 
+  write(6,*) "time_l", time_l
+  write(6,*) "ntsteps_pad", ntsteps_pad, "= 2 **", ntsteps_pad_pow 
+  write(6,*) "time_l2 (padded time)", time_l2
+  write(6,*)
+  write(6,*) "Fundamental frequency resolution", 2 * pi * hbar /( time_l * eV)
+  write(6,*) "Padded frequency resolution", 2 * pi * hbar /( time_l2 * eV)
+  write(6,*) "delta t", delta_t
+  write(6,*) "max freq",  pi * hbar /( delta_t  * eV), "eV"
+
+
+  if (runmode .eq. 1 ) then
+     nfreq = ntsteps_pad 
+  end if
+
+  if (runmode .eq. 2) then
+
+     nfreq = nfreq_inp
+     write(6,*) "nfreq", nfreq
+     allocate( freq(nfreq), freq_ind(nfreq))  
+
+     write(6,*) "allocated freq", size(freq),nfreq
+     freq = 0
+     freq_ind =0 
+   
+     call linspace(freq, freq_min, freq_max, nfreq)
+  end if
+
+
+
+  allocate(sigma_m(nfinal,nfreq,3), sigma(nfinal,nfreq), sigma_tot(nfreq),  sigma_proj(nproj,nfreq), sigma_tmp(nfinal,nfreq), omega(nfreq))
+
+
+  !
+  ! Loop over trajectories
+  !
+
+  
+  do i=1, ntsteps
+     time(i)= (i-1)*delta_t
+  end do
+           
+
+  call hist_init(time_h_0, 1000, x(1), x(npoints_pes) ) 
+  call hist_init(time_h_0_mom, 1000, minval(x_mom_sampl(:,2)), maxval(x_mom_sampl(:,2)) ) 
+  do i=1, ntsteps
+     call hist_init(time_h(i), 1000, x(1), x(npoints_pes) ) 
+  end do
+
+
+  sigma=0
+  sigma_tot=0
+  sigma_proj=0
+
+  do traj=1, npoints_x_mom_sampl
+
+           !
+           ! Compute trajectory
+           !
+             
+           call hist_add(time_h_0, x_mom_sampl(traj,1), 1.0d0)   
+           call hist_add(time_h_0_mom, x_mom_sampl(traj,2), 1.0d0)    
+ 
+           call verlet_trajectory(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/my_SI, x, E_n_inp * eV, delta_t, my_SI, x_new )
+        
+           do i=1, ntsteps
+              call hist_add(time_h(i), x_new(i), 1.0d0)
+           end do
+
+           ! look up energies as a function of distance (which in turn is a function of time)
+           call spline_easy(x, E_n_inp, npoints_pes, x_new, E_n, ntsteps)
+           
+           do i=1,nfinal
+              call spline_easy(x, E_f_inp(i,:), npoints_pes, x_new, E_f(i,:), ntsteps)  
+           end do
+        
+           do i=1,nfinal
+              do m=1,3
+                 call spline_easy(x, D_fn_inp(i,:,m) , npoints_pes, x_new, D_fn(i,:,m) , ntsteps)  
+              end do
+           end do
+
+
+           ! now everything should be splined and ready. 
+           if (runmode .eq. 1) then
+
+              ! compute  e^{-i \int_0^t W_I(t') dt' }
+              ! first time, compute the mean transition energy, and frequency
+              if (traj .eq. 1) then
+
+                 ind = minloc(E_i_inp)
+                 !                 E_fn_mean = sum(  E_f(nfinal,:) - E_n(:) ) / max(1,size(E_n(:))) 
+                 E_fn_mean =  E_f(nfinal,ind(1)) - E_n(ind(1))
+                 
+                 write(6,*) "E_fn_mean", E_fn_mean
+                 
+                 ! omega centered around E_fn_mean
+                 j=1
+                 do i=nfreq/2, 1, -1
+                    omega(j) = -2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean
+                    j=j+1
+                 end do
+                 do i=0, nfreq/2-1
+                    omega(j) =  2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean
+                    j=j+1
+                 end do
+
+                 !do i=0,nfreq-1
+                 !   omega(i+1) = 2 * pi * i * hbar / (time_l2 * eV) - E_fn_mean
+                 !end do
+
+              end if
+        
+              call compute_SCKH(E_n, E_f, E_fn_mean, D_fn, time,  sigma_m, gamma)
+        
+              ! square sigma, check this expression
+              sigma = sigma + real( sum( sigma_m * conjg(sigma_m), 3)) 
+              sigma_tot = sigma_tot +  sum( real( sum( sigma_m * conjg(sigma_m), 3)),1)
+ 
+              ! compute projections
+              do i=1,nproj
+                 sigma_tmp = sigma_m(:,:,1) * projvec(i,1) + sigma_m(:,:,2) * projvec(i,2) + sigma_m(:,:,3) * projvec(i,3)
+                 sigma_proj(i,:) = sigma_proj(i,:) + sum( real( sigma_tmp * conjg(sigma_tmp)),1)
+              end do
+        
+        
+           else  if(runmode .eq. 2) then
+              write(6,*) "Method of Odelius / Takashashi et al. "
+        
+              sigma_m = 0
+
+              ! compute sigma_tot  
+              do k =1,nfinal! final state 
+                 do m=1,3 ! polarization     
+                    do l = 1, nfreq
+                       do t = 1, ntsteps              
+                          sigma(k,l) =  sigma(k,l) + D_fn(k,t,m) ** 2 *  exp(-(gamma * eV / hbar) * time(t)) &
+                               / (  (freq(l) - (E_n(t) - E_f(k,t)) ) ** 2 + gamma2 ** 2) 
+                          
+                       end do !t
+                    end do ! l
+                 end do ! m
+              end do ! k
+
+              ! compute projections
+              do k =1,nfinal! final state 
+                 do m=1,nproj
+                    do l = 1, nfreq
+                       do t = 1, ntsteps              
+                          D_proj = D_fn(k,t,1) * projvec(m,1) + D_fn(k,t,2) * projvec(m,2) + D_fn(k,t,3) * projvec(m,3)
+                          sigma_m(k,l,m) =  sigma_m(k,l,m) + D_proj ** 2 * exp(-(gamma * eV / hbar) * time(t)) &
+                               / (  (freq(l) - (E_n(t) - E_f(k,t)) ) ** 2 + gamma2 ** 2)  !dcmplx(funct_real, funct_imag)
+                       end do !t
+                    end do ! l
+                 end do ! m
+              end do ! k
+
+              sigma_tot = sigma_tot +  sum( real( sum( sigma_m , 3)),1)
+    
+              ! compute projections (sigma_m already squared!)
+              do i=1,nproj
+                 sigma_proj(i,:) = sigma_proj(i,:) + real( sum( sigma_m(:,:,i) ,1 ) )
+              end do
+
+           end if
+
+           !write(6,*) "Computed trajectory", traj, x_mom_sampl(traj,1), x_mom_sampl(traj,2)
+  
+        end do ! end traj
+
+
+write(6,*)
+write(6,*) "Averaged over", npoints_x_mom_sampl, "trajectories"
+
+if (runmode .eq. 1) then 
+
+!write distribution
+
+file="_time_h_0"
+file = trim(adjustl(outfile)) //  trim(adjustl(file))  // ".dat"
+call hist_broadening(time_h_0, 0.01d-10)
+call hist_write(time_h_0, file)
+
+file="_time_h_0_mom"
+file = trim(adjustl(outfile)) //  trim(adjustl(file))  // ".dat"
+!call hist_broadening(time_h_0_mom, 0.01d-10)
+call hist_write(time_h_0_mom, file)
+
+do i=1,10 !ntsteps
+   file="_time_h_"
+   write(string,*) i
+   file = trim(adjustl(outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+   call hist_broadening(time_h(i), 0.01d-10)
+   call hist_write(time_h(i), file)
+end do
+
+
+!normalize 
+norm = sum(sigma_tot) *  2 * pi  * hbar / (time_l2 * eV ) 
+sigma_tot = sigma_tot / norm
+sigma = sigma / norm
+sigma_proj = sigma_proj / norm
+
+! write sigma to file
+file="_sigma"
+file = trim(adjustl(outfile)) // trim(adjustl(file)) // ".dat"
+open(10,file=file,status='unknown')
+ 
+
+  !do i=nfreq/2, 1, -1
+  !    write(10,*)  -2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma(j,nfreq-i+1)
+  ! end do
+ !
+  ! do i=0, nfreq/2
+  !    write(10,*)  2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma(j,i+1)
+  ! end do
+
+do i=1,nfreq
+   write(10,*)  omega(i), sigma_tot(i)
+!   write(10,*)  i, sigma_tot(i)
+end do
+
+close(10)
+
+! write spectrum from different final states
+do j=1, nfinal
+
+   file="_sigma_final_"
+   write(string,*) j
+   file = trim(adjustl(outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+   open(10,file=file,status='unknown')
+   
+   do i=nfreq/2, 1, -1
+      write(10,*)  -2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma(j,nfreq-i+1)
+   end do
+ 
+   do i=0, nfreq/2
+      write(10,*)  2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma(j,i+1)
+   end do
+     
+   close(10)
+end do ! j
+
+! write spectrum from projections  
+do j=1, nproj
+  
+   file="_sigma_proj_"
+   write(string,*) j
+   file = trim(adjustl(outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+   open(10,file=file,status='unknown')
+
+   do i=nfreq/2, 1, -1
+      write(10,*)  -2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma_proj(j,nfreq-i+1)
+   end do
+     
+   do i=0, nfreq/2
+      write(10,*)  2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma_proj(j,i+1)
+   end do
+     
+   close(10)
+end do !j
+  
+
+else if (runmode .eq. 2) then
+   
+!normalize 
+norm = sum(sigma_tot) * (freq(2)-freq(1))
+
+sigma_tot = sigma_tot / norm
+sigma = sigma / norm
+sigma_proj = sigma_proj / norm
+
+
+! write sigma to file
+file="_sigma_"
+file = trim(adjustl(outfile)) // trim(adjustl(file)) // ".dat"
+open(10,file=file,status='unknown')
+
+do i=1,nfreq
+   write(10,*)  freq(i), sigma_tot(i)
+end do
+
+close(10)
+
+
+! write spectrum from different final states
+do j=1, nfinal
+
+   file="_sigma_final_"
+   write(string,*) j
+   file = trim(adjustl(outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+   open(10,file=file,status='unknown')
+
+   do i=1,nfreq
+      write(10,*)  freq(i), sigma(j,i)
+   end do
+
+   close(10)
+end do
+
+! write spectrum from projections
+do j=1, nproj
+
+   file="_sigma_proj_"
+   write(string,*) j
+   file = trim(adjustl(outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+   open(10,file=file,status='unknown')
+
+   do i=1,nfreq
+      write(10,*)  freq(i), sigma_proj(j,i)
+   end do
+end do
+
+end if
+         
+        
+end program SCKH
