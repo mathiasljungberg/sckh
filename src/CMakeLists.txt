@@ -59,6 +59,22 @@ m_constants.F90
 m_vib_finite_diff.F90
 m_fourier_grid.F90
 m_splines.F90
+m_algebra.F90
+m_color.F90
+m_define_macro.F90
+m_die.F90
+m_fact.F90
+m_sort.F90
+m_upper.F90
+m_warn.F90
+m_sckh_params_t.F90
+m_log.F90
+m_log_type.F90
+m_io.F90
+m_input.F90
+m_KH.F90
+m_PES_io.F90
+m_KH_functions.F90
 )
 
 #SET(ALL_MODULES_F 
@@ -71,7 +87,7 @@ m_splines.F90
 #add_subdirectory(morsefitting morsefitting)
 
 SET(EXECUTABLES
-vib_finite_diff
+vib_finite_diff sckh_main
 )
 
 FOREACH(EXEC ${EXECUTABLES})

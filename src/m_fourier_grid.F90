@@ -52,7 +52,7 @@ contains
           !p = 2.0_wp * const % pi * (k-1) / (dx*nstates) 
           !r_diff = (i-j) !dx * (i-j)
           H_mat(i,j) =  H_mat(i,j) + exp( dcmplx(0,2.0_wp * const % pi * (i-j) * (k-1) / nstates)) * &
-               ((k-1)**2) * (hbar**2/ (2.0_wp * mu)) * (2.0_wp * const % pi)**2 / (dx * nstates)**3 
+               ((k-1)**2) * (-hbar**2/ (2.0_wp * mu)) * (-1.0_wp) * (2.0_wp * const % pi)**2 / (dx * nstates)**2 
           !write(6,*) exp( dcmplx(0,r_diff * p)) * &
           !     (-p**2) * (-hbar**2)/ (2.0_wp * mu) / nstates
 

@@ -51,12 +51,12 @@ program vib_finite_diff
   write(6,*) "solve_finite_diff: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
 
   ! fourier grid
-  !allocate(eigvec_z(npoints, npoints))
-  !deallocate(eigval)
-  !allocate(eigval(npoints))
-  !call solve_fourier_grid(dx, y_new, eigval, eigvec_z, mu, "SI")  
+  allocate(eigvec_z(npoints, npoints))
+  deallocate(eigval)
+  allocate(eigval(npoints))
+  call solve_fourier_grid(dx, y_new, eigval, eigvec_z, mu, "SI")  
   
-  !write(6,*) "solve_finite_diff: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
+  write(6,*) "solve_finite_diff: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
 
   
 
