@@ -1,5 +1,7 @@
 module m_KH
   implicit none
+
+#include "m_define_macro.F90"
 contains
 
 !subroutine calculate_XAS_nonadiabatic(inp)
@@ -10,7 +12,7 @@ contains
 !
 !  ! other variables
 !  character(80):: file,string
-!  real(kind=wp):: my_SI, dx,dvr_start, gamma, E_n_mean 
+!  real(kind=wp):: mu_SI, dx,dvr_start, gamma, E_n_mean 
 !  integer:: npoints, nstates_na 
 !  real(kind=wp), dimension(:),allocatable:: X_dvr,E_i, eig_i, eig_na
 !  real(kind=wp), dimension(:),allocatable::  sigma, omega
@@ -54,7 +56,7 @@ contains
 !   end if
 !
 !  npoints = (inp % nstates-1)/2
-!  my_SI = inp % my * const % u
+!  mu_SI = inp % mu * const % u
 !  dvr_start = inp % dvr_start_in * 1.0d-10
 !  dx = inp % dx_in * 1.0d-10
 !
@@ -88,12 +90,12 @@ contains
 !
 !
 !  ! initial state
-!  call solve_sinc_DVR(dx,my_SI, E_i, c_i, eig_i)
+!  call solve_sinc_DVR(dx,mu_SI, E_i, c_i, eig_i)
 !  write(6,*) "Initial state fundamental", (eig_i(2) -eig_i(1))*const % cm
 !
 !  ! final states
 !  do j=1,inp % npesfile_f
-!     call solve_sinc_DVR(dx,my_SI, E_f(j,:), c_f(j,:,:), eig_f(j,:))
+!     call solve_sinc_DVR(dx,mu_SI, E_f(j,:), c_f(j,:,:), eig_f(j,:))
 !     write(6,*) "Final state fundamental",j, (eig_f(j,2) -eig_f(j,1))*const % cm
 !  end do
 !
@@ -202,15 +204,16 @@ subroutine calculate_XES_nonadiabatic(p)
   use m_PES_io, only: read_nac_file
   use m_sckh_params_t, only: sckh_params_t 
   use m_KH_functions, only: solve_sinc_DVR
+  use m_io, only: get_free_handle
 
-  type(sckh_params_t), intent(in):: p 
+  type(sckh_params_t), intent(inout):: p 
 
   ! loop variables
   integer::i,j,ii,jj,k,l,m,t 
 
   ! other variables
   character(80):: file,string
-  real(kind=wp):: my_SI, dx,dvr_start, gamma, E_n_mean 
+  real(kind=wp):: mu_SI, dx,dvr_start, gamma, E_n_mean 
   integer:: npoints 
   real(kind=wp), dimension(:),allocatable:: X_dvr,E_i, E_n, E_lp_corr, eig_i, eig_n, shift
   real(kind=wp), dimension(:),allocatable::  sigma, omega, D_ni
@@ -218,6 +221,8 @@ subroutine calculate_XES_nonadiabatic(p)
        eig_f, E_f, sigma_states
   real(kind=wp), dimension(:,:,:),allocatable:: c_f, dipole, D_fi
   real(kind=wp), dimension(:,:,:,:),allocatable:: D_fn, nac
+  integer:: ifile
+
   !complex(kind=wp), dimension(:,:),allocatable:: 
 
   !
@@ -246,7 +251,7 @@ subroutine calculate_XES_nonadiabatic(p)
   end if
 
   npoints = (p % nstates-1)/2
-  my_SI = p % my * const % u
+  mu_SI = p % mu * const % u
   dvr_start = p % dvr_start_in * 1.0d-10
   dx = p % dx_in * 1.0d-10
 
@@ -259,18 +264,44 @@ subroutine calculate_XES_nonadiabatic(p)
      X_dvr(ii) = (ii-1)*dx + dvr_start
   end do
 
+ write(6,*) "X_dvr", X_dvr
+
   ! read PES files
   call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_dvr, E_i)
   call read_PES_file(p % pes_file_n, p % npoints_in, p % nstates, X_dvr, E_n)
+
+  ! final state pes_files and dipole_files
+  ifile = get_free_handle()
+  open(ifile, file= p % pes_file_list_f, action='read')
+  
+  allocate(p % pes_files_f(p % npesfile_f))
+  do i=1, p % npesfile_f
+    read(ifile,*) p % pes_files_f(i)
+    write(6,*) p % pes_files_f(i)
+  end do
+
+  close(ifile)
+
+  ifile = get_free_handle()
+  open(ifile, file= p % dipole_file_list_f, action='read')
+  
+  write(6,*) "p % dipole_file_list_f", p % dipole_file_list_f
+  allocate(p % dipolefile_f(p % npesfile_f))
+  do i=1, p % npesfile_f
+    read(ifile,*) p % dipolefile_f(i)
+  end do
+
+  close(ifile)
+
 
   do j=1,p % npesfile_f
      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % nstates, X_dvr, E_f(j,:))
      call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_dvr, dipole(j,:,:))
   end do
 
-  if (p % nonadiabatic .eq. 1) then
-     call read_nac_file(p % nac_file, p % npoints_in, p %nstates, X_dvr, p % npesfile_f, nac)
-  end if
+!  if (p % nonadiabatic .eq. 1) then
+!     call read_nac_file(p % nac_file, p % npoints_in, p %nstates, X_dvr, p % npesfile_f, nac)
+!  end if
 
   ! Shift orbital energies so that E_f(1,:) have energies E_lp_corr
   ! and the spacing between the intermediate and final states are preserved
@@ -295,16 +326,16 @@ subroutine calculate_XES_nonadiabatic(p)
 
 
   ! initial state
-  call solve_sinc_DVR(dx,my_SI, E_i, c_i, eig_i)
+  call solve_sinc_DVR(dx,mu_SI, E_i, c_i, eig_i)
   write(6,*) "Initial state fundamental", (eig_i(2) -eig_i(1))*const % cm
 
   ! intermediate state
-  call solve_sinc_DVR(dx,my_SI, E_n, c_n, eig_n)
+  call solve_sinc_DVR(dx,mu_SI, E_n, c_n, eig_n)
   write(6,*) "Intermediate state fundamental", (eig_n(2) -eig_n(1))*const % cm
 
   ! final states
   do j=1,p % npesfile_f
-     call solve_sinc_DVR(dx,my_SI, E_f(j,:), c_f(j,:,:), eig_f(j,:))
+     call solve_sinc_DVR(dx,mu_SI, E_f(j,:), c_f(j,:,:), eig_f(j,:))
      write(6,*) "Final state fundamental",j, (eig_f(j,2) -eig_f(j,1))*const % cm
   end do
 

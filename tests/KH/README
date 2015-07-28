@@ -1,0 +1,6 @@
+old code: 
+KH < KH.inp > out
+
+new code (uses input.txt as input)
+SCKH_main >out
+

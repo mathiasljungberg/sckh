@@ -38,7 +38,7 @@ module m_sckh_params_t
      integer:: npesfile_f 
      integer:: shift_PES
      integer:: nonadiabatic
-     real(wp):: my
+     real(wp):: mu
      real(wp):: dvr_start_in
      real(wp):: dx_in
      real(wp):: gamma_FWHM 
@@ -64,8 +64,8 @@ contains
     ! read input file
     call input_calc_params('input.txt', inp, iv_in, ilog)
     
-    ! runmode: either "XAS" or "XES"
-    call init_parameter('runmode',inp, "XAS", p % runmode ,iv)
+    ! runmode: either "SCKH" or "KH"
+    call init_parameter('runmode',inp, "KH", p % runmode ,iv)
     
     ! pes_file_i: PES file for the initial state
     call init_parameter('pes_file_i',inp, "pes_file_i,txt", p % pes_file_i  ,iv)
@@ -83,7 +83,7 @@ contains
     ! dipole files for intermediate states
     call init_parameter('dipole_file_list_n',inp, "dipole_file_list_n.txt", p % dipole_file_list_n ,iv)
     ! dipole files for final states
-    call init_parameter('dipole_file_list_f',inp, "dipole_file_list_f.txt", p % dipole_file_list_n ,iv)
+    call init_parameter('dipole_file_list_f',inp, "dipole_file_list_f.txt", p % dipole_file_list_f ,iv)
     
     ! outfile: the base name of the output files
     call init_parameter('outfile',inp, "outfile,txt", p % outfile ,iv)
@@ -108,7 +108,7 @@ contains
     ! nonadiabatic: if 1 yes, if 0 no
     call init_parameter('nonadiabatic',inp, 0, p % nonadiabatic ,iv)
     ! mu, reduced mass
-    call init_parameter('my',inp, 1.0_wp, p % my ,iv)
+    call init_parameter('mu',inp, 1.0_wp, p % mu ,iv)
     ! dvr_start_in: x coordinate of the starting point of the dvr points [Angstrom]
     call init_parameter('dvr_start_in',inp, 0.0_wp, p % dvr_start_in ,iv)
     ! dx_in: spacing between dvr points [Angstroms]
