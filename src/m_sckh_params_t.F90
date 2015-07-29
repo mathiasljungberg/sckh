@@ -43,6 +43,19 @@ module m_sckh_params_t
      real(wp):: dx_in
      real(wp):: gamma_FWHM 
 
+     ! sckh parameters
+     ! for SCKH
+     integer:: samplemode
+     integer:: npoints_x_sampl 
+     integer:: npoints_mom_sampl 
+     integer:: ntsteps
+     integer:: ntsteps2
+     real(kind=wp):: delta_t
+     
+     ! projections
+     integer:: nproj
+     real(kind=wp), allocatable:: projvec(:,:)
+
   end type sckh_params_t
 
 contains
@@ -115,6 +128,25 @@ contains
     call init_parameter('dx_in',inp, 0.1_wp, p % dx_in ,iv)
     ! gamma_FWHM: lifetime broadening [eV]
     call init_parameter('gamma_FWHM',inp, 0.1_wp, p % gamma_FWHM ,iv)
+
+
+    ! sckh parameters
+    call init_parameter('samplemode',inp, 1, p % samplemode,iv)
+
+    call init_parameter('npoints_x_sampl',inp, 1, p % npoints_x_sampl,iv)
+
+    call init_parameter('npoints_mom_sampl',inp,1 , p % npoints_mom_sampl,iv)
+
+    call init_parameter('ntsteps',inp, 1, p % ntsteps,iv)
+
+    call init_parameter('ntsteps2',inp, 1, p % ntsteps2,iv)
+
+    call init_parameter('delta_t',inp, 0.1_wp, p % delta_t,iv)
+
+
+    !call init_parameter('nproj',inp, 3, p % nproj,iv)
+
+    
     
   end subroutine init_sckh_params_t
   

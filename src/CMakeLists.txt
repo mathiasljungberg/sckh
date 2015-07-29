@@ -63,7 +63,6 @@ m_algebra.F90
 m_color.F90
 m_define_macro.F90
 m_die.F90
-m_fact.F90
 m_sort.F90
 m_upper.F90
 m_warn.F90
@@ -75,12 +74,17 @@ m_input.F90
 m_KH.F90
 m_PES_io.F90
 m_KH_functions.F90
+m_KH_utils.F90
+m_SCKH_PES.F90
+m_SCKH_utils.F90
+hist_class.F90
+m_FFT.F90
 )
 
-#SET(ALL_MODULES_F 
+SET(ALL_MODULES_F 
+sffteu.f
+)
 #bubblesort.f    crossprod.f     factorials.f    rnd.f           sffteu.f        splib.f         splines.f
-#)
-
 
 #ADD_LIBRARY(fortran-utilities STATIC ${ALL_MODULES_F90} ${ALL_MODULES_F})
 
@@ -91,7 +95,7 @@ vib_finite_diff sckh_main
 )
 
 FOREACH(EXEC ${EXECUTABLES})
-  ADD_EXECUTABLE(${EXEC} ${EXEC}.F90 ${ALL_MODULES_F90})
+  ADD_EXECUTABLE(${EXEC} ${EXEC}.F90 ${ALL_MODULES_F90} ${ALL_MODULES_F})
   TARGET_LINK_LIBRARIES(${EXEC} ${FLAGS} ${LAPACK_LIB}
     ${LINK_ADDONS})
 ENDFOREACH(EXEC)
