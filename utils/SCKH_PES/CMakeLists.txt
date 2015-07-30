@@ -68,7 +68,7 @@ sffteu.f
 #add_subdirectory(morsefitting morsefitting)
 
 SET(EXECUTABLES
-SCKH
+SCKH_PES
 )
 
 FOREACH(EXEC ${EXECUTABLES})

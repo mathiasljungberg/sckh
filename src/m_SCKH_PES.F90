@@ -59,6 +59,7 @@ subroutine calculate_SCKH_PES(p)
   real(kind=wp), dimension(:),allocatable::  X_dvr
   real(kind=wp) :: dvr_start 
   integer:: npoints, ii
+  real(8):: dnrm2
 
   ! set some local variables
   ntsteps = p % ntsteps
@@ -72,6 +73,35 @@ subroutine calculate_SCKH_PES(p)
   dvr_start = p % dvr_start_in * 1.0d-10
   dx = p % dx_in * 1.0d-10
   delta_t = p % delta_t
+
+  ! projections
+  if(p % use_proj) then
+    ifile = get_free_handle()
+    open(ifile, file= p % proj_file, action='read')    
+    read(ifile,*) p % nproj
+    
+    allocate(p % projvec(p % nproj,3))
+    
+    do i=1, p % nproj                                         
+      read(ifile,*) p % projvec(i,1), p % projvec(i,2), p % projvec(i,3) 
+      
+      !normalize projvec                               
+      p % projvec(i,:) = p % projvec(i,:) / dnrm2(3,p % projvec(i,:),1)
+      write(6,*) "projvector", i,  p % projvec(i,:)            
+    end do
+
+    close(ifile)
+  else
+    ! the three cartesian directions
+    p % nproj =3 
+    allocate(p % projvec(p % nproj,3))
+    
+    p % projvec =0.0_wp
+    p % projvec(1,1) =1.0_wp
+    p % projvec(2,2) =1.0_wp
+    p % projvec(3,3) =1.0_wp
+
+  end if
 
   !outfile = p % outfile
 
@@ -325,7 +355,8 @@ subroutine calculate_SCKH_PES(p)
            
      ! compute projections
      do i=1,p % nproj
-        sigma_tmp = sigma_m(:,:,1) * p % projvec(i,1) + sigma_m(:,:,2) * p % projvec(i,2) + sigma_m(:,:,3) * p % projvec(i,3)
+        sigma_tmp = sigma_m(:,:,1) * p % projvec(i,1) + sigma_m(:,:,2) * &
+             p % projvec(i,2) + sigma_m(:,:,3) * p % projvec(i,3)
         sigma_proj(i,:) = sigma_proj(i,:) + sum( real( sigma_tmp * conjg(sigma_tmp)),1)
      end do
      
@@ -366,14 +397,15 @@ file = trim(adjustl(p % outfile)) // trim(adjustl(file)) // ".dat"
 ifile = get_free_handle()
 open(ifile,file=file,status='unknown')
  
-
-  !do i=n_omega/2, 1, -1
-  !    write(10,*)  -2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma(j,n_omega-i+1)
-  ! end do
+!   do i=n_omega/2, 1, -1
+!     write(ifile,*)  -2.0_wp * const % pi * (i) * &
+!          const % hbar / (time_l2 * const % eV) - E_fn_mean, sigma(j,n_omega-i+1)
+!   end do
  !
-  ! do i=0, n_omega/2
-  !    write(10,*)  2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma(j,i+1)
-  ! end do
+!   do i=0, n_omega/2
+!     write(ifile,*)  2.0_wp * const % pi * (i) * &
+!          const % hbar / (time_l2 * const % eV) - E_fn_mean, sigma(j,i+1)
+!   end do
 
 do i=1,n_omega
    write(ifile,*)  omega(i), sigma_tot(i)

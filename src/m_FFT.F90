@@ -84,10 +84,10 @@ subroutine FFT_complex(x, f, f_out, omega)
   f_real = dreal(f)
   f_imag = dimag(f)
 
-  call FFT(f_real, f_imag, f_out_real, f_out_imag, -1)
+  call FFT(f_real, f_imag, f_out_real, f_out_imag, 1)
 
-  !call reorder_sigma1(f_out_real)
-  !call reorder_sigma1(f_out_imag)
+  call reorder_sigma1(f_out_real)
+  call reorder_sigma1(f_out_imag)
 
   f_out = dcmplx(f_out_real, f_out_imag)
 

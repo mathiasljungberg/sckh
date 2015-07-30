@@ -29,6 +29,8 @@ module m_sckh_params_t
 
      character(80):: nac_file
 
+     character(80):: proj_file
+
      ! 
      integer:: nstates
      integer:: npoints_in
@@ -53,6 +55,7 @@ module m_sckh_params_t
      real(kind=wp):: delta_t
      
      ! projections
+     logical:: use_proj
      integer:: nproj
      real(kind=wp), allocatable:: projvec(:,:)
 
@@ -103,6 +106,9 @@ contains
     
     ! nac_file: the file containing the non-adiabatic couplings
     call init_parameter('nac_file',inp, "nac_file.txt", p % nac_file ,iv)
+
+    ! proj_file: the file containing the projections, if used
+    call init_parameter('proj_file',inp, "proj_file.txt", p % proj_file ,iv)
     
     ! nstates: the number of dvr points, equally the number of vibrational eigenstates
     call init_parameter('nstates',inp, 100, p % nstates ,iv)
@@ -143,6 +149,8 @@ contains
 
     call init_parameter('delta_t',inp, 0.1_wp, p % delta_t,iv)
 
+    ! projections
+    call init_parameter('use_proj',inp, .false., p % use_proj,iv)
 
     !call init_parameter('nproj',inp, 3, p % nproj,iv)
 

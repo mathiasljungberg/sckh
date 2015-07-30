@@ -1,0 +1,8 @@
+dipolefile_9.dat
+dipolefile_8.dat
+dipolefile_7.dat
+dipolefile_6.dat
+dipolefile_5.dat
+dipolefile_4.dat
+
+

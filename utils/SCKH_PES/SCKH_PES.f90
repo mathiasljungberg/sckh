@@ -260,7 +260,7 @@ program SCKH
   end do
 
   do i=1,npoints_pes
-     write(20,'3ES16.6') x(i), c_i(i,1), c_i(i,1) ** 2
+     write(20,'(3ES16.6)') x(i), c_i(i,1), c_i(i,1) ** 2
   end do
   
   delta_t = delta_t * 1.d-15
@@ -304,7 +304,8 @@ program SCKH
 
 
 
-  allocate(sigma_m(nfinal,nfreq,3), sigma(nfinal,nfreq), sigma_tot(nfreq),  sigma_proj(nproj,nfreq), sigma_tmp(nfinal,nfreq), omega(nfreq))
+  allocate(sigma_m(nfinal,nfreq,3), sigma(nfinal,nfreq), sigma_tot(nfreq), &
+       sigma_proj(nproj,nfreq), sigma_tmp(nfinal,nfreq), omega(nfreq))
 
 
   !

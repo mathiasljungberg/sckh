@@ -1,0 +1,192 @@
+Manual for the program SCKH
+
+This program calculates XES using semi-classical approximation to the Kramers-Heisenberg formula (SCKH) for excitations above the edge. It needs trajectories run on the core excited state which can be obtained from from the StoBe program. Many trajectories are used and the resulting spectra summed together. There is also an option to calculate spectra according to Odelius et al, Takahashi et al. but this is only for purposes of comparing the results. 
+
+How to compile the program
+******************************
+
+We need a fortran 90 compiler like pgf90. All necessary subroutines are included except blas. See makefile. 
+
+
+How to run the program
+*****************************
+we need:
+
+1) inputfile (SCKH.inp in this example)
+2) file with names of all trajectory files (trajectories.dat in example)
+3) the trajectory files (mdpentamer_1_1_1_1.combined in example)
+
+run it like
+
+SCKH < SCKH.inp > out
+
+ 
+Main input file (SCKH.inp)
+***********************************
+the input file is read like:
+
+  read(5,*) nfinal
+  read(5,*) ntraj, tstep, ntsteps_inp, ntsteps
+  read(5,*) files_file
+  read(5,*) outfile
+  read(5,*) freq_min, freq_max, nfreq_inp
+  read(5,*) gamma_FWHM, gamma_FWHM_2
+  read(5,*) runmode
+  read(5,*) nproj
+
+  do i=1, nproj
+     read(5,*) projvec(i,1),projvec(i,2),projvec(i,3)
+  end do
+
+
+where 
+ 
+
+ nfinal  :  number of final states 
+ ntraj : number of trajectories
+ tstep : time step in the trajectories 
+ ntsteps_inp : the number of timesteps in the input trajectories 
+ ntsteps : number of timesteps, interpolated from the ones in trajectory. Don't use more than makes
+           a smooth spectrum, often nsteps = nsteps_inp will do
+ files_file  :  a file containing the names of the trajectroy files and their weights 
+ outfile : the file where the spectrum is written
+ freq_min : minimum frequency (only for runmode = 2 ) in eV
+ freq_max : maximum frequency (only for runmode = 2 ) in eV 
+ nfreq_inp : number of frequency bins (only for runmode = 2 ) 
+ gamma_FWHM : FWHM of Loretzian in eV
+ gamma_FWHM_2 : empirical broadening parameter (only for runmode 2). For rigorous results gamma_FWHM_2 = gamma_FWHM in eV
+ runmode :  1: Semi-classical Kramers-Heisenberg, 2: method of Odelius / Takahashi
+ nproj: number of projection vectors
+
+Other Input files
+***********************************
+
+files_file is read like this:
+
+do i=1,ntraj
+  read(10,*) trajfile(i), traj_weight(i)
+end do	
+
+with trajfile(i) being the name of the i:th trajectory file and traj_weight(i) it's corresponding weight 
+
+the trajfile(i) is read like this:
+
+do i=1,ntsteps_inp
+
+        read(10,*) time_inp2(i)
+        read(10,*) E_gs(i)
+        read(10,*) E_n_inp(i)
+        read(10,*) E_IP1s(i)
+        read(10,*) dummy, ntrans
+
+	 do j =1,nfinal
+           read(10,*) E_trans(j,i), D_fn_inp(j,i,1), D_fn_inp(j,i,2), D_fn_inp(j,i,3)
+        end do
+end do
+
+time_inp2(i):  the time of the snapshot [fs]
+E_gs(i)	 :     total energy of ground state [Hartree]
+E_n_inp(i) :   total energy of the core ionized state [Hartree]  
+E_IP1s(i):     the 1s orbital energy [1s]
+dummy, ntrans :  this is just the header of the StoBe XES output file 
+
+E_trans(j,i) : Energy of transition [Hartree]    
+D_fn_inp(j,i,1) : transition dipole in x-direction
+D_fn_inp(j,i,2) : transition dipole in y-direction
+D_fn_inp(j,i,3) : transition dipole in z-direction
+
+
+Output files
+**************************
+
+the input parameter 'outputfile' is the base name of the outputfiles and the additions below signify:
+
+_sigma.dat :  the orientally averaged spectrum
+_sigma_final_j.dat :  the spectrum from final state j
+_sigma_proj_j.dat :  the spectrum from projection j
+ 
+
+Example:
+**************
+XES_mukamel_traj_IP1s.inp:
+
+20
+3 0.25 2 161 161  
+trajectories.dat
+pentamer_XES
+518 535 200
+0.18 0.18 
+1
+3
+-0.062085  -0.808628   0.585036
+-0.011379  -0.585555  -0.810553
+0.998006  -0.056980   0.027153
+
+
+trajectories.dat:
+
+mdpentamer_1_1_1_1.combined  1.0
+mdpentamer_1_1_1_2.combined  1.0
+mdpentamer_1_1_1_3.combined  1.0
+
+
+mdpentamer_1_1_1_1.combined:
+
+0.0000000000                                                            
+-145.517003460                                                          
+-125.768150358                                                          
+ 509.99491
+XES     20                                                              
+  17.76704595  -0.27374961D-03  -0.35145957D-02   0.23012746D-02        
+  17.77009203  -0.14017912D-03  -0.13677747D-02   0.16603224D-02        
+  17.78420333  -0.69114503D-03  -0.88970707D-02   0.62619823D-02        
+  17.85162142  -0.59495323D-03   0.11348153D-02  -0.84087540D-03        
+  17.85524493   0.59778739D-03   0.13522938D-02  -0.10169096D-02        
+  18.21959556   0.43020866D-03  -0.17031174D-02  -0.23623908D-02        
+  18.22219167   0.35474518D-03   0.27099250D-01   0.37601269D-01        
+  18.22507235   0.70509194D-03   0.10362337D-01   0.14444022D-01        
+  18.29777908  -0.73318720D-03  -0.14057195D-01   0.10038562D-01        
+  18.30369527  -0.94518325D-02  -0.25710974D-03   0.32377358D-03        
+  18.36017000  -0.14868635D-02  -0.14490625D-01   0.14261670D-01        
+  18.37635916   0.86725169D-03   0.10328806D-01   0.94247343D-02        
+  18.39712707   0.23411817D-02   0.36098038D-01  -0.24563937D-01        
+  18.43092140   0.39300670D-01  -0.16448240D-02   0.58145622D-03        
+  18.44681482   0.47974116D-03   0.54775171D-02  -0.16536218D-02        
+  18.44786165  -0.14731231D-02   0.11384786D-02   0.77847326D-02        
+  18.46296834  -0.44670186D-02   0.11958958D-01  -0.97546116D-02        
+  18.48343872   0.41236489D-01  -0.13558537D-02   0.24597403D-03        
+  18.52552998   0.19203035D-02  -0.82006014D-03  -0.10006908D-02        
+  18.52830229  -0.10680430D-02  -0.47854887D-03  -0.89294220D-03        
+0.2500000000                                                            
+-145.513262616                                                          
+-125.763029746                                                          
+ 509.97574
+XES     20                                                              
+  17.76581671  -0.39946595D-03  -0.50827248D-02   0.35041986D-02        
+  17.76976176  -0.16365983D-03  -0.16731072D-02   0.19027359D-02        
+  17.77913600  -0.63990379D-03  -0.82841776D-02   0.58132656D-02        
+  17.85027576  -0.59366432D-03   0.11095674D-02  -0.82694138D-03        
+  17.85386078   0.60087341D-03   0.13028411D-02  -0.98549495D-03        
+  18.21699565   0.45198448D-03   0.28974240D-01   0.40247451D-01        
+  18.21936218   0.49199414D-03   0.19687617D-02   0.27356887D-02        
+  18.22468983   0.61013878D-03   0.36564773D-02   0.51458093D-02        
+  18.29634563  -0.75003410D-03  -0.14201872D-01   0.10118389D-01        
+  18.30235758  -0.94998689D-02  -0.24205133D-03   0.31272133D-03        
+  18.36014214  -0.15511030D-02  -0.15272190D-01   0.14743499D-01        
+  18.37600234   0.89915863D-03   0.10341541D-01   0.87291879D-02        
+  18.39527244   0.23067497D-02   0.35797463D-01  -0.24473635D-01        
+  18.42928155   0.39784664D-01  -0.16992871D-02   0.58955851D-03        
+  18.44657418   0.53001344D-03   0.51496061D-02  -0.16647488D-02        
+  18.44771959  -0.13688616D-02   0.14046987D-02   0.73523843D-02        
+  18.46176432  -0.45079944D-02   0.11819140D-01  -0.96573949D-02        
+  18.48167194   0.40804999D-01  -0.13129540D-02   0.22577685D-03        
+  18.52440001   0.18825183D-02  -0.81139332D-03  -0.98598289D-03        
+  18.52715781  -0.10526743D-02  -0.47192936D-03  -0.87994511D-03      
+....
+....
+....
+
+
+
+
+

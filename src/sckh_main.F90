@@ -26,10 +26,10 @@ program sckh_main
 
   if(upper(p % runmode) .eq. "KH") then
     call calculate_XES_nonadiabatic(p)
-  else if (upper(p % runmode) .eq. "SCKH") then
+  else if (upper(p % runmode) .eq. "SCKH_PES") then
     call calculate_SCKH_PES(p)
   else 
-    write(6,*) "runmode must be either 'KH' or 'SCKH' ", upper(p % runmode)
+    write(6,*) "runmode must be either 'KH' or 'SCKH_PES' ", upper(p % runmode)
     stop
   end if
 
