@@ -20,10 +20,14 @@ module m_sckh_params_t
      character(80):: dipole_file_list_n
      character(80):: dipole_file_list_f
 
+     character(80):: traj_file_list
+
      character(80), allocatable:: pes_files_n(:)
      character(80), allocatable:: pes_files_f(:)
      character(80), allocatable:: dipolefile_n(:)
      character(80), allocatable:: dipolefile_f(:)
+
+     !character(80), allocatable:: traj_files(:)
      
      character(80)::outfile
 
@@ -46,7 +50,7 @@ module m_sckh_params_t
      real(wp):: gamma_FWHM 
 
      ! sckh parameters
-     ! for SCKH
+     ! for SCKH_PES
      integer:: samplemode
      integer:: npoints_x_sampl 
      integer:: npoints_mom_sampl 
@@ -54,6 +58,10 @@ module m_sckh_params_t
      integer:: ntsteps2
      real(kind=wp):: delta_t
      
+     ! for SCKH
+     integer:: ntraj
+     integer:: nfinal
+
      ! projections
      logical:: use_proj
      integer:: nproj
@@ -100,6 +108,9 @@ contains
     call init_parameter('dipole_file_list_n',inp, "dipole_file_list_n.txt", p % dipole_file_list_n ,iv)
     ! dipole files for final states
     call init_parameter('dipole_file_list_f',inp, "dipole_file_list_f.txt", p % dipole_file_list_f ,iv)
+
+    ! list of trajectroy files for SCKH
+    call init_parameter('traj_file_list',inp, "traj_file_list.txt", p % traj_file_list ,iv)
     
     ! outfile: the base name of the output files
     call init_parameter('outfile',inp, "outfile,txt", p % outfile ,iv)
@@ -110,6 +121,7 @@ contains
     ! proj_file: the file containing the projections, if used
     call init_parameter('proj_file',inp, "proj_file.txt", p % proj_file ,iv)
     
+
     ! nstates: the number of dvr points, equally the number of vibrational eigenstates
     call init_parameter('nstates',inp, 100, p % nstates ,iv)
     ! npoints_in: the number of points in the supplied PES files
@@ -148,6 +160,10 @@ contains
     call init_parameter('ntsteps2',inp, 1, p % ntsteps2,iv)
 
     call init_parameter('delta_t',inp, 0.1_wp, p % delta_t,iv)
+
+    call init_parameter('ntraj',inp, 1, p % ntraj, iv)
+
+    call init_parameter('nfinal',inp, 1, p % nfinal, iv)
 
     ! projections
     call init_parameter('use_proj',inp, .false., p % use_proj,iv)

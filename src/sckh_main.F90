@@ -5,6 +5,7 @@ program sckh_main
   use m_KH, only: calculate_XES_nonadiabatic
   use m_log, only : init_logs, ilog, log_timing_note
   use m_SCKH_PES, only : calculate_SCKH_PES
+  use m_SCKH, only : calculate_SCKH
   !use m_fact, only : init_fact
 
   implicit none
@@ -28,8 +29,10 @@ program sckh_main
     call calculate_XES_nonadiabatic(p)
   else if (upper(p % runmode) .eq. "SCKH_PES") then
     call calculate_SCKH_PES(p)
+  else if (upper(p % runmode) .eq. "SCKH") then
+    call calculate_SCKH(p)
   else 
-    write(6,*) "runmode must be either 'KH' or 'SCKH_PES' ", upper(p % runmode)
+    write(6,*) "runmode must be either 'KH','SCKH_PES', or 'SCKH' ", upper(p % runmode)
     stop
   end if
 

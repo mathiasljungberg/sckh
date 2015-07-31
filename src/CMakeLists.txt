@@ -79,6 +79,7 @@ m_SCKH_PES.F90
 m_SCKH_utils.F90
 hist_class.F90
 m_FFT.F90
+m_SCKH.F90
 )
 
 SET(ALL_MODULES_F 

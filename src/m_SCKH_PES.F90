@@ -1,11 +1,4 @@
 module m_SCKH_PES
-  !use KH_functions  
-  !use parameters  
-  !use SCKH_functions
-  !use m_XAS_io
-  !use spline_m
-  !use hist_class
-  !use FFT_m
 
   implicit none
 
@@ -74,6 +67,9 @@ subroutine calculate_SCKH_PES(p)
   dx = p % dx_in * 1.0d-10
   delta_t = p % delta_t
 
+  ! use HWHM internally
+  gamma = p % gamma_FWHM / 2 
+
   ! projections
   if(p % use_proj) then
     ifile = get_free_handle()
@@ -136,9 +132,6 @@ subroutine calculate_SCKH_PES(p)
      allocate(nac(p % npesfile_f, p % npesfile_f, p % npoints_in, 2) )
   end if
   
-  ! use HWHM internally
-  gamma = p % gamma_FWHM / 2 
-
   ! set up DVR points
   do i = -npoints,npoints
      ii = i + npoints +1
@@ -251,10 +244,7 @@ subroutine calculate_SCKH_PES(p)
   time_l2 = (ntsteps_pad-1) * delta_t 
 
   write(6,*) "outfile", p % outfile
-  ! some output
   write(6,*) "gamma (hwhm of lorentzian broadening)", gamma
-  !write(6,*) "ntsteps", ntsteps
-  !write(6,*) "tstep", tstep
   write(6,*) "mu_SI", mu_SI 
   write(6,*) "time_l", time_l
   write(6,*) "ntsteps_pad", ntsteps_pad, "= 2 **", ntsteps_pad_pow 
@@ -397,19 +387,8 @@ file = trim(adjustl(p % outfile)) // trim(adjustl(file)) // ".dat"
 ifile = get_free_handle()
 open(ifile,file=file,status='unknown')
  
-!   do i=n_omega/2, 1, -1
-!     write(ifile,*)  -2.0_wp * const % pi * (i) * &
-!          const % hbar / (time_l2 * const % eV) - E_fn_mean, sigma(j,n_omega-i+1)
-!   end do
- !
-!   do i=0, n_omega/2
-!     write(ifile,*)  2.0_wp * const % pi * (i) * &
-!          const % hbar / (time_l2 * const % eV) - E_fn_mean, sigma(j,i+1)
-!   end do
-
 do i=1,n_omega
-   write(ifile,*)  omega(i), sigma_tot(i)
-!   write(ifile,*)  i, sigma_tot(i)
+  write(ifile,*)  omega(i), sigma_tot(i)
 end do
 
 close(ifile)
@@ -424,16 +403,10 @@ do j=1, nfinal
    ifile = get_free_handle()
    open(ifile,file=file,status='unknown')
    
-   do i=n_omega/2, 1, -1
-      write(ifile,*)  -2.0_wp * const % pi * (i) * &
-           const % hbar / (time_l2 * const % eV) - E_fn_mean, sigma(j,n_omega-i+1)
+   do i=1,n_omega
+     write(ifile,*)  omega(i), sigma(j,i)
    end do
- 
-   do i=0, n_omega/2
-      write(ifile,*)  2.0_wp * const % pi * (i) * &
-           const % hbar / (time_l2 * const % eV) - E_fn_mean, sigma(j,i+1)
-   end do
-     
+  
    close(ifile)
 end do ! j
 
@@ -446,17 +419,13 @@ do j=1, p % nproj
    ifile = get_free_handle()
    open(ifile,file=file,status='unknown')
 
-   do i=n_omega/2, 1, -1
-      write(ifile,*)  -2.0_wp * const % pi * (i) * const % hbar / (time_l2 * const % eV) - E_fn_mean, sigma_proj(j,n_omega-i+1)
+   do i=1,n_omega
+     write(ifile,*)  omega(i), sigma_proj(j,i)
    end do
-     
-   do i=0, n_omega/2
-      write(ifile,*)  2.0_wp * const % pi * (i) * const % hbar / (time_l2 * const % eV) - E_fn_mean, sigma_proj(j,i+1)
-   end do
-     
+ 
    close(ifile)
 end do !j
-  
+
 end subroutine calculate_SCKH_PES
 
 end module m_SCKH_PES

@@ -1,0 +1,29 @@
+20
+624 0.25 2 2   !161 161   !500
+trajectories.dat
+pentamer_spectrum_long_new_mean_runmode2_t=0_proj.dat
+518 535 200
+0.18 0.18 
+2
+3
+-0.062085  -0.808628   0.585036
+-0.011379  -0.585555  -0.810553
+0.998006  -0.056980   0.027153
+
+
+
+
+
+1 0 0
+0 1 0
+0 0 1
+
+!624 0.25 161 12000
+
+ read(5,*) nfinal
+read(5,*) ntraj, tstep, ntsteps_inp, ntsteps
+read(5,*) files_file
+  read(5,*) outfile
+  read(5,*) freq_min, freq_max, nfreq_inp
+  read(5,*) gamma_FWHM, gamma_FWHM_2       !lifetime, lifetime2                                                                                                        
+  read(5,*) runmode
