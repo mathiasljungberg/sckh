@@ -1,0 +1,145 @@
+Manual for the program KH
+
+This program calculates XES using the non resonant Kramers-Heisenberg formula. 
+
+How to compile the program
+******************************
+
+We need a fortran 90 compiler like pgf90. All necessary subroutines are included except blas. See makefile. 
+
+
+How to run the program
+*****************************
+we need:
+
+1) inputfile (KH.inp in this example)
+2) potential enrgy surface files for 
+   i) initial state
+   ii) intermediate state
+   iii) final state
+   iv) the first final state computed more acccurately (optional)
+
+run it like
+
+KH < KH.inp > out
+
+ 
+Main input file (KH.inp)
+***********************************
+the input file is read like:
+
+
+  read(5,*) npoints_in
+  read(5,*) pes_file_i
+  read(5,*) pes_file_n   ! core ionized state
+  read(5,*) shift_PES, pes_file_lp_corr        
+
+  read(5,*) npesfile_f
+  allocate(pes_file_f(npesfile_f), dipolefile_f(npesfile_f))
+
+  do i=1,npesfile_f
+     read(5,*) pes_file_f(i), dipolefile_f(i)
+  end do
+
+  read(5,*) outfile
+  read(5,*) my
+  read(5,*) nstates, dvr_start_in, dx_in
+  read(5,*) omega_start, omega_end, n_omega
+  read(5,*) gamma_FWHM
+  read(5,*) nproj
+
+  do i=1, nproj
+     read(5,*) projvec(i,1),projvec(i,2),projvec(i,3)
+  end do   
+
+
+where 
+   
+  ! npoints_in: the number of points in the supplied PES files
+  ! pes_file_i: PES file for the initial state
+  ! pes_file_n: PES file for the intermediate state
+  ! shift_PES: =1, then use pes_file_lp_correct to correct the first final state, =0, do nothing
+  ! pes_file_lp_correct: PES for first final stae, computed more accurately
+  ! npesfile_f: the number of final state PES files
+  ! pesfile_f(i): PES files for the final states
+  ! dipolefile_f(i): dipole transition matrix elements between intermediate state and final state i
+  ! outfile: the base name of the output files
+  ! nstates: the number of dvr points, equally the number of vibrational eigenstates
+  ! dvr_start_in: x coordinate of the starting point of the dvr points [Angstrom]
+  ! dx_in: spacing between dvr points [Angstroms]
+  ! omega_start: starting emission frequency [eV]
+  ! omega_end: ending emission frequency [eV]
+  ! n_omega: number of emission frequencies
+  ! gamma_FWHM: lifetime broadening [eV]
+  ! nproj: number of projection vectors
+
+Other Input files
+***********************************
+
+the PES files are read like:
+
+  do i=1,npoints_in
+     read(10,*) x_in(i), E_in(i)
+  end do
+
+where:
+
+x_in(i) is the x-coordiate in [Angstroms]
+E_in(i) is the energy in [Hartrees]
+
+
+the dipolefiles are read like:
+
+ do i=1,npoints_in
+   read(10,*) x_in(i), dipole_in(i,1),dipole_in(i,2),dipole_in(i,3)
+ end do
+
+where: 
+
+x_in(i) is the x-coordiate in [Angstroms]
+dipole_in(i,1-3) is the transition dipole matrix elements in x,y and z directions
+
+
+Output files
+**************************
+
+the input parameter 'outfile' is the base name of the outputfiles and the additions below signify:
+
+_sigma.dat :  the orientally averaged spectrum [arb. units]
+_sigma_direct.dat: the direct contribution to the cross section
+_sigma_max_int.dat: the spectrum assuming maximal interference
+_sigma_states_j.dat: spectrum from the individual electronic final state j
+_sigma_dir_states_j.dat: direct spectrum from the individual electronic final state j
+_sigma_max_int_states_j.dat: max interference spectrum from the individual electronic final state j
+_sigma_proj: spectrum in the projected directions corresponding to the input projection vectors
+_vib_eigenvalues_initial.dat: vibrational eigenvalues for initial state PES
+_vib_eigenvalues_intermediate.dat: vibrational eigenvalues for intermediate state PES
+_vib_eigenvalues_final.dat: vibrational eigenvalues for final state PES:s
+
+
+Example:
+**************
+KH.inp :
+
+77
+test_energy_tot.dat                          ! inital state
+test_energy_tot_exc.dat   !pesfile_1.dat     ! intermediate state 
+1 test_lp_lp_energy.dat                      ! shift to real lp PES, if 1
+6                                            ! number of final state PES files
+pesfile_9.dat dipolefile_9.dat
+pesfile_8.dat dipolefile_8.dat
+pesfile_7.dat dipolefile_7.dat
+pesfile_6.dat dipolefile_6.dat
+pesfile_5.dat dipolefile_5.dat
+pesfile_4.dat dipolefile_4.dat
+testout
+1.0078825                                    ! reduced mass
+77 0.5 0.025                                 ! DVR: npoints, start, dx
+517 528 100                                 !omega_start,omeda_end, n_omega
+0.18
+3
+1.0 0.0 0.0
+0.0 1.0 0.0
+0.0 0.0 1.0
+
+results from run can be found in directory ref

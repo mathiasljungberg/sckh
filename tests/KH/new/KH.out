@@ -1,0 +1,25 @@
+           1 pesfile_9.dat                                                                   dipolefile_9.dat                                                                
+           2 pesfile_8.dat                                                                   dipolefile_8.dat                                                                
+           3 pesfile_7.dat                                                                   dipolefile_7.dat                                                                
+           4 pesfile_6.dat                                                                   dipolefile_6.dat                                                                
+           5 pesfile_5.dat                                                                   dipolefile_5.dat                                                                
+           6 pesfile_4.dat                                                                   dipolefile_4.dat                                                                
+ projvector           1   1.0000000000000000        0.0000000000000000        0.0000000000000000     
+ projvector           2   0.0000000000000000        1.0000000000000000        0.0000000000000000     
+ projvector           3   0.0000000000000000        0.0000000000000000        1.0000000000000000     
+ Done reading
+ Shifted PES:s
+ Initial state fundamental   3174.8674548571416     
+ Intermediate state fundamental   2324.6893152344046     
+ Final state fundamental           1   1451.8503756465391     
+ Final state fundamental           2   2656.2617479385472     
+ Final state fundamental           3   4047.9616112392400     
+ Final state fundamental           4   3888.3290996971018     
+ Final state fundamental           5   3594.1299638908245     
+ Final state fundamental           6   4181.1125320554956     
+ Calculated dipole matrix elements
+   525.64986999356029     
+ sum (D_ni(:)**2)  0.99999999999999845     
+ E_n_mean  -2014.1104212467542     
+ Full Kramers-Heisenberg
+ Calculated spectrum
