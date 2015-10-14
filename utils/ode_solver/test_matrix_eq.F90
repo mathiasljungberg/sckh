@@ -9,7 +9,7 @@ program test_matrix_eq
   call test2
   call test3
   call test4
-
+  call test_time_ordered_exp
   stop
   
 contains
@@ -384,6 +384,134 @@ subroutine test4
 
   return
 end subroutine test4
+
+
+subroutine test_time_ordered_exp
+  use m_precision, only: wp
+  use m_func_time_ordered_exp
+  use m_rkf45_matrix
+  
+!
+! Solve the diagonal matrix equation
+! d/dt A_{ab}(t) = i \delta_{ab} A_{aa}(t)(E_a(t) -E_l(t)) 
+! A_{ab}(0) = \delta_{ab} 
+! this should be equal to A_{ab}(t) = \delta_{ab} exp(i int_0^t (E_a(\tau) -E_l(\tau)) d\tau )  
+!
+! take E_a(t) as C_a*cos(omega_a t +phi_a) and  E_l(t) as C_l*cos(omega_l t + phi_l)
+!
+!
+!*******************************************************************************
+!
+
+  implicit none
+!
+  integer, parameter :: neqn1 = 2
+  integer, parameter :: neqn2 = 2
+!
+  real(kind=wp) ::abserr
+  integer:: i_step
+  integer:: iflag
+  integer:: iwork(5)
+  integer:: n_step
+  real(kind=wp):: relerr
+  real(kind=wp):: t
+  real(kind=wp) :: t_out
+  real(kind=wp) :: t_start
+  real(kind=wp)::  t_stop
+  complex(kind=wp):: yp(neqn1,neqn2) , f1(neqn1,neqn2), f2(neqn1,neqn2), f3(neqn1,neqn2),&
+       f4(neqn1,neqn2), f5(neqn1,neqn2)
+  real(kind=wp)::  savre, savae
+
+  complex(kind=wp):: y(neqn1, neqn2)
+  real(kind=wp):: H_input(neqn1, neqn2,1)
+  integer:: i,j
+  real(kind=wp):: h
+
+  real(kind=wp), allocatable:: A_a(:), omega_a(:), &
+       phi_a(:), A_l(:), omega_l(:), phi_l(:)
+  real(kind=wp):: int_Ea(2)
+  real(kind=wp):: int_El(2)
+  complex(kind=wp):: y_exact(2,2)
+
+!
+
+  abserr = 0.000000001e+00_wp
+  relerr = 0.000000001e+00_wp
+
+  iflag = 1
+
+  t_start = 0.0e+00_wp
+  t_stop = 10.0e+00_wp * 3.14159265e+00_wp
+
+  n_step = 12
+
+  t_out = 0.0e+00_wp
+
+  y=0.0_wp
+  y(1,1)=1.0_wp
+  y(2,2)=1.0_wp
+  
+  allocate(A_a(2))
+  allocate(omega_a(2))
+  allocate(phi_a(2))
+  allocate(A_l(2))
+  allocate(omega_l(2))
+  allocate(phi_l(2))
+
+  A_a =0.0d0
+  omega_a =0.0d0
+  phi_a =0.0d0
+  A_l =0.0d0
+  omega_l =0.0d0
+  phi_l =0.0d0
+
+  do i=1,2
+    A_a(i) = i
+    omega_a(i) = 0.3d0 / i * 3.14159265e+00_wp
+    phi_a(i) = 0.14d0 * i *  3.14159265e+00_wp
+    A_l(i) = 0.7d0 / i
+    omega_l(i) = 0.8d0 / i * 3.14159265e+00_wp
+    phi_l(i) = 0.8d0 * i * 3.14159265e+00_wp
+  end do
+
+  call set_A_omega_phi_a( A_a, omega_a, phi_a)
+  call set_A_omega_phi_l( A_l, omega_l, phi_l)
+
+  write ( *, '(a)' ) 'test_time_ordered_exp'
+
+
+  write ( *, '(a)' ) ' '
+  write ( *, '(a)' ) '       T          Y(1,1)         Y(2,1)       Y(1,2)      Y(2,2)'
+  write ( *, '(a)' ) ' '
+  write ( *, '(9g14.6)' ) t_out, y(1,1), y(2,1), y(1,2), y(2,2)
+
+  do i_step = 1, n_step
+
+    t = ( ( n_step - i_step + 1 ) * t_start &
+            + ( i_step - 1 ) * t_stop ) / dble ( n_step )
+    t_out = ( ( n_step - i_step ) * t_start &
+            + ( i_step ) * t_stop ) / dble ( n_step )
+
+    call rkfs_matrix_c ( func_c, neqn1, neqn2, y, t, t_out, relerr, abserr, iflag, yp, h, &
+         f1, f2, f3, f4, f5, savre, savae, iwork(1), iwork(2), iwork(3), iwork(4), iwork(5) )
+
+    ! exact solution for t_out
+    y_exact = 0.0d0
+    do i=1,2
+      int_Ea(i) = (A_a(i) / omega_a(i)) * &
+           (cos(phi_a(i)) * sin(omega_a(i) * t_out) + sin(phi_a(i)) * (cos(omega_a(i) * t_out) -1.0d0)) 
+      int_El(i) = (A_l(i) / omega_l(i)) * &
+           (cos(phi_l(i)) * sin(omega_l(i) * t_out) + sin(phi_l(i)) * (cos(omega_l(i) * t_out) -1.0d0)) 
+      y_exact(i,i) = exp(dcmplx(0.0d0, (int_Ea(i)- int_El(i))))
+    end do
+ 
+    write ( *, '(13g14.6)' ) t_out, y(1,1), y(2,1), y(1,2), y(2,2), &
+         y(1,1)- y_exact(1,1), y(2,2)- y_exact(2,2) 
+
+  end do
+
+  return
+end subroutine test_time_ordered_exp
 
 
 

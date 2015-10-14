@@ -49,6 +49,7 @@ ENDIF(CMAKE_Fortran_COMPILER MATCHES ifort)
 SET(ALL_MODULES_F90 
 m_precision.F90
 m_func.F90
+m_func_time_ordered_exp.F90
 m_rkf45_matrix.F90
 m_define_macro.F90
 )
