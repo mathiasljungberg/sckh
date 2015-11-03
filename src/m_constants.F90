@@ -26,6 +26,8 @@ module m_constants
      real(8):: Hartree2eV ! = 27.211396132d0  
      ! Boltzmann's constant (SI)
      real(8):: k_b !=1.3806503d-23
+     ! Au time unit
+     real(8)::autime!=2.418884326505d−17
 
   end type constants_t
 
@@ -51,7 +53,9 @@ module m_constants
        !> Hartree to eV
        27.211396132d0, &
        !> Boltzmann's constant
-       1.3806503d-23   )
+       1.3806503d-23, &   
+       !> Au time s
+       2.418884326505d-17  )
 
 end module m_constants
 
