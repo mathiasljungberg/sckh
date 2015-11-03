@@ -912,7 +912,8 @@ subroutine ODE_solver(A_matrix,times,nstates,ntsteps)
         t = ( ( ntsteps - i + 1 ) * t_start+ ( i - 1 ) * t_end ) / dble( ntsteps )
         t_out = (( ntsteps - i ) * t_start+ ( i) * t_end ) / dble ( ntsteps )
         write(*,*) 't ',times(i),' t_out ',times(i+1),'h ',h
-        call rkfs_matrix_c(nstates,nstates,funct_complex,y_value,times(i),times(i+1),relerr,abserr,iflag,yp_value,h,f1,f2,f3,f4,f5,savre,savae,iwork(1),iwork(2),iwork(3),iwork(4), iwork(5))
+        call rkfs_matrix_c(nstates,nstates,funct_complex,y_value,times(i),times(i+1),relerr,abserr,&
+             iflag,yp_value,h,f1,f2,f3,f4,f5,savre,savae,iwork(1),iwork(2),iwork(3),iwork(4), iwork(5))
          A_matrix(:,:,i+1)=y_value
       enddo
     deallocate(H_matrix,y_value,yp_value)
