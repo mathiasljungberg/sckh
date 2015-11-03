@@ -61,6 +61,7 @@ module m_sckh_params_t
      ! for SCKH
      integer:: ntraj
      integer:: nfinal
+     character(80):: runmode_sckh
 
      ! projections
      logical:: use_proj
@@ -164,6 +165,7 @@ contains
     call init_parameter('ntraj',inp, 1, p % ntraj, iv)
 
     call init_parameter('nfinal',inp, 1, p % nfinal, iv)
+    call init_parameter('runmode_sckh',inp,'nonresonant',p%runmode_sckh,iv)
 
     ! projections
     call init_parameter('use_proj',inp, .false., p % use_proj,iv)

@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.4)
 
 PROJECT(fortran-utilities Fortran)
 
+
 IF(CMAKE_Fortran_COMPILER MATCHES ifort)
 
   MESSAGE(STATUS  "ifort compiler found")
@@ -71,6 +72,8 @@ m_log.F90
 m_log_type.F90
 m_io.F90
 m_input.F90
+m_rkf45_matrix.F90
+m_func.F90
 m_KH.F90
 m_PES_io.F90
 m_KH_functions.F90

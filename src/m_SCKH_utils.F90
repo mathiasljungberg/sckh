@@ -868,6 +868,58 @@ contains
  
   end subroutine sinc_filter
 
+
+subroutine ODE_solver(A_matrix,times,nstates,ntsteps)
+    use m_precision,only:wp 
+    use m_func, only: funct_complex
+    use m_rkf45_matrix, only: rkfs_matrix_c
+    implicit none
+    integer,intent(in)::nstates,ntsteps
+    complex(kind=wp),intent(out),dimension(nstates,nstates,ntsteps)::A_matrix
+    real(kind=wp),dimension(:,:,:),allocatable::H_matrix
+    complex(kind=wp),allocatable,dimension(:,:)::y_value
+    complex(kind=wp),allocatable,dimension(:,:)::yp_value
+    real(kind=wp),dimension(ntsteps)::times
+    real(kind=wp) ::abserr
+    !external f_04
+    integer:: i_step
+    integer:: iflag
+    integer:: iwork(5)
+    real(kind=wp):: relerr
+    real(kind=wp):: t
+    real(kind=wp) :: t_out
+    complex(kind=wp),allocatable::  f1(:,:), f2(:,:), f3(:,:),f4(:,:), f5(:,:)
+    real(kind=wp)::  savre, savae
+    integer:: i,j
+    real(kind=wp):: h,t_start,t_end
+    ! set initial conditions for A matrix at t=0
+    A_matrix(:,:,1)=0.0
+    do i=1,ntsteps
+       A_matrix(i,i,1)=(1.0_wp,0.0_wp)
+    enddo
+    allocate(H_matrix(nstates,nstates,ntsteps),y_value(nstates,nstates),yp_value(nstates,nstates))
+    allocate(f1(nstates,nstates),f2(nstates,nstates),f3(nstates,nstates))
+    allocate(f4(nstates,nstates),f5(nstates,nstates))
+      abserr = 0.000000001e+00_wp
+      relerr = 0.000000001e+00_wp
+      iflag = 1
+      y_value=A_matrix(:,:,1)
+      h=times(2)-times(1)
+      t_start=times(1)
+      t_end=times(ntsteps)
+      write(*,*) 'ODE_solver ', ntsteps 
+      do i=1,ntsteps-1
+        t = ( ( ntsteps - i + 1 ) * t_start+ ( i - 1 ) * t_end ) / dble( ntsteps )
+        t_out = (( ntsteps - i ) * t_start+ ( i) * t_end ) / dble ( ntsteps )
+        write(*,*) 't ',times(i),' t_out ',times(i+1),'h ',h
+        call rkfs_matrix_c(nstates,nstates,funct_complex,y_value,times(i),times(i+1),relerr,abserr,iflag,yp_value,h,f1,f2,f3,f4,f5,savre,savae,iwork(1),iwork(2),iwork(3),iwork(4), iwork(5))
+         A_matrix(:,:,i+1)=y_value
+      enddo
+    deallocate(H_matrix,y_value,yp_value)
+    deallocate(f1,f2,f3,f4,f5)
+end subroutine ODE_solver
+
+
   
 end module m_SCKH_utils
 
