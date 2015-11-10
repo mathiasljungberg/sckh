@@ -5,7 +5,8 @@ program sckh_main
   use m_KH, only: calculate_XES_nonadiabatic
   use m_log, only : init_logs, ilog, log_timing_note
   use m_SCKH_PES, only : calculate_SCKH_PES
-  use m_SCKH, only : calculate_SCKH,compute_sckh_diagonal_nonresonant
+  use m_SCKH, only : calculate_SCKH,compute_sckh_diagonal_nonresonant,&
+  compute_sckh_offdiagonal
   !use m_fact, only : init_fact
 
   implicit none
@@ -36,6 +37,9 @@ program sckh_main
    endif
    if (upper(p%runmode_sckh) .eq. "NONRESONANT_DIAGONAL") then
      call compute_sckh_diagonal_nonresonant(p)
+   endif
+   if (upper(p%runmode_sckh) .eq. "NONRESONANT_OFFDIAGONAL") then
+     call compute_sckh_offdiagonal(p)
    endif
   else 
     write(6,*) "runmode must be either 'KH','SCKH_PES', or 'SCKH' ", upper(p % runmode)

@@ -208,7 +208,10 @@ subroutine funct_complex(t,y,yp)
      do i=1,shape_H(1)
          call spline_one(time,H_in(i,i,:),shape_H(3),t,Ht(i,i)) !spline_one(x,y,n, x2,y2)
      enddo!i
-     yp=(0.0_wp,1.0_wp)*matmul(y,dcmplx(Ht))
+     !yp=(0.0_wp,1.0_wp)*matmul(y,dcmplx(Ht))
+     call zgemm('N','N',shape_H(1),shape_H(1),shape_H(1),(1.0d0,0.0d0),y,shape_H(1),&
+         dcmplx(Ht),shape_H(1),(0.0d0,0.0d0),yp,shape_H(1))
+     yp=(0.0_wp,1.0_wp)*yp
      deallocate(Ht)
    else
       write(*,*) 'Error in m_func module'
@@ -228,55 +231,87 @@ subroutine clean_memory()
 end subroutine clean_memory 
 
 
-subroutine transform_dipole_operator(D_fn,E_final,E_n,nstates,ntimesteps)
+subroutine transform_dipole_operator(D_nf,E_final,E_n,nstates,ntimesteps)
    implicit none
    integer,intent(in)::nstates,ntimesteps
    real(kind=wp),dimension(nstates,ntimesteps),intent(in)::E_final
    real(kind=wp),dimension(ntimesteps),intent(in)::E_n
-   real(kind=wp),dimension(nstates,ntimesteps,3),intent(out)::D_fn
-   real(kind=wp),dimension(:,:,:),allocatable::D_fn_trans
+   real(kind=wp),dimension(nstates,ntimesteps,3),intent(out)::D_nf
+   real(kind=wp),dimension(:,:,:),allocatable::D_nf_trans
    integer::i,j,k,l,m ! loop variables
-
-   allocate(D_fn_trans(nstates,ntimesteps,3))
-   D_fn_trans=0.0d0
+   allocate(D_nf_trans(nstates,ntimesteps,3))
+   D_nf_trans=0.0d0
    ! Build D_ab^{~}=D_ab(t)*(E_b(t)-E_a(t)) - instanteneous basis
    do m=1,3
-     do k=1,ntimesteps
        do i=1,nstates
-          do j=1,nstates
-            D_fn_trans(i,k,m)=D_fn(i,k,m)*(E_n(k)-E_final(i,k))
-          enddo
+            D_nf_trans(i,:,m)=D_nf(i,:,m)*(E_final(i,:)-E_n(:))
        enddo
-     enddo
    enddo 
-
-   D_fn=0.0d0  
-   if(.not. allocated(Overlap_matrix)) then
-       write(*,*) 'Error in Transform dipole'
-       write(*,*) 'Overlap matrix is not allocated'
-       stop
-   end if
-
+   D_nf=0.0d0  
+   D_nf(:,:,1)=D_nf_trans(:,:,1) ! keep the dipole operator for step k=1 unchanged
    do m=1,3 ! dipole polarization
-     do k=1,ntimesteps
+     do k=2,ntimesteps
        do i=1,nstates
          do  j=1,nstates
-          D_fn(i,k,m)=D_fn(i,k,m)+Overlap_matrix(nstates+1,nstates+1,k)*D_fn_trans(j,k,m)*Overlap_matrix(i,nstates+1-j,k)
+          D_nf(i,k,m)=D_nf(i,k,m)+Overlap_matrix(nstates+1,nstates+1,k-1)*D_nf_trans(j,k,m)*Overlap_matrix(i,nstates+1-j,k-1)
          enddo!j
        enddo!i
      enddo!k
    enddo !m
-
-   deallocate(D_fn_trans)
+   deallocate(D_nf_trans)
 end subroutine transform_dipole_operator
 
 
 
+subroutine get_hamiltonian_offdiagonal(E_f,E_int,nstates,ntsteps,delta_t,E_f_mean)
+   implicit none
+   integer,intent(in)::nstates,ntsteps
+   real(kind=wp),intent(in),dimension(nstates,ntsteps)::E_f
+   real(kind=wp),intent(in),dimension(ntsteps)::E_int
+   real(kind=wp),intent(in)::delta_t
+   integer::i,j,k,l,m ! loop variables
+   real(kind=wp), intent(in)::E_f_mean
 
-
-
-
-
+   if(.not. allocated(H_in)) then
+       allocate(H_in(nstates,nstates,ntsteps))
+   else
+       write(*,*) 'Error in m_func module'
+       write(*,*) 'H_in has been already allocated'
+       stop
+   endif
+   H_in=0.0_wp
+   ! for the time=0 there is no transformation
+   ! Also we assume that hamiltonian matrix is diagonal at time t=0
+     do i=1,nstates
+      H_in(i,i,1)=E_f(i,1)
+     enddo
+   do k=2,ntsteps
+     do i=1,nstates
+        do j=1,nstates
+          do l=1,nstates
+             H_in(i,j,k)=H_in(i,j,k)+Overlap_matrix(i,l,k-1)*E_f(nstates+1-l,k)*Overlap_matrix(j,l,k-1)
+          enddo ! l
+        enddo ! j
+     enddo ! i
+   enddo ! k
+   do i=1,nstates
+     H_in(i,i,:)=H_in(i,i,:)-E_int(:)-E_f_mean
+   enddo
+   open(11,file='Eab_module.txt',status='unknown')
+   ! save to file the Eab matrix
+   do k=1,ntsteps 
+    write(11,*) 'Time step is ',k
+    do j=1,nstates
+      write(11,'(9F14.8)') (H_in(j,i,k),i=1,nstates)
+    enddo!j
+   enddo!k
+   close(11)
+   allocate(time(ntsteps))
+   do i=1,ntsteps
+     time(i)=(i-1)*delta_t
+   enddo
+   write(*,*) 'delta_t ',delta_t
+end subroutine get_hamiltonian_offdiagonal
 
 
 
