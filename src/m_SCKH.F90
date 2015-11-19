@@ -370,10 +370,9 @@ subroutine compute_sckh_diagonal_nonresonant(p)
   complex(kind=wp), dimension(:,:,:),allocatable::  sigma_m
   real(kind=wp),dimension(:),allocatable:: E_IP1s, E_gs, traj_weights
   ! H_mat contains the Hamiltonian matrix elements for the different time steps
-  complex(kind=wp),dimension(:,:,:),allocatable::A_mat_inp,A_mat
+  complex(kind=wp),dimension(:,:,:),allocatable::A_mat
   complex(kind=wp),dimension(:,:,:),allocatable::Final_state_sum
   integer::ifile
-   real(kind=wp),allocatable::A_real(:),A_imag(:)
   !functions
   real(kind=wp):: dnrm2
   ! set up local variables
@@ -411,10 +410,9 @@ subroutine compute_sckh_diagonal_nonresonant(p)
        E_n(ntsteps), E_f(nfinal,ntsteps), D_fn(nfinal,ntsteps,3), &
        funct(ntsteps), funct_real(ntsteps_pad), funct_imag(ntsteps_pad),&
        E_IP1s(ntsteps_inp), E_trans(nfinal,ntsteps_inp))
-  allocate(A_mat(nfinal,nfinal,ntsteps),A_mat_inp(nfinal,nfinal,ntsteps_inp))
+  allocate(A_mat(nfinal,nfinal,ntsteps))
   allocate(Final_state_sum(nfinal,ntsteps,3))
-  allocate(A_real(ntsteps),A_imag(ntsteps))
-
+ 
   ! create time_inp, in s
   time_inp = 0
   do i=1,ntsteps_inp
@@ -486,7 +484,6 @@ subroutine compute_sckh_diagonal_nonresonant(p)
       end do
     end do
 
-    A_mat_inp=0.0
     A_mat=0.0
 
     if (traj .eq. 1) then
@@ -495,8 +492,8 @@ subroutine compute_sckh_diagonal_nonresonant(p)
 
     ! Solve coupling matrix equation
 
-    call  get_diagonal_hamiltonian(E_f_inp,E_n_inp,nfinal,ntsteps_inp,delta_t/const%autime, E_fn_mean)
-    call ODE_solver(A_mat_inp,time_inp/const%autime,nfinal,ntsteps_inp)
+    call  get_diagonal_hamiltonian(E_f_inp,E_n_inp,nfinal,ntsteps_inp,(time_inp(2)-time_inp(1))/const%autime, E_fn_mean)
+    call ODE_solver(A_mat,time/const%autime,nfinal,ntsteps)
 
     ! Write the solution to the file
 
@@ -505,17 +502,6 @@ subroutine compute_sckh_diagonal_nonresonant(p)
 
     ! Spline A matrix
     ! compute \sum_f(Aff_\prime* Df\primen
-
-
-    A_real=0.D0
-    A_imag=0.D0
-    do i=1,nfinal
-      do j=1,nfinal   
-        call spline_easy(time_inp,real(A_mat_inp(i,j,:)),ntsteps_inp,time,A_real,ntsteps)
-        call spline_easy(time_inp,aimag(A_mat_inp(i,j,:)),ntsteps_inp,time,A_imag,ntsteps)
-        A_mat(i,j,:)=cmplx(A_real(:),A_imag(:))
-      enddo
-    enddo
 
     sigma_m = 0
 
@@ -650,10 +636,9 @@ subroutine compute_sckh_diagonal_nonresonant(p)
   complex(kind=wp), dimension(:,:,:),allocatable::  sigma_m
   real(kind=wp),dimension(:),allocatable:: E_IP1s, E_gs, traj_weights
   ! H_mat contains the Hamiltonian matrix elements for the different time steps
-  complex(kind=wp),dimension(:,:,:),allocatable::A_mat_inp,A_mat
+  complex(kind=wp),dimension(:,:,:),allocatable::A_mat
   complex(kind=wp),dimension(:,:,:),allocatable::Final_state_sum
   integer::ifile
-   real(kind=wp),allocatable::A_real(:),A_imag(:)
   !functions
   real(kind=wp):: dnrm2
   ! set up local variables
@@ -693,9 +678,8 @@ subroutine compute_sckh_diagonal_nonresonant(p)
        E_n(ntsteps), E_f(nfinal,ntsteps), D_fn(nfinal,ntsteps,3), &
        funct(ntsteps), funct_real(ntsteps_pad), funct_imag(ntsteps_pad),&
        E_IP1s(ntsteps_inp), E_trans(nfinal,ntsteps_inp))
-  allocate(A_mat(nfinal,nfinal,ntsteps),A_mat_inp(nfinal,nfinal,ntsteps_inp))
+  allocate(A_mat(nfinal,nfinal,ntsteps))
   allocate(Final_state_sum(nfinal,ntsteps,3))
-  allocate(A_real(ntsteps),A_imag(ntsteps))
 
   ! create time_inp, in s
   time_inp = 0
@@ -771,7 +755,6 @@ subroutine compute_sckh_diagonal_nonresonant(p)
       end do
     end do
 
-    A_mat_inp=0.0
     A_mat=0.0
 
     if (traj .eq. 1) then
@@ -780,8 +763,8 @@ subroutine compute_sckh_diagonal_nonresonant(p)
 
     ! Solve coupling matrix equation
     call  get_hamiltonian_offdiagonal(E_f_inp,E_n_inp,nfinal,ntsteps_inp,&
-           delta_t/const%autime,E_fn_mean)
-    call ODE_solver(A_mat_inp,time_inp/const%autime,nfinal,ntsteps_inp)
+           (time_inp(2)-time_inp(1))/const%autime,E_fn_mean)
+    call ODE_solver(A_mat,time/const%autime,nfinal,ntsteps)
 
     ! Write the solution to the file
 
@@ -789,16 +772,7 @@ subroutine compute_sckh_diagonal_nonresonant(p)
     write(6,*) "Semi-Classical Kramers-Heisenberg"
 
     ! Spline A matrix
-
-    A_real=0.D0
-    A_imag=0.D0
-    do i=1,nfinal
-      do j=1,nfinal   
-        call spline_easy(time_inp,real(A_mat_inp(i,j,:)),ntsteps_inp,time,A_real,ntsteps)
-        call spline_easy(time_inp,aimag(A_mat_inp(i,j,:)),ntsteps_inp,time,A_imag,ntsteps)
-        A_mat(i,j,:)=cmplx(A_real(:),A_imag(:))
-      enddo
-    enddo
+  
     call transform_dipole_operator(D_fn,E_f,E_n,nfinal,ntsteps) 
     sigma_m = 0
 

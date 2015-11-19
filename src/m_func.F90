@@ -6,6 +6,7 @@ module m_func
   real(kind=wp), allocatable, private:: H_in(:,:,:)
   real(kind=wp),allocatable,private::Overlap_matrix(:,:,:)
   real(kind=wp),allocatable,public::time(:)
+  real(kind=wp),allocatable,private::yder(:,:,:)
   integer, private :: H_in_shape(3)
 
 contains
@@ -198,16 +199,28 @@ subroutine funct_complex(t,y,yp)
    real(kind=wp),allocatable::Ht(:,:)
    integer::shape_H(3)
    integer::i,j,k,l ! loop variables
-
-
    if(allocated(H_in)) then
-     shape_H=shape(H_in)
-     !write(*,*) 'Shape H_in is ',shape_H(1),shape_H(2),shape_H(3)
-     allocate(Ht(shape_H(1),shape_H(2)))
-     Ht=0.0d0
-     do i=1,shape_H(1)
-         call spline_one(time,H_in(i,i,:),shape_H(3),t,Ht(i,i)) !spline_one(x,y,n, x2,y2)
-     enddo!i
+    shape_H=shape(H_in)
+    allocate(Ht(shape_H(1),shape_H(2)))
+    if(allocated(yder)) then
+       do i=1,shape_H(1)
+         do j=1,shape_H(2)
+          call splint(time,H_in(i,j,:),yder(i,j,:),shape_H(3),t,Ht(i,j))
+         enddo
+       enddo
+     else
+       allocate( yder(shape_H(1),shape_H(2),shape_H(3)) )
+       do i=1,shape_H(1)
+         do j=1,shape_H(2)
+          call spline(time,H_in(i,j,:),shape_H(3),1.0d30,1.0d30,yder(i,j,:))
+         enddo
+       enddo
+       do i=1,shape_H(1)
+         do j=1,shape_H(2)
+          call splint(time,H_in(i,j,:),yder(i,j,:),shape_H(3),t,Ht(i,j))
+         enddo
+       enddo
+     endif
      !yp=(0.0_wp,1.0_wp)*matmul(y,dcmplx(Ht))
      call zgemm('N','N',shape_H(1),shape_H(1),shape_H(1),(1.0d0,0.0d0),y,shape_H(1),&
          dcmplx(Ht),shape_H(1),(0.0d0,0.0d0),yp,shape_H(1))
