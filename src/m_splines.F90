@@ -104,11 +104,14 @@ contains
     real(8), intent(in):: x, xa(:),y2a(:,:,:),ya(:,:,:)
     real(8), intent(out):: y(:,:)
     
-    integer:: k,khi,klo
+    integer:: k
+    integer,save:: khi,klo
     real(8):: a,b,h
-
-    klo=1
-    khi= size(xa)
+    integer,save::is_first_call=1
+    if (is_first_call .eq. 1) then
+        klo=1
+        khi= size(xa)
+    endif
 
     do while (khi-klo.gt.1)
       k=(khi+klo)/2
