@@ -102,16 +102,12 @@ contains
   ! this subroutine splines a whole array, last index time dimension
   subroutine splint_array3_d(xa,ya,y2a,x,y)
     real(8), intent(in):: x, xa(:),y2a(:,:,:),ya(:,:,:)
-    real(8), intent(out):: y(:,:)
-    
+    real(8), intent(out):: y(:,:) 
     integer:: k
-    integer,save:: khi,klo
+    integer:: khi,klo
     real(8):: a,b,h
-    integer,save::is_first_call=1
-    if (is_first_call .eq. 1) then
-        klo=1
-        khi= size(xa)
-    endif
+    klo=1
+    khi= size(xa)
 
     do while (khi-klo.gt.1)
       k=(khi+klo)/2
