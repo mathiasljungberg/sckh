@@ -1,0 +1,17 @@
+
+runmode SCKH
+runmode_sckh  NONRESONANT_OFFDIAGONAL
+
+! files
+outfile dimer_XES
+traj_file_list trajectories.dat
+
+gamma_FWHM 0.18
+delta_t 0.0025
+ntsteps 16000 
+ntsteps2 16000 
+use_proj .true.
+proj_file proj_file.txt
+ntraj 1
+nfinal 8
+

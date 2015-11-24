@@ -3,11 +3,13 @@ module m_func
   use m_splines
   implicit none
 
-  real(kind=wp), allocatable, private:: H_in(:,:,:)
+  real(kind=wp), allocatable:: H_in(:,:,:)
   real(kind=wp),allocatable,private::Overlap_matrix(:,:,:)
   real(kind=wp),allocatable,public::time(:)
-  real(kind=wp),allocatable,private::yder(:,:,:)
+  real(kind=wp),allocatable,private::yder(:,:,:),H_effective(:,:,:),time_effective(:)
   integer, private :: H_in_shape(3)
+  integer,private:: effective_ntsteps=800
+
 
 contains
   
@@ -104,7 +106,9 @@ subroutine read_overlap(nstates,ntsteps,filename)
    implicit none
    character(len=80),intent(in):: filename
    integer,intent(in):: nstates,ntsteps
-   integer::i,j,k,l,m,n,traj
+   integer::i,j,k,l,m,n,traj,shape_ov(3)
+   real(kind=wp),allocatable,dimension(:,:,:)::ov_temp
+
 
 
    if( allocated(Overlap_matrix)) then
@@ -148,7 +152,7 @@ subroutine read_overlap(nstates,ntsteps,filename)
    open(11,file='overlap_marix_module.txt',status='unknown')
 
    ! Print the overlap matrix
-   write(11,*) 'Print the overlap matrix  '
+   write(11,*) 'Print the overlap matrix read from t12 file  '
    do k=1,ntsteps !nsteps-1
     write(11,*) 'Time step is ',k
     do j=1,nstates
@@ -156,6 +160,37 @@ subroutine read_overlap(nstates,ntsteps,filename)
     enddo
    enddo
    close(11)
+   ! The overlap matrix has state order opposite to the E_f and D_fn. In order to do ordering the same, 
+   !  the reordering should be done (states are sorted according to their energies
+   shape_ov=shape(Overlap_matrix)
+   allocate(ov_temp(shape_ov(1),shape_ov(2),shape_ov(3)))
+   ov_temp=Overlap_matrix
+   do i=1,shape_ov(1)-1
+     do j=1,shape_ov(2)-1
+      Overlap_matrix(j,i,:)=ov_temp(j+1,i+1,:)
+     enddo
+   enddo
+   Overlap_matrix(shape_ov(1),shape_ov(1),:)=ov_temp(1,1,:)
+   do i=1,shape_ov(1)-1
+     Overlap_matrix(shape_ov(1),i,:)=ov_temp(1,i+1,:)
+     Overlap_matrix(i,shape_ov(1),:)=ov_temp(i+1,1,:)
+   enddo
+   open(11,file='overlap_marix_after_reordering.txt',status='unknown')
+
+ !   Print the overlap matrix after reordering
+   write(11,*) 'Print the overlap matrix read from t12 file  '
+   do k=1,ntsteps !nsteps-1
+    write(11,*) 'Time step is ',k
+    do j=1,nstates
+      write(11,'(9F14.8)') (Overlap_matrix(j,i,k),i=1,nstates)
+    enddo
+   enddo
+   close(11)
+   deallocate(ov_temp)
+
+
+
+   
 end subroutine read_overlap
 
 
@@ -203,11 +238,7 @@ subroutine funct_complex(t,y,yp)
     shape_H=shape(H_in)
     allocate(Ht(shape_H(1),shape_H(2)))
     if(allocated(yder)) then
-       do i=1,shape_H(1)
-         do j=1,shape_H(2)
-          call splint(time,H_in(i,j,:),yder(i,j,:),shape_H(3),t,Ht(i,j))
-         enddo
-       enddo
+       call splint_array3_d(time,H_in,yder,t,Ht)
      else
        allocate( yder(shape_H(1),shape_H(2),shape_H(3)) )
        do i=1,shape_H(1)
@@ -215,13 +246,12 @@ subroutine funct_complex(t,y,yp)
           call spline(time,H_in(i,j,:),shape_H(3),1.0d30,1.0d30,yder(i,j,:))
          enddo
        enddo
-       do i=1,shape_H(1)
-         do j=1,shape_H(2)
-          call splint(time,H_in(i,j,:),yder(i,j,:),shape_H(3),t,Ht(i,j))
-         enddo
-       enddo
+       call splint_array3_d(time,H_in,yder,t,Ht)
      endif
      !yp=(0.0_wp,1.0_wp)*matmul(y,dcmplx(Ht))
+     !subroutine splint_array3_d(xa,ya,y2a,x,y)
+    !real(8), intent(in):: x, xa(:),y2a(:,:,:),ya(:,:,:)
+    !real(8), intent(out):: y(:,:)
      call zgemm('N','N',shape_H(1),shape_H(1),shape_H(1),(1.0d0,0.0d0),y,shape_H(1),&
          dcmplx(Ht),shape_H(1),(0.0d0,0.0d0),yp,shape_H(1))
      yp=(0.0_wp,1.0_wp)*yp
@@ -261,12 +291,12 @@ subroutine transform_dipole_operator(D_nf,E_final,E_n,nstates,ntimesteps)
        enddo
    enddo 
    D_nf=0.0d0  
-   D_nf(:,:,1)=D_nf_trans(:,:,1) ! keep the dipole operator for step k=1 unchanged
+   D_nf(:,:,1)=D_nf_trans(:,:,1) ! transform the dipole operator for step k=1 
    do m=1,3 ! dipole polarization
      do k=2,ntimesteps
        do i=1,nstates
          do  j=1,nstates
-          D_nf(i,k,m)=D_nf(i,k,m)+Overlap_matrix(nstates+1,nstates+1,k-1)*D_nf_trans(j,k,m)*Overlap_matrix(i,nstates+1-j,k-1)
+          D_nf(i,k,m)=D_nf(i,k,m)+Overlap_matrix(nstates+1,nstates+1,k)*D_nf_trans(j,k,m)*Overlap_matrix(i,j,k)
          enddo!j
        enddo!i
      enddo!k
@@ -302,7 +332,7 @@ subroutine get_hamiltonian_offdiagonal(E_f,E_int,nstates,ntsteps,delta_t,E_f_mea
      do i=1,nstates
         do j=1,nstates
           do l=1,nstates
-             H_in(i,j,k)=H_in(i,j,k)+Overlap_matrix(i,l,k-1)*E_f(nstates+1-l,k)*Overlap_matrix(j,l,k-1)
+             H_in(i,j,k)=H_in(i,j,k)+Overlap_matrix(i,l,k)*E_f(l,k)*Overlap_matrix(j,l,k)
           enddo ! l
         enddo ! j
      enddo ! i
@@ -315,7 +345,7 @@ subroutine get_hamiltonian_offdiagonal(E_f,E_int,nstates,ntsteps,delta_t,E_f_mea
    do k=1,ntsteps 
     write(11,*) 'Time step is ',k
     do j=1,nstates
-      write(11,'(9F14.8)') (H_in(j,i,k),i=1,nstates)
+      write(11,'(9F18.10)') (H_in(j,i,k),i=1,nstates)
     enddo!j
    enddo!k
    close(11)
@@ -326,10 +356,116 @@ subroutine get_hamiltonian_offdiagonal(E_f,E_int,nstates,ntsteps,delta_t,E_f_mea
    write(*,*) 'delta_t ',delta_t
 end subroutine get_hamiltonian_offdiagonal
 
+subroutine funct_complex_linear(t,y,yp)
+   implicit none
+   real(kind=wp), intent(in):: t
+   complex(kind=wp),dimension(:,:),intent(in):: y
+   complex(kind=wp),dimension(:,:),intent(out):: yp
+   real(kind=wp),allocatable::Ht(:,:)
+   integer::shape_H(3),shape_time(1)
+   integer::middle
+   integer::i,j,k,l,i_start, i_end
+   real::step
+   step=time(2)-time(1)
+   ! loop variables
+   ! As we have too many points for large dimer trajectory, we may try to use the linear interpolation between time steps
+   ! Binary search for the interval
+ if(allocated(H_in)) then
+    shape_H=shape(H_in)
+   allocate(Ht(shape_H(1),shape_H(2)))
+   shape_time=shape(time)
+   i_end=shape_time(1)
+   i_start=DINT(t/step)
+   if ( abs(time(i_start)) .eq. t ) then 
+     i_end=i_start
+   else
+     i_end=i_start+1
+   endif
+   if(i_end .eq. i_start) then 
+      Ht(:,:)=H_in(:,:,i_start)
+   else
+      Ht(:,:)=H_in(:,:,i_start)+(t-time(i_start))/(time(i_end)-time(i_start))*(H_in(:,:,i_end)-H_in(:,:,i_start))
+ !     Ht(i,j)=(H_in(i,j,i_end)-H_in(i,j,i_start))/step+(H_in(i,j,i_start)*i_end-H_in(i,j,i_end)*i_start)
+
+  endif
+  call zgemm('N','N',shape_H(1),shape_H(1),shape_H(1),(1.0d0,0.0d0),y,shape_H(1),&
+      dcmplx(Ht),shape_H(1),(0.0d0,0.0d0),yp,shape_H(1))
+  else
+    write(*,*) 'Routine funct_complex linear. H_in is not allocated'
+    stop
+ endif
+end subroutine  funct_complex_linear
 
 
+subroutine funct_complex_large(t,y,yp)
+   implicit none
+   real(kind=wp), intent(in):: t
+   complex(kind=wp),dimension(:,:),intent(in):: y
+   complex(kind=wp),dimension(:,:),intent(out):: yp
+   real(kind=wp),allocatable::Ht(:,:)
+   integer::shape_H(3)
+   integer::i,j,k,l ! loop variables
+   integer:: effective_ntsteps
+   integer::i_step
+!   write(*,*) 'Start complex interpolation function ****************************'
+   if(allocated(H_in)) then
+    shape_H=shape(H_in)
+    allocate(Ht(shape_H(1),shape_H(2)))
+    if(allocated(yder)) then
+  !     write(*,*) 'Second branch ','time_effective ',shape(time_effective),'H_effective ', shape(H_effective),&
+   !     'yder ',shape(yder),'Ht ', shape(Ht)
+    !  write(*,*) 'shape H_in ', shape(H_in)
+       do i=1,shape_H(1)
+         do j=1,shape_H(2)
+           call splint(time_effective,H_effective(i,j,:),yder(i,j,:),effective_ntsteps+1,t,Ht(i,j))
+         enddo
+       enddo
+     ! write(*,*) 'End second branch '
+     else
+       ! There we assume that number of points in array is equal to 16000. To do interpolation we select 800 points
+       effective_ntsteps=8000
+       i_step=shape_H(3)/effective_ntsteps
+      ! write(*,*) 'effective_ntsteps outside',effective_ntsteps,'  ',i_step
+       allocate( yder(shape_H(1),shape_H(2),effective_ntsteps+1) )
+       allocate( H_effective(shape_H(1),shape_H(2),effective_ntsteps+1))
+       allocate(time_effective(effective_ntsteps+1))
+       H_effective(:,:,1)=H_in(:,:,1)
+       time_effective(1)=time(1)
+       do i=2,effective_ntsteps+1
+          H_effective(:,:,i)=H_in(:,:,i_step*(i-1))
+          time_effective(i)=time(i_step*(i-1))
+       !   write(*,*) i,'   ',(i-1)*i_step
+       enddo
+        !         write(*,*) 'After creating matices '
+       do i=1,shape_H(1)
+         do j=1,shape_H(2)
+          call spline(time_effective,H_effective(j,i,:),effective_ntsteps+1,1.0d30,1.0d30,yder(j,i,:))
+         enddo
+       enddo
+         !        write(*,*) 'After splining '
+      ! write(*,*) 'Second branch ','time_effective ',shape(time_effective),'H_effective ', shape(H_effective),&
+       !           'yder ',shape(yder),'Ht ', shape(Ht)
+       do i=1,shape_H(1)
+         do j=1,shape_H(2)
+          call splint(time_effective,H_effective(j,i,:),yder(j,i,:),effective_ntsteps+1,t,Ht(j,i))
+         enddo
+       enddo
 
+     endif
+    !write(*,*) 'After interpolation '
+     !yp=(0.0_wp,1.0_wp)*matmul(y,dcmplx(Ht))
+     call zgemm('N','N',shape_H(1),shape_H(1),shape_H(1),(1.0d0,0.0d0),y,shape_H(1),&
+         dcmplx(Ht),shape_H(1),(0.0d0,0.0d0),yp,shape_H(1))
+     yp=(0.0_wp,1.0_wp)*yp
+     deallocate(Ht)
+     !            write(*,*) 'first branch end '
+   else
+      write(*,*) 'Error in m_func module'
+      write(*,*) 'H_in is not allocated'
+      stop
+   endif
 
+end subroutine funct_complex_large
 
 
 
