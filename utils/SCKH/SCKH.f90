@@ -304,7 +304,7 @@ else  if(runmode .eq. 2) then
           do m=1,3 ! polarization     
              do l = 1, nfreq
                 do t = 1, ntsteps              
-                   sigma(k,l) =  sigma(k,l) + D_fn(k,t,m) ** 2 *  exp(-(gamma * eV / hbar) * time(t)) &
+                   sigma_m(k,l,m) =  sigma_m(k,l,m) + D_fn(k,t,m) ** 2 *  exp(-(gamma * eV / hbar) * time(t)) &
                         / (  (freq(l) - (E_n(t) - E_f(k,t)) ) ** 2 + gamma2 ** 2) 
 
                 end do !t
@@ -313,25 +313,34 @@ else  if(runmode .eq. 2) then
        end do ! k
 
        ! compute projections
-       do k =1,nfinal! final state 
-          do m=1,nproj
-             do l = 1, nfreq
-                do t = 1, ntsteps              
-                   D_proj = D_fn(k,t,1) * projvec(m,1) + D_fn(k,t,2) * projvec(m,2) + D_fn(k,t,3) * projvec(m,3)
-                   sigma_m(k,l,m) =  sigma_m(k,l,m) + D_proj ** 2 * exp(-(gamma * eV / hbar) * time(t)) &
-                        / (  (freq(l) - (E_n(t) - E_f(k,t)) ) ** 2 + gamma2 ** 2)  !dcmplx(funct_real, funct_imag)
-                end do !t
-             end do ! l
-          end do ! m
-       end do ! k
+       do i=1,nproj
+         sigma_tmp = sigma_m(:,:,1) * projvec(i,1) + sigma_m(:,:,2) * projvec(i,2) + sigma_m(:,:,3) * projvec(i,3)
+         sigma_proj(i,:) = sigma_proj(i,:) + sum( real( sigma_tmp * conjg(sigma_tmp)),1)
+       end do
+
+!       do k =1,nfinal! final state 
+!          do m=1,nproj
+!             do l = 1, nfreq
+!                do t = 1, ntsteps              
+!                   D_proj = D_fn(k,t,1) * projvec(m,1) + D_fn(k,t,2) * projvec(m,2) + D_fn(k,t,3) * projvec(m,3)
+!                   sigma_proj(k,l,m) =  sigma_proj(k,l,m) + D_proj ** 2 * exp(-(gamma * eV / hbar) * time(t)) &
+!                        / (  (freq(l) - (E_n(t) - E_f(k,t)) ) ** 2 + gamma2 ** 2)  !dcmplx(funct_real, funct_imag)
+!                end do !t
+!             end do ! l
+!          end do ! m
+!       end do ! k
 
     !sigma = sigma + real( sum( sigma_m, 3)) 
-    sigma_tot = sigma_tot +  sum( real( sum( sigma_m , 3)),1)
+       !    sigma_tot = sigma_tot +  sum( real( sum( sigma_m , 3)),1)
+
+       sigma = sigma + real( sum( sigma_m * conjg(sigma_m), 3)) 
+       sigma_tot = sigma_tot +  sum( real( sum( sigma_m * conjg(sigma_m), 3)),1)
+
     
-    ! compute projections (sigma_m already squared!)
-    do i=1,nproj
-       sigma_proj(i,:) = sigma_proj(i,:) + real( sum( sigma_m(:,:,i) ,1 ) )
-    end do
+    !! compute projections (sigma_m already squared!)
+    !do i=1,nproj
+    !   sigma_proj(i,:) = sigma_proj(i,:) + real( sum( sigma_m(:,:,i) ,1 ) )
+    !end do
 
 end if
 
@@ -421,7 +430,7 @@ sigma_proj = sigma_proj / norm
 
 
 ! write sigma to file
-file="_sigma_"
+file="_sigma"
 file = trim(adjustl(outfile)) // trim(adjustl(file)) // ".dat"
 open(10,file=file,status='unknown')
 

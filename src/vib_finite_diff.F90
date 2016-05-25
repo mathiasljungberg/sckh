@@ -4,6 +4,9 @@ program vib_finite_diff
   use m_splines, only: linspace, spline_easy
   use m_vib_finite_diff, only: solve_finite_diff
   use m_fourier_grid, only: solve_fourier_grid
+  use m_fourier_grid, only: fourier_grid_d1_fast
+  use m_KH_functions, only: solve_sinc_DVR
+  use m_KH_functions, only: dsinc_mat_elems
   implicit none 
 
   character(75)::inputfile,outputfile
@@ -16,6 +19,8 @@ program vib_finite_diff
   real(wp), allocatable:: x(:), y(:), x_new(:), y_new(:)
   real(wp), allocatable:: eigvec(:,:), eigval(:)
   complex(wp), allocatable:: eigvec_z(:,:)
+  complex(wp), allocatable:: first_der(:,:)
+  real(wp), allocatable:: first_der_sinc(:,:)
 
   ! read from standard input
   read(5,*) inputfile
@@ -47,17 +52,40 @@ program vib_finite_diff
   
   ! finite differences
   call solve_finite_diff(dx, y_new, nstates, eigval, eigvec, mu, "SI")  
-  
+
+  write(6,*) eigval * const % cm 
   write(6,*) "solve_finite_diff: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
 
-  ! fourier grid
+  ! fourier grid, slow but reliable
   allocate(eigvec_z(npoints, npoints))
   deallocate(eigval)
   allocate(eigval(npoints))
-  call solve_fourier_grid(dx, y_new, eigval, eigvec_z, mu, "SI")  
+  call solve_fourier_grid(dx, y_new, eigval, eigvec_z, mu, "SI", "fast")  
   
-  write(6,*) "solve_finite_diff: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
+  write(6,*) eigval(1:nstates) * const % cm 
+  write(6,*) "solve_fourier_grid: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
 
+
+  ! sinc
+  eigval=0.0_wp
+  eigvec=0.0_wp
+  call solve_sinc_DVR(dx, mu, y_new, eigvec, eigval)
+
+  write(6,*) eigval(1:nstates) * const % cm 
+  write(6,*) "solve_sinc_DVR: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
+
+  ! look at first derivatives
+  allocate(first_der(npoints, npoints))
+  call fourier_grid_d1_fast(npoints, dx, first_der)
+
+  write(6,*) "first derivaive matrix", abs(first_der * const % cm * const % hbar * dcmplx(0.0_wp, -1.0_wp)) 
+
+  allocate(first_der_sinc(npoints, npoints))
+  call dsinc_mat_elems(first_der_sinc,x_new)
+
+  write(6,*) "first derivaive sinc", first_der_sinc * const % cm * const % hbar 
   
-
+  write(6,*) "differnce abs first derivaives", (abs(first_der_sinc) - abs(first_der)) * const % cm * const % hbar 
+  
+  
 end program vib_finite_diff

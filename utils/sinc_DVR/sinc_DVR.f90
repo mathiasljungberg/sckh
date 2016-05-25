@@ -38,7 +38,8 @@ program sinc_DVR
   ! dx: the spacing betwen dvr points, in Angstroms
   ! my: reduced mass, in atomic units
 
-  allocate(X_dvr(nstates), x_in(npoints_in), E_in(npoints_in), eig_i(nstates), c_i(nstates,nstates))
+  allocate(X_dvr(nstates), x_in(npoints_in), E_in(npoints_in), &
+       eig_i(nstates), c_i(nstates,nstates))
   allocate(E_dvr(nstates))
 
   !
@@ -88,7 +89,8 @@ program sinc_DVR
      if(abs(X_dvr(nstates)-x_in(npoints_in)) .lt. 1d-20 ) then
         X_dvr(nstates)=x_in(npoints_in)
      else
-        write(6,*) "dvr point higher than supplied potential range!", X_dvr(nstates), x_in(npoints_in), X_dvr(nstates)- x_in(npoints_in)
+       write(6,*) "dvr point higher than supplied potential range!", X_dvr(nstates), &
+            x_in(npoints_in), X_dvr(nstates)- x_in(npoints_in)
         stop
      end if
   end if

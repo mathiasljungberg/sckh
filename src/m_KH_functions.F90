@@ -134,7 +134,7 @@ contains
              
           end do
           
-          write(6,*) j1,j2
+!          write(6,*) j1,j2
           
           M(j1,j2) = prod1 * dx_sinc
           
@@ -178,14 +178,14 @@ contains
 
     do i = -npoints,npoints
        ii = i + npoints +1
-       H_kin(ii,ii) = (const % hbar**2  / (2 * my_SI * dx **2)) * (const % pi ** 2) /3.0d0
+       H_kin(ii,ii) = (const % hbar**2  / (2.0_wp * my_SI * dx **2)) * (const % pi ** 2) / 3.0_wp
     end do
 
     do i = -npoints,npoints
        ii = i + npoints +1
        do j = i +1, npoints
           jj = j + npoints +1
-          H_kin(ii,jj) =  (const % hbar**2 * (-1)**(i-j) / ( my_SI * dx **2)) / (i-j) **2
+          H_kin(ii,jj) =  (const % hbar**2 * (-1.0_wp)**(i-j) / ( my_SI * dx **2)) / (i-j) **2
           H_kin(jj,ii) = H_kin(ii,jj)
        end do
     end do

@@ -1,9 +1,0 @@
-module m_fourier_grid
-  implicit none
-contains
-
-subroutine fourier_grid
-
-end subroutine fourier_grid
-
-end module m_fourier_grid

@@ -52,6 +52,7 @@ program SCKH
 
   read(5,*) outfile
   read(5,*) my
+  read(5,*) freq_min, freq_max, nfreq_inp ! changed
   read(5,*) gamma_FWHM, gamma_FWHM_2     
   read(5,*) runmode
   read(5,*) samplemode, npoints_x_sampl, npoints_mom_sampl, delta_t, ntsteps
@@ -404,50 +405,81 @@ program SCKH
            else  if(runmode .eq. 2) then
               write(6,*) "Method of Odelius / Takashashi et al. "
         
-              sigma_m = 0
-
-              ! compute sigma_tot  
-              do k =1,nfinal! final state 
-                 do m=1,3 ! polarization     
-                    do l = 1, nfreq
-                       do t = 1, ntsteps              
-                          sigma(k,l) =  sigma(k,l) + D_fn(k,t,m) ** 2 *  exp(-(gamma * eV / hbar) * time(t)) &
-                               / (  (freq(l) - (E_n(t) - E_f(k,t)) ) ** 2 + gamma2 ** 2) 
-                          
-                       end do !t
-                    end do ! l
-                 end do ! m
-              end do ! k
-
-              ! compute projections
-              do k =1,nfinal! final state 
-                 do m=1,nproj
-                    do l = 1, nfreq
-                       do t = 1, ntsteps              
-                          D_proj = D_fn(k,t,1) * projvec(m,1) + D_fn(k,t,2) * projvec(m,2) + D_fn(k,t,3) * projvec(m,3)
-                          sigma_m(k,l,m) =  sigma_m(k,l,m) + D_proj ** 2 * exp(-(gamma * eV / hbar) * time(t)) &
-                               / (  (freq(l) - (E_n(t) - E_f(k,t)) ) ** 2 + gamma2 ** 2)  !dcmplx(funct_real, funct_imag)
-                       end do !t
-                    end do ! l
-                 end do ! m
-              end do ! k
-
-              sigma_tot = sigma_tot +  sum( real( sum( sigma_m , 3)),1)
-    
-              ! compute projections (sigma_m already squared!)
-              do i=1,nproj
-                 sigma_proj(i,:) = sigma_proj(i,:) + real( sum( sigma_m(:,:,i) ,1 ) )
-              end do
-
-           end if
+!              sigma_m = 0
+!
+!              ! compute sigma_tot  
+!              do k =1,nfinal! final state 
+!                 do m=1,3 ! polarization     
+!                    do l = 1, nfreq
+!                       do t = 1, ntsteps              
+!                          sigma(k,l) =  sigma(k,l) + D_fn(k,t,m) ** 2 *  exp(-(gamma * eV / hbar) * time(t)) &
+!                               / (  (freq(l) - (E_n(t) - E_f(k,t)) ) ** 2 + gamma2 ** 2) 
+!                          
+!                       end do !t
+!                    end do ! l
+!                 end do ! m
+!              end do ! k
+!
+!              ! compute projections
+!              do k =1,nfinal! final state 
+!                 do m=1,nproj
+!                    do l = 1, nfreq
+!                       do t = 1, ntsteps              
+!                          D_proj = D_fn(k,t,1) * projvec(m,1) + D_fn(k,t,2) * projvec(m,2) + D_fn(k,t,3) * projvec(m,3)
+!                          sigma_m(k,l,m) =  sigma_m(k,l,m) + D_proj ** 2 * exp(-(gamma * eV / hbar) * time(t)) &
+!                               / (  (freq(l) - (E_n(t) - E_f(k,t)) ) ** 2 + gamma2 ** 2)  !dcmplx(funct_real, funct_imag)
+!                       end do !t
+!                    end do ! l
+!                 end do ! m
+!              end do ! k
+!
+!              sigma_tot = sigma_tot +  sum( real( sum( sigma_m , 3)),1)
+!    
+!              ! compute projections (sigma_m already squared!)
+!              do i=1,nproj
+!                 sigma_proj(i,:) = sigma_proj(i,:) + real( sum( sigma_m(:,:,i) ,1 ) )
+!              end do
+!
+!           end if
 
            !write(6,*) "Computed trajectory", traj, x_mom_sampl(traj,1), x_mom_sampl(traj,2)
-  
-        end do ! end traj
+
+! below, copy-paste from SCKH
+              
+       sigma_m = 0
+
+       ! compute sigma_tot  
+       do k =1,nfinal! final state 
+          do m=1,3 ! polarization     
+             do l = 1, nfreq
+                do t = 1, ntsteps              
+                   sigma_m(k,l,m) =  sigma_m(k,l,m) + D_fn(k,t,m) ** 2 *  exp(-(gamma * eV / hbar) * time(t)) &
+                        / (  (freq(l) - (E_n(t) - E_f(k,t)) ) ** 2 + gamma2 ** 2) 
+
+                end do !t
+             end do ! l
+          end do ! m
+       end do ! k
+
+       ! compute projections
+       do i=1,nproj
+         sigma_tmp = sigma_m(:,:,1) * projvec(i,1) + sigma_m(:,:,2) * projvec(i,2) + sigma_m(:,:,3) * projvec(i,3)
+         sigma_proj(i,:) = sigma_proj(i,:) + sum( real( sigma_tmp * conjg(sigma_tmp)),1)
+       end do
+
+       sigma = sigma + real( sum( sigma_m * conjg(sigma_m), 3)) 
+       sigma_tot = sigma_tot +  sum( real( sum( sigma_m * conjg(sigma_m), 3)),1)
+
+     end if
+     
+   end do ! end traj
 
 
 write(6,*)
 write(6,*) "Averaged over", npoints_x_mom_sampl, "trajectories"
+
+
+write(6,*) "runmode", runmode
 
 if (runmode .eq. 1) then 
 
@@ -516,7 +548,7 @@ do j=1, nfinal
    end do
      
    close(10)
-end do ! j
+ end do ! j
 
 ! write spectrum from projections  
 do j=1, nproj
@@ -532,14 +564,16 @@ do j=1, nproj
      
    do i=0, nfreq/2
       write(10,*)  2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma_proj(j,i+1)
-   end do
+    end do
      
    close(10)
-end do !j
+ end do !j
   
 
 else if (runmode .eq. 2) then
    
+write(6,*) "in runmode 2 "
+
 !normalize 
 norm = sum(sigma_tot) * (freq(2)-freq(1))
 
@@ -549,7 +583,7 @@ sigma_proj = sigma_proj / norm
 
 
 ! write sigma to file
-file="_sigma_"
+file="_sigma"
 file = trim(adjustl(outfile)) // trim(adjustl(file)) // ".dat"
 open(10,file=file,status='unknown')
 

@@ -18,7 +18,7 @@ IF(CMAKE_Fortran_COMPILER MATCHES ifort)
    SET(MKLROOT "/opt/intel/composer_xe_2013_sp1/mkl")
    SET(INCDIR " -I${MKLROOT}/include")
   #SET(OMP_FLAGS "")
-  #SET(FFTW_LIB "-L/usr/lib -lfftw3 -lm")
+   SET(FFTW_LIB "-L/usr/lib -lfftw3 -lm")
    SET(LAPACK_LIB " -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_sequential.a -Wl,--end-group -lpthread -lm")
    ENDIF(USER_OS STREQUAL LinuxMint)
 
@@ -35,7 +35,7 @@ ELSE(CMAKE_Fortran_COMPILER MATCHES gfortran)
     SET(FLAGS "-O0  -fbounds-check -framework vecLib")  
     SET(INCDIR "-I/usr/local/include -I/usr/include")
     #SET(OMP_FLAGS "")
-    #SET(FFTW_LIB "-L/usr/local/lib -lfftw3 -lm")
+    SET(FFTW_LIB "-L/usr/local/lib -lfftw3 -lm")
     SET(LAPACK_LIB "")
   ELSE(USER_OS STREQUAL mac)
 
@@ -83,6 +83,7 @@ m_SCKH_utils.F90
 hist_class.F90
 m_FFT.F90
 m_SCKH.F90
+m_fftw3.F90
 )
 
 SET(ALL_MODULES_F 
@@ -100,7 +101,7 @@ vib_finite_diff sckh_main
 
 FOREACH(EXEC ${EXECUTABLES})
   ADD_EXECUTABLE(${EXEC} ${EXEC}.F90 ${ALL_MODULES_F90} ${ALL_MODULES_F})
-  TARGET_LINK_LIBRARIES(${EXEC} ${FLAGS} ${LAPACK_LIB}
+  TARGET_LINK_LIBRARIES(${EXEC} ${FLAGS} ${LAPACK_LIB} ${FFTW_LIB}
     ${LINK_ADDONS})
 ENDFOREACH(EXEC)
 
