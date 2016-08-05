@@ -539,14 +539,18 @@ do j=1, nfinal
    file = trim(adjustl(outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
    open(10,file=file,status='unknown')
    
-   do i=nfreq/2, 1, -1
-      write(10,*)  -2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma(j,nfreq-i+1)
+   !do i=nfreq/2, 1, -1
+   !   write(10,*)  -2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma(j,nfreq-i+1)
+   !end do
+   !
+   !do i=0, nfreq/2
+   !   write(10,*)  2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma(j,i+1)
+   !end do
+
+   do i=1,nfreq
+     write(10,*)  omega(i), sigma(j,i)
    end do
- 
-   do i=0, nfreq/2
-      write(10,*)  2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma(j,i+1)
-   end do
-     
+   
    close(10)
  end do ! j
 
@@ -558,14 +562,18 @@ do j=1, nproj
    file = trim(adjustl(outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
    open(10,file=file,status='unknown')
 
-   do i=nfreq/2, 1, -1
-      write(10,*)  -2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma_proj(j,nfreq-i+1)
+   !do i=nfreq/2, 1, -1
+   !   write(10,*)  -2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma_proj(j,nfreq-i+1)
+   !end do
+    ! 
+   !do i=0, nfreq/2
+   !   write(10,*)  2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma_proj(j,i+1)
+   ! end do
+
+   do i=1,nfreq
+     write(10,*)  omega(i), sigma_proj(j,i)
    end do
-     
-   do i=0, nfreq/2
-      write(10,*)  2 * pi * (i) * hbar / (time_l2 * eV) - E_fn_mean, sigma_proj(j,i+1)
-    end do
-     
+   
    close(10)
  end do !j
   

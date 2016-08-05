@@ -1010,11 +1010,121 @@ subroutine spectrum_XES(eig_f, eig_n,  D_ni, D_fn, D_fi, omega, sigma, sigma_sta
   end do
 
   deallocate(F)
-
+  
 end subroutine spectrum_XES
 
 !subroutine print_output()
 !end subroutine print_output
+
+
+
+!
+! These are new routines for general XES spectrum calcultions with resonant and non-resonant on the same footing
+!
+
+subroutine compute_XES_res(E_i, E_n, E_f,  D_ni, D_fn, omega_in, omega_out, gamma, gamma2, sigma_final)
+  use m_precision, only: wp
+  
+  real(kind=wp), intent(in):: E_i, E_n(:), E_f(:)
+  real(kind=wp), intent(in):: D_ni(:,:), D_fn(:,:,:)
+  real(kind=wp), intent(in):: omega_in(:)
+  real(kind=wp), intent(in):: omega_out(:)
+  real(kind=wp), intent(in):: gamma
+  real(kind=wp), intent(in):: gamma2
+  real(kind=wp), intent(out):: sigma_final(:,:,:,:,:)
+
+  integer:: om_in, om_out, i_f
+  complex(wp):: F(3,3)
+  real(wp):: prefac
+  
+  do om_in = 1, size(omega_in)
+    do om_out = 1, size(omega_out)
+      do i_f = 1, size(E_f)
+        
+        call compute_amplitude_F(E_n, E_f(i_f),  D_ni(:,:), D_fn(i_f,:,:), omega_out(om_out), gamma, F(:,:))
+        
+        prefac = omega_in(om_in) / omega_out(om_out) ! etc 
+        sigma_final(i_f, om_in, om_out,:,:) = prefac * abs(F)**2  &
+             * gamma2 / ((omega_in(om_in) - omega_out(om_out) - E_f(i_f)- E_i)**2 + gamma2**2 )
+        
+      end do
+    end do
+  end do
+  
+end subroutine compute_XES_res
+
+
+subroutine compute_XES_nonres_elec(E_i, E_n, E_f,  D_ni, D_fn, omega_out, gamma, sigma_m)
+  use m_precision, only: wp
+  
+  real(kind=wp), intent(in):: E_i, E_n, E_f(:)
+  real(kind=wp), intent(in):: D_ni(:), D_fn(:,:)
+  real(kind=wp), intent(in):: omega_out(:)
+  real(kind=wp), intent(in):: gamma
+  complex(kind=wp), intent(out):: sigma_m(:,:,:)
+
+  real(kind=wp), allocatable:: E_n_tmp(:), E_f_tmp(:)
+  real(kind=wp), allocatable:: D_ni_tmp(:,:), D_fn_tmp(:,:,:)
+  real(kind=wp), allocatable:: sigma_tmp(:,:,:,:)
+
+  allocate(E_n_tmp(1))
+  allocate(E_f_tmp(size(E_f)))
+  allocate(D_ni_tmp(1,size(D_ni)))
+  allocate(D_fn_tmp(1,size(D_fn,1), size(D_fn,2)))
+  allocate(sigma_tmp(size(E_f), 3, 3, size(omega_out)))
+  
+  E_n_tmp(1) = E_n
+  E_f_tmp(:) = E_f(:)
+  D_ni_tmp(1,:) = D_ni(:)
+  D_fn_tmp(1,:,:) = D_fn(:,:)
+  
+  call compute_XES_nonres(E_i, E_n_tmp, E_f_tmp, D_ni_tmp, D_fn_tmp, omega_out, gamma, sigma_tmp)
+  
+  sigma_m(:,:,:) = sigma_tmp(:,1,:,:)
+  
+end subroutine compute_XES_nonres_elec
+
+subroutine compute_XES_nonres(E_i, E_n, E_f,  D_ni, D_fn, omega_out, gamma, sigma_final)
+  use m_precision, only: wp
+  
+  real(kind=wp), intent(in):: E_i, E_n(:), E_f(:)
+  real(kind=wp), intent(in):: D_ni(:,:), D_fn(:,:,:)
+  real(kind=wp), intent(in):: omega_out(:)
+  real(kind=wp), intent(in):: gamma
+  real(kind=wp), intent(out):: sigma_final(:,:,:,:)
+
+  integer:: i_f, om_out
+  complex(wp):: F(3,3)
+  
+  do i_f = 1, size(E_f) 
+    do om_out=1, size(omega_out)
+      call compute_amplitude_F(E_n, E_f(i_f),  D_ni, D_fn(i_f,:,:), omega_out(om_out), gamma, F(:,:))      
+      sigma_final(i_f, :,:, om_out) = abs(F(:,:))**2
+    end do
+  end do
+  
+end subroutine compute_XES_nonres
+
+! scattering amplitude, for each frequency, and final state
+! F_f(\omega') = \sum_{n} \frac{D_{in} D_{nf} } {\omega' -(E_n -E_f) + i\gamma }
+subroutine compute_amplitude_F(E_n, E_f,  D_ni, D_fn, omega_out, gamma, F)
+  use m_precision, only: wp
+
+  real(kind=wp), intent(in):: E_n(:), E_f
+  real(kind=wp), intent(in):: D_ni(:,:), D_fn(:,:)
+  real(kind=wp), intent(in):: omega_out
+  real(kind=wp), intent(in):: gamma
+  complex(kind=wp), intent(out):: F(:,:)
+
+  integer:: m1, m2
+  
+  do m1=1,3
+    do m2=1,3
+      F(m1,m2) = sum(D_ni(:,m1)*D_fn(:,m2) / (omega_out -(E_n(:)-E_f) + cmplx(0, gamma,8)))
+    end do
+  end do
+
+end subroutine compute_amplitude_F
 
 end module m_KH_utils
 

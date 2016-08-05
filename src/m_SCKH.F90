@@ -13,7 +13,8 @@ subroutine  calculate_SCKH(p)
   use m_splines, only: spline_easy
   use m_splines, only: linspace
   use m_FFT, only: next_power_of_2
-
+  use m_KH_utils, only: compute_XES_nonres_elec 
+  
   type(sckh_params_t), intent(inout):: p 
 
   ! input/output                                                                                                                                                                                                  
@@ -38,10 +39,11 @@ subroutine  calculate_SCKH(p)
   integer, dimension(:), allocatable:: freq_ind
   complex(kind=wp), dimension(:,:),allocatable::  sigma_tmp
   complex(kind=wp), dimension(:,:,:),allocatable::  sigma_m
-  real(kind=wp),dimension(:),allocatable:: E_IP1s, E_gs 
+  real(kind=wp),dimension(:),allocatable:: E_IP1s, E_gs_inp 
   real(kind=wp),dimension(:),allocatable:: omega
+  real(kind=wp),dimension(:),allocatable:: D_ni(:)
   integer:: ifile
-
+  
   !functions
   real(kind=wp):: dnrm2
 
@@ -73,11 +75,14 @@ subroutine  calculate_SCKH(p)
   call next_power_of_2(ntsteps, ntsteps_pad, ntsteps_pad_pow)
 
   ! allocate everything (changed dimension of E_n_inp etc) 
-  allocate(time_inp(ntsteps_inp),time_inp2(ntsteps_inp), E_gs(ntsteps_inp),E_n_inp(ntsteps_inp), &
+  allocate(time_inp(ntsteps_inp),time_inp2(ntsteps_inp), E_gs_inp(ntsteps_inp),E_n_inp(ntsteps_inp), &
        E_f_inp(nfinal,ntsteps_inp), D_fn_inp(nfinal,ntsteps_inp,3), time(ntsteps),&
        E_n(ntsteps), E_f(nfinal,ntsteps), D_fn(nfinal,ntsteps,3), int_W_I(nfinal,ntsteps),&
        E_IP1s(ntsteps_inp), E_trans(nfinal,ntsteps_inp))
+  allocate(D_ni(3))
   
+  D_ni = 1.0_wp
+
   ! create time_inp, in s
   time_inp = 0.0_wp  
   do i=1,ntsteps_inp
@@ -124,117 +129,124 @@ subroutine  calculate_SCKH(p)
     !  
 
     call read_one_sckh_traj(ntsteps_inp, nfinal, traj_files(traj), time_inp, &
-         time_inp2, E_gs, E_n_inp, E_IP1s, E_trans, E_f_inp, D_fn_inp)
+         time_inp2, E_gs_inp, E_n_inp, E_IP1s, E_trans, E_f_inp, D_fn_inp)
+    
+    !
+    ! Compute all relevant properties
+    !
+    if(p % runmode .eq. "static") then
 
-  !
-  ! Compute all relevant properties
-  !
+      ! static spectrum
+      call compute_XES_nonres_elec(E_gs_inp(1), E_n_inp(1), E_f_inp(:,1), D_ni, D_fn_inp(:,1,:), omega, gamma, sigma_m)
 
-  call spline_easy(time_inp, E_n_inp, ntsteps_inp, time, E_n, ntsteps)
+    else
+      
+      call spline_easy(time_inp, E_n_inp, ntsteps_inp, time, E_n, ntsteps)
+    
+      do i=1,nfinal
+        call spline_easy( time_inp, E_f_inp(i,:), ntsteps_inp, time, E_f(i,:), ntsteps)  
+      end do
+      
+      do i=1,nfinal
+        do m=1,3
+          call spline_easy(time_inp, D_fn_inp(i,:,m), ntsteps_inp, time, D_fn(i,:,m) , ntsteps)  
+        end do
+      end do
 
-  do i=1,nfinal
-     call spline_easy( time_inp, E_f_inp(i,:), ntsteps_inp, time, E_f(i,:), ntsteps)  
-  end do
-  
-  do i=1,nfinal
-     do m=1,3
-        call spline_easy(time_inp, D_fn_inp(i,:,m), ntsteps_inp, time, D_fn(i,:,m) , ntsteps)  
-     end do
-  end do
-
-
-  ! now everything should be splined and ready. 
-
-  ! first time, compute the mean transition energy
-  if (traj .eq. 1) then
-    E_fn_mean = sum(E_f(nfinal,:) - E_n(:)) / max(1,size(E_n(:))) 
-
-    ! omega centered around E_fn_mean
-    j=1
-    do i=n_omega/2, 1, -1
-      omega(j) = -2.0_wp * const % pi * (i) * const % hbar / (time_l2 * const % eV) - E_fn_mean
-      j=j+1
-    end do
-    do i=0, n_omega/2-1
-      omega(j) =  2.0_wp * const % pi * (i) * const % hbar / (time_l2 * const % eV) - E_fn_mean
-      j=j+1
+      ! now everything should be splined and ready. 
+      
+      ! first time, compute the mean transition energy
+      if (traj .eq. 1) then
+        E_fn_mean = sum(E_f(nfinal,:) - E_n(:)) / max(1,size(E_n(:))) 
+        
+        ! omega centered around E_fn_mean
+        j=1
+        do i=n_omega/2, 1, -1
+          omega(j) = -2.0_wp * const % pi * (i) * const % hbar / (time_l2 * const % eV) - E_fn_mean
+          j=j+1
+        end do
+        do i=0, n_omega/2-1
+          omega(j) =  2.0_wp * const % pi * (i) * const % hbar / (time_l2 * const % eV) - E_fn_mean
+          j=j+1
+        end do
+        
+      end if
+      
+      call compute_SCKH(E_n, E_f, E_fn_mean, D_fn, time,  sigma_m, gamma)
+      
+    end if
+    
+    ! square sigma, check this expression
+    sigma = sigma + real( sum( sigma_m * conjg(sigma_m), 3)) 
+    sigma_tot = sigma_tot +  sum( real( sum( sigma_m * conjg(sigma_m), 3)),1)
+    
+    ! compute projections
+    do i=1,p % nproj
+      sigma_tmp = sigma_m(:,:,1) * p % projvec(i,1) + sigma_m(:,:,2) * &
+           p % projvec(i,2) + sigma_m(:,:,3) * p % projvec(i,3)
+      sigma_proj(i,:) = sigma_proj(i,:) + sum( real( sigma_tmp * conjg(sigma_tmp)),1)
     end do
     
-  end if
+    write(6,*) "Computed trajectory", traj
+    
+  end do !end traj
   
-  call compute_SCKH(E_n, E_f, E_fn_mean, D_fn, time,  sigma_m, gamma)
-   
-  ! square sigma, check this expression
-  sigma = sigma + real( sum( sigma_m * conjg(sigma_m), 3)) 
-  sigma_tot = sigma_tot +  sum( real( sum( sigma_m * conjg(sigma_m), 3)),1)
+  close(ifile)
   
-  ! compute projections
-  do i=1,p % nproj
-    sigma_tmp = sigma_m(:,:,1) * p % projvec(i,1) + sigma_m(:,:,2) * &
-         p % projvec(i,2) + sigma_m(:,:,3) * p % projvec(i,3)
-    sigma_proj(i,:) = sigma_proj(i,:) + sum( real( sigma_tmp * conjg(sigma_tmp)),1)
+  write(6,*)
+  write(6,*) "Averaged over", ntraj, "trajectories"
+  
+  !normalize 
+  norm = sum(sigma_tot) *  2.0_wp * const % pi  * const % hbar / (time_l2 * const % eV ) 
+  sigma_tot = sigma_tot / norm
+  sigma = sigma / norm
+  sigma_proj = sigma_proj / norm
+  
+  ! write sigma to file
+  file="_sigma"
+  file = trim(adjustl(p % outfile)) // trim(adjustl(file)) // ".dat"
+  ifile = get_free_handle()
+  open(ifile,file=file,status='unknown')
+  
+  do i=1,n_omega
+    write(ifile,*)  omega(i), sigma_tot(i)
   end do
   
-  write(6,*) "Computed trajectory", traj
+  close(ifile)
+
+  ! write spectrum from different final states
+  do j=1, nfinal
+    
+    file="_sigma_final_"
+    write(string,*) j
+    file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+    
+    ifile = get_free_handle()
+    open(ifile,file=file,status='unknown')
+    
+    do i=1,n_omega
+      write(ifile,*)  omega(i), sigma(j,i)
+    end do
+    
+    close(ifile)
+  end do ! j
   
-end do !end traj
-
-close(ifile)
-
-write(6,*)
-write(6,*) "Averaged over", ntraj, "trajectories"
-
-!normalize 
-norm = sum(sigma_tot) *  2.0_wp * const % pi  * const % hbar / (time_l2 * const % eV ) 
-sigma_tot = sigma_tot / norm
-sigma = sigma / norm
-sigma_proj = sigma_proj / norm
-
-! write sigma to file
-file="_sigma"
-file = trim(adjustl(p % outfile)) // trim(adjustl(file)) // ".dat"
-ifile = get_free_handle()
-open(ifile,file=file,status='unknown')
- 
-do i=1,n_omega
-  write(ifile,*)  omega(i), sigma_tot(i)
-end do
-
-close(ifile)
-
-! write spectrum from different final states
-do j=1, nfinal
-
-   file="_sigma_final_"
-   write(string,*) j
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
-
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
-   
-   do i=1,n_omega
-     write(ifile,*)  omega(i), sigma(j,i)
-   end do
+  ! write spectrum from projections  
+  do j=1, p % nproj
+    
+    file="_sigma_proj_"
+    write(string,*) j
+    file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+    ifile = get_free_handle()
+    open(ifile,file=file,status='unknown')
+    
+    do i=1,n_omega
+      write(ifile,*)  omega(i), sigma_proj(j,i)
+    end do
+    
+    close(ifile)
+  end do !j
   
-   close(ifile)
-end do ! j
-
-! write spectrum from projections  
-do j=1, p % nproj
-  
-   file="_sigma_proj_"
-   write(string,*) j
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
-
-   do i=1,n_omega
-     write(ifile,*)  omega(i), sigma_proj(j,i)
-   end do
- 
-   close(ifile)
-end do !j
-
 end subroutine calculate_SCKH
 
 subroutine read_projections(p)
@@ -278,7 +290,7 @@ subroutine read_projections(p)
 end subroutine read_projections
 
 subroutine read_one_sckh_traj(ntsteps_inp, nfinal, traj_file, time_inp, &
-     time_inp2, E_gs, E_n_inp, E_IP1s, E_trans, E_f_inp, D_fn_inp)
+     time_inp2, E_gs_inp, E_n_inp, E_IP1s, E_trans, E_f_inp, D_fn_inp)
   use m_precision, only: wp
   use m_constants, only: const
   use m_io, only: get_free_handle
@@ -286,7 +298,7 @@ subroutine read_one_sckh_traj(ntsteps_inp, nfinal, traj_file, time_inp, &
   integer, intent(in):: ntsteps_inp, nfinal
   character(*), intent(in):: traj_file
   real(kind=wp), intent(in):: time_inp(:)
-  real(kind=wp), intent(out)::  time_inp2(:), E_gs(:),  E_n_inp(:),&
+  real(kind=wp), intent(out)::  time_inp2(:), E_gs_inp(:),  E_n_inp(:),&
        E_IP1s(:), E_trans(:,:), E_f_inp(:,:), D_fn_inp(:,:,:)
  
   integer:: ifile, i, j, ntrans
@@ -298,7 +310,7 @@ subroutine read_one_sckh_traj(ntsteps_inp, nfinal, traj_file, time_inp, &
   do i=1,ntsteps_inp
     
     read(ifile,*) time_inp2(i)
-    read(ifile,*) E_gs(i)
+    read(ifile,*) E_gs_inp(i)
     read(ifile,*) E_n_inp(i)
     read(ifile,*) E_IP1s(i)  
     
@@ -314,7 +326,7 @@ subroutine read_one_sckh_traj(ntsteps_inp, nfinal, traj_file, time_inp, &
     end do
 
     !compute E_f_inp
-    E_f_inp(:,i) = E_gs(i) - E_trans(:,i) + E_IP1s(i) * (const % eV / const % Hartree)
+    E_f_inp(:,i) = E_gs_inp(i) - E_trans(:,i) + E_IP1s(i) * (const % eV / const % Hartree)
     
     !check that time_inp(i) = time_inp2(i) 
     if ( abs(time_inp(i) - time_inp2(i)*1.d-15 ) .gt. 1.d-30) then
@@ -680,7 +692,7 @@ subroutine compute_sckh_diagonal_nonresonant(p)
        E_IP1s(ntsteps_inp), E_trans(nfinal,ntsteps_inp))
   allocate(A_mat(nfinal,nfinal,ntsteps))
   allocate(Final_state_sum(nfinal,ntsteps,3))
-
+  
   ! create time_inp, in s
   time_inp = 0
   do i=1,ntsteps_inp

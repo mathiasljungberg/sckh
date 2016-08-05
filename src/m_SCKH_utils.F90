@@ -498,6 +498,67 @@ contains
     
   end subroutine compute_SCKH
 
+!  subroutine compute_SCKH_one(E_n, E_f, E_fn_mean, D_fn, time, sigma_m, gamma)
+!    use m_precision, only: wp
+!    use m_constants, only: const
+!    use m_FFT, only: FFT_complex 
+!
+!    ! passed variables
+!    real(kind=wp), dimension(:), intent(in):: E_n,time
+!    real(kind=wp), dimension(:,:), intent(in):: E_f
+!    real(kind=wp),dimension(:,:,:),intent(in):: D_fn 
+!    complex(kind=wp), dimension(:,:,:),intent(out) ::  sigma_m
+!    real(kind=wp), intent(in):: E_fn_mean, gamma
+!    ! local variables
+!    integer:: ntsteps, ntsteps_pad, nfinal
+!    complex(kind=wp), dimension(:),allocatable:: funct
+!    complex(kind=wp), dimension(:,:),allocatable::  e_factor1
+!    real(kind=wp), dimension(:,:),allocatable:: int_W_I
+!    real(kind=wp),dimension(:),allocatable::  omega_out 
+!    real(kind=wp):: delta_t
+!    integer:: i,k,m 
+!
+!    ntsteps = size(time) 
+!    !nfinal = size(E_f,1) 
+!    ntsteps_pad = size(sigma_m,1) 
+!    
+!    allocate(funct(ntsteps), int_W_I( ntsteps), &
+!         e_factor1(ntsteps), omega_out(ntsteps_pad) )
+!    
+!    delta_t = time(2)-time(1)
+!        
+!    int_W_I(1) = E_f(1) - E_n(1)  - E_fn_mean  
+!    
+!    do i = 2, ntsteps
+!       int_W_I(i) = int_W_I(i-1) + ( E_f(i) - E_n(i)) - E_fn_mean  
+!    end do
+!    int_W_I =  int_W_I * delta_t
+!    
+!    !do i = 1,nfinal 
+!    e_factor1(:) = exp(dcmplx(0, -(const % eV  / const % hbar) *int_W_I(:)  ))
+!   ! end do
+!    
+!    ! compute A_{fm}(t) = D^m_{fn}(t) * e_factor_f(t) * exp(-gamma * eV * time(:) / hbar)
+!    ! and fourer transform
+!    
+!    sigma_m = 0.0_wp
+!    
+!    !do a FFT
+!    !do k =1,nfinal! final state 
+!    do m=1,3 ! polarization     
+!          
+!      funct = D_fn(:,m) * e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar)
+!      
+!      call FFT_complex(time,funct, sigma_m(:,m), omega_out)
+!      
+!    end do ! m
+!    ! end do ! k
+!    
+!    deallocate(funct, int_W_I)
+!    
+!  end subroutine compute_SCKH_one
+
+  
   
   subroutine compute_SCXAS(E_i, E_f, E_fi_mean, D_fi, time, sigma_m, gamma)
     use m_precision, only: wp

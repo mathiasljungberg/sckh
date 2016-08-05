@@ -84,6 +84,7 @@ hist_class.F90
 m_FFT.F90
 m_SCKH.F90
 m_fftw3.F90
+m_wave_packet_dynamics.F90
 )
 
 SET(ALL_MODULES_F 
@@ -96,7 +97,7 @@ sffteu.f
 #add_subdirectory(morsefitting morsefitting)
 
 SET(EXECUTABLES
-vib_finite_diff sckh_main
+vib_finite_diff wpd sckh_main
 )
 
 FOREACH(EXEC ${EXECUTABLES})

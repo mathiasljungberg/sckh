@@ -127,7 +127,9 @@ subroutine calculate_SCKH_PES(p)
        x_mom_sampl(npoints_x_mom_sampl, 2))
 
   allocate(X_dvr(npoints_in))
-
+  !allocate(E_f_elastic(1,ntsteps)
+  !allocate(D_fn_elastic(1,ntsteps,3)
+  
   if (p % nonadiabatic .eq. 1) then
      allocate(nac(p % npesfile_f, p % npesfile_f, p % npoints_in, 2) )
   end if
@@ -259,7 +261,6 @@ subroutine calculate_SCKH_PES(p)
   allocate(sigma_m(nfinal,n_omega,3), sigma(nfinal,n_omega), sigma_tot(n_omega), &
        sigma_proj(p % nproj,n_omega), sigma_tmp(nfinal,n_omega), omega(n_omega))
 
-
   !
   ! Loop over trajectories
   !
@@ -279,6 +280,11 @@ subroutine calculate_SCKH_PES(p)
   sigma=0.0_wp
   sigma_tot=0.0_wp
   sigma_proj=0.0_wp
+!  sigma_m =0.0_wp
+  
+  !sigma_elastic=0.0_wp
+  !sigma_tot_elastic=0.0_wp
+  !sigma_proj_elastic=0.0_wp
 
   do traj=1, npoints_x_mom_sampl
      
@@ -297,6 +303,8 @@ subroutine calculate_SCKH_PES(p)
      
      ! look up energies as a function of distance (which in turn is a function of time)
      call spline_easy(X_dvr, E_n_inp, npoints_in, x_new, E_n, ntsteps)
+
+     !call spline_easy(X_dvr, E_i_inp, npoints_in, x_new, E_f_elastic(1,:), ntsteps)
      
      do i=1,nfinal
         call spline_easy(X_dvr, E_f_inp(i,:), npoints_in, x_new, E_f(i,:), ntsteps)  
@@ -336,13 +344,16 @@ subroutine calculate_SCKH_PES(p)
         !end do
         
      end if
-     
+
      call compute_SCKH(E_n, E_f, E_fn_mean, D_fn, time,  sigma_m, gamma)
-     
-     ! square sigma
+
+     ! static spectrum
+     ! call compute_XES_spectrum_novib(E_n(1), E_f(:,1), E_fn_mean, D_fn(1), sigma_m_static, gamma)
+
+     ! square sigma, must be done before summing over trajectories
      sigma = sigma + real( sum( sigma_m * conjg(sigma_m), 3)) 
      sigma_tot = sigma_tot +  sum( real( sum( sigma_m * conjg(sigma_m), 3)),1)
-           
+     
      ! compute projections
      do i=1,p % nproj
         sigma_tmp = sigma_m(:,:,1) * p % projvec(i,1) + sigma_m(:,:,2) * &
