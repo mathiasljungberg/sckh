@@ -26,7 +26,7 @@ subroutine calculate_SCKH_PES(p)
   ! input/output
   integer:: nfinal, ntsteps,  ntsteps_pad
   integer:: ntsteps_pad_pow, npoints_in  
-  real(kind=wp),dimension(:),allocatable::  E_n_inp, time, E_n 
+  real(kind=wp),dimension(:),allocatable::  E_n_inp, time, E_n, E_dyn_inp 
   real(kind=wp),dimension(:,:),allocatable:: E_f_inp, E_f, E_trans
   real(kind=wp),dimension(:,:,:),allocatable:: D_fn_inp, D_fn 
 
@@ -116,7 +116,7 @@ subroutine calculate_SCKH_PES(p)
   end if
 
   ! allocate everything (changed dimension of E_n_inp etc) 
-  allocate( E_i_inp(npoints_in),E_n_inp(npoints_in), &
+  allocate( E_i_inp(npoints_in),E_n_inp(npoints_in), E_dyn_inp(npoints_in),&
        E_f_inp(nfinal,npoints_in), D_fn_inp(nfinal,npoints_in,3), time(ntsteps),&
        E_n(ntsteps), E_f(nfinal,ntsteps), D_fn(nfinal,ntsteps,3), int_W_I(nfinal,ntsteps),&
        E_IP1s(npoints_in), E_trans(nfinal,npoints_in),E_lp_corr(npoints_in),&
@@ -144,7 +144,14 @@ subroutine calculate_SCKH_PES(p)
   call read_PES_file(p % pes_file_i, p % npoints_in, p % npoints_in, X_dvr, E_i_inp)
   call read_PES_file(p % pes_file_n, p % npoints_in, p % npoints_in, X_dvr, E_n_inp)
 
-  ! final state pes_files and dipole_files
+  ! read PES file where the dynamcis is run 
+  if (p % use_dynamics_file) then
+    call read_PES_file(p % pes_file_dyn, p % npoints_in, p % npoints_in, X_dvr, E_dyn_inp)
+  else
+    E_dyn_inp = E_n_inp
+  end if
+  
+    ! final state pes_files and dipole_files
   ifile = get_free_handle()
   open(ifile, file= p % pes_file_list_f, action='read')
   
@@ -194,6 +201,7 @@ subroutine calculate_SCKH_PES(p)
   ! convert to eV units
   E_i_inp = E_i_inp  / const % eV
   E_n_inp = E_n_inp  / const % eV
+  E_dyn_inp = E_dyn_inp  / const % eV
      
   do j=1,nfinal
      E_f_inp(j,:) = E_f_inp(j,:) / const % eV
@@ -295,7 +303,7 @@ subroutine calculate_SCKH_PES(p)
      call hist_add(time_h_0, x_mom_sampl(traj,1), 1.0d0)   
      call hist_add(time_h_0_mom, x_mom_sampl(traj,2), 1.0d0)    
      
-     call verlet_trajectory(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, X_dvr, E_n_inp * const % eV, delta_t, mu_SI, x_new )
+     call verlet_trajectory(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, X_dvr, E_dyn_inp * const % eV, delta_t, mu_SI, x_new )
      
      do i=1, ntsteps
         call hist_add(time_h(i), x_new(i), 1.0d0)

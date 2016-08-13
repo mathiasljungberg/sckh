@@ -12,6 +12,7 @@ module m_sckh_params_t
      ! PES and dipole files (PES modes)
      character(80):: pes_file_i
      character(80):: pes_file_n
+     character(80):: pes_file_dyn
      character(80):: pes_file_lp_corr
      character(80):: pes_file_ch_corr
 
@@ -57,6 +58,7 @@ module m_sckh_params_t
      integer:: ntsteps
      integer:: ntsteps2
      real(kind=wp):: delta_t
+     logical:: use_dynamics_file
      
      ! for SCKH
      integer:: ntraj
@@ -68,6 +70,7 @@ module m_sckh_params_t
      integer:: nproj
      real(kind=wp), allocatable:: projvec(:,:)
 
+     
   end type sckh_params_t
 
 contains
@@ -93,13 +96,15 @@ contains
     call init_parameter('runmode',inp, "KH", p % runmode ,iv)
     
     ! pes_file_i: PES file for the initial state
-    call init_parameter('pes_file_i',inp, "pes_file_i,txt", p % pes_file_i  ,iv)
+    call init_parameter('pes_file_i',inp, "pes_file_i.txt", p % pes_file_i  ,iv)
     ! pes_file_n: PES file for the intermediate state, XES
-    call init_parameter('pes_file_n',inp, "pes_file_n,txt", p % pes_file_n  ,iv)
+    call init_parameter('pes_file_n',inp, "pes_file_n.txt", p % pes_file_n  ,iv)
+    ! pes_file_n: PES file for the dynamics, usually equal to pes_file_n, XES
+    call init_parameter('pes_file_dyn',inp, "pes_file_n.txt", p % pes_file_dyn  ,iv)
     ! pes_file_lp_corr: PES for first final state, computed more accurately
-    call init_parameter('pes_file_lp_corr',inp, "pes_file_lp_corr,txt", p % pes_file_lp_corr ,iv)
+    call init_parameter('pes_file_lp_corr',inp, "pes_file_lp_corr.txt", p % pes_file_lp_corr ,iv)
     ! pes_file_ch_corr: PES for the core hole state, computed more accurately
-    call init_parameter('pes_file_ch_corr',inp, "pes_file_ch_corr,txt", p % pes_file_ch_corr ,iv)
+    call init_parameter('pes_file_ch_corr',inp, "pes_file_ch_corr.txt", p % pes_file_ch_corr ,iv)
     
     ! pes_file_list_n: in case of many interemedite PES:es, list of these files
     call init_parameter('pes_file_list_n',inp, "pes_file_list_n.txt", p % pes_file_list_n ,iv)
@@ -170,6 +175,9 @@ contains
     ! projections
     call init_parameter('use_proj',inp, .false., p % use_proj,iv)
 
+    ! flag to use an additional dynamics file (pes_file_dyn)
+    call init_parameter('use_dynamics_file',inp, .false., p % use_dynamics_file,iv)
+    
     !call init_parameter('nproj',inp, 3, p % nproj,iv)
 
     
