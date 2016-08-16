@@ -1,0 +1,7 @@
+create library like this
+f2py-2.7 -c *.f  --fcompiler=gfortran -m h2o_pjt2 -h 
+
+
+smarter
+f2py-2.7 H2O.pjt2.f  -m h2o_pjt2 -h h2o_pjt2.pyf
+f2py-2.7 -c H2O.pjt2.f h2o_pjt2.pyf  --fcompiler=gfortran -m h2o_pjt2

@@ -1,0 +1,24 @@
+from __future__ import print_function
+import numpy as np
+from ase import Atoms
+from h2o_pjt2_calculator import H2o_pjt2_calculator
+
+r_OH1 = 0.95792059
+r_OH2 = r_OH1
+theta = 104.4996469200000 * np.pi / 180.0
+
+print(theta)
+atoms = Atoms('OHH', positions=[(0.0, 0.0, 0.0),
+                              (np.sin(theta) * r_OH1, np.cos(theta) * r_OH1, 0.0 ),
+                              (-np.sin(theta) * r_OH2, np.cos(theta) * r_OH2, 0.0 )])
+
+
+
+
+#print(h2o.positions)
+calc  = H2o_pjt2_calculator()
+atoms.set_calculator(calc)
+
+E = atoms.get_potential_energy()
+
+print(E)

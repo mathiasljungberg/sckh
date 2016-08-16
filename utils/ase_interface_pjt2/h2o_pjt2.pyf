@@ -1,0 +1,26 @@
+!    -*- f90 -*-
+! Note: the context of this file is case sensitive.
+
+python module h2o_pjt2 ! in 
+    interface  ! in :h2o_pjt2
+        subroutine potv(v,r1,r2,xcos) ! in :h2o_pjt2:H2O.pjt2.f
+            double precision :: v
+            double precision :: r1
+            double precision :: r2
+            double precision :: xcos
+            double precision dimension(3) :: xmass
+            double precision :: g1
+            double precision :: g2
+            common /mass/ xmass,g1,g2
+        end subroutine potv
+        subroutine pots(v,q1,q2,theta) ! in :h2o_pjt2:H2O.pjt2.f
+            double precision, intent(out) :: v
+            double precision, intent(in) :: q1
+            double precision, intent(in) :: q2
+            double precision, intent(in) :: theta
+        end subroutine pots
+    end interface 
+end python module h2o_pjt2
+
+! This file was auto-generated with f2py (version:2).
+! See http://cens.ioc.ee/projects/f2py2e/

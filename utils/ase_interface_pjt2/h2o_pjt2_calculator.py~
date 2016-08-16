@@ -1,0 +1,23 @@
+import numpy as np
+from __future__ import print_function
+"""This module defines an ASE interface to
+
+C     Potential PJT2 due Polyansky, Jensen and Tennyson,                                                                                                                                                           C     J. Chem. Phys., 105, 6490-6497 (1996)                                                                                                                                                                        C     Update of Polyansky, Jensen and Tennyson, J Chem Phys 101, 7651 (1994)) 
+
+"""
+import os
+import os.path as op
+import subprocess
+import pickle
+import shutil
+
+import numpy as np
+
+from ase.units import Bohr, Hartree
+import ase.data
+from ase.calculators.calculator import FileIOCalculator, ReadError
+from ase.calculators.calculator import Parameters, all_changes
+from ase.calculators.calculator import equal
+import ase.io
+
+m_e_to_amu = 1822.88839
