@@ -46,20 +46,22 @@ class H2o_pjt2_calculator(Calculator):
             raise RuntimeError("chemical formula '{}' is not a water molecule!".format(chemical_formula))
         
         # compute internal coordinates, both stretch coordinates q1, q2 in [bohr] and theta in radians  
-        pos=atoms.get_positions()
-        q1_tmp = (pos[h1] -  pos[o]) / Bohr
-        q2_tmp = (pos[h2] -  pos[o]) / Bohr
+        pos=atoms.get_positions() / Bohr 
+        #q1_tmp = (pos[h1] -  pos[o]) / Bohr
+        #q2_tmp = (pos[h2] -  pos[o]) / Bohr
+        #
+        #q1 = np.linalg.norm(q1_tmp)
+        #q2 = np.linalg.norm(q2_tmp)
+        #
+        #q1_norm = q1_tmp / q1 
+        #q2_norm = q2_tmp / q2
+        #q_norm_sum = q1_norm + q2_norm  
+        #q_norm_sum_norm = q_norm_sum / np.linalg.norm(q_norm_sum)
+        #
+        #theta = 2.0 * abs(np.arcsin(np.linalg.norm(np.cross(q1_norm,q_norm_sum_norm))))
 
-        q1 = np.linalg.norm(q1_tmp)
-        q2 = np.linalg.norm(q2_tmp)
+        q1,q2,theta = get_internal_coords_h2o(pos[o], pos[h1], pos[h2])
         
-        q1_norm = q1_tmp / q1 
-        q2_norm = q2_tmp / q2
-        q_norm_sum = q1_norm + q2_norm  
-        q_norm_sum_norm = q_norm_sum / np.linalg.norm(q_norm_sum)
-
-        theta = 2.0 * abs(np.arcsin(np.linalg.norm(np.cross(q1_norm,q_norm_sum_norm))))
-
         if properties[0] == 'energy':
 
             V =0.0
@@ -71,3 +73,29 @@ class H2o_pjt2_calculator(Calculator):
             self.results['forces'] = self.calculate_numerical_forces(atoms, d=0.00000001)
 
         
+def get_internal_coords_h2o(pos_o, pos_h1, pos_h2):
+
+    q1_tmp = (pos_h1 -  pos_o) 
+    q2_tmp = (pos_h2 -  pos_o) 
+    
+    q1 = np.linalg.norm(q1_tmp)
+    q2 = np.linalg.norm(q2_tmp)
+    
+    q1_norm = q1_tmp / q1 
+    q2_norm = q2_tmp / q2
+    q_norm_sum = q1_norm + q2_norm  
+    q_norm_sum_norm = q_norm_sum / np.linalg.norm(q_norm_sum)
+
+    theta = 2.0 * abs(np.arcsin(np.linalg.norm(np.cross(q1_norm,q_norm_sum_norm))))
+
+    return q1, q2, theta
+
+# theta in radians
+def get_cart_coords_h2o(q1, q2, theta, r0):
+    
+    r_o = r0
+    r_h1 = [np.sin(theta/2.0) * q1, np.cos(theta/2.0) * q1, 0.0 ]
+    r_h2 = [-np.sin(theta/2.0) * q2, np.cos(theta/2.0) * q2, 0.0 ]
+    
+    return r_o, r_h1, r_h2
+
