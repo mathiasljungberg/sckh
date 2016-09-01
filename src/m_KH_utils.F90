@@ -867,13 +867,13 @@ subroutine spectrum_XAS_nonadiabatic(eig_na, eig_i, c_na, D_fi, omega, sigma, si
  
 end subroutine spectrum_XAS_nonadiabatic
 
-subroutine calculate_dipoles_XES(c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
+subroutine calculate_dipoles_KH_nonres(c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
   use m_precision, only: wp
 
   real(kind=wp), intent(in):: c_i(:,:), c_n(:,:), c_f(:,:,:), dipole(:,:,:)
-  real(kind=wp), intent(out):: D_ni(:), D_fn(:,:,:,:), D_fi(:,:,:)
+  real(kind=wp), intent(out):: D_ni(:,:), D_fn(:,:,:,:), D_fi(:,:,:)
 
-  integer:: nstates, npesfile_f,i,j,k,l
+  integer:: nstates, npesfile_f,i,j,k,m
 
   nstates = size(c_i,2)
   npesfile_f = size(c_f,1)
@@ -882,15 +882,17 @@ subroutine calculate_dipoles_XES(c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
   ! calculate dipole matrix elements between states 
   !
 
-  do i=1,nstates 
-     D_ni(i) = sum(c_n(:,i)*c_i(:,1))
+  do i=1,nstates
+    do m=1,3
+      D_ni(i,m) = sum(c_n(:,i)*c_i(:,1))
+    end do
   end do
      
   do i=1, npesfile_f
      do j=1, nstates ! final
         do k=1, nstates ! intermediate
-           do l=1,3
-              D_fn(i,j,k,l) = sum(dipole(i,:,l) * c_f(i,:,j) * c_n(:,k))   ! true dipole moment
+           do m=1,3
+              D_fn(i,j,k,m) = sum(dipole(i,:,m) * c_f(i,:,j) * c_n(:,k))   ! true dipole moment
               !D_fn(i,j,k,l) = dipole(i,21,l) * sum(c_f(i,:,j) * c_n(:,k)) ! FC, dipole moment at eq geom
               !D_fn(i,j,k,l) = sum(c_f(i,:,j) * c_n(:,k))                  ! no dipole moment
            end do
@@ -901,22 +903,82 @@ subroutine calculate_dipoles_XES(c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
   ! transitions from ground state directly to final states
   do i=1, npesfile_f
      do j=1, nstates ! final
-        do l=1,3
-           D_fi(i,j,l) = sum(dipole(i,:,l) * c_f(i,:,j) * c_i(:,1))   ! true dipole moment
+        do m=1,3
+           D_fi(i,j,m) = sum(dipole(i,:,m) * c_f(i,:,j) * c_i(:,1))   ! true dipole moment
         end do
      end do
   end do
 
   write(6,*) "Calculated XES dipole matrix elements"
 
-end subroutine calculate_dipoles_XES
+end subroutine calculate_dipoles_KH_nonres
+
+subroutine calculate_dipoles_KH_res(c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
+  use m_precision, only: wp
+
+  real(kind=wp), intent(in):: c_i(:,:), c_n(:,:,:), c_f(:,:,:), dipole(:,:,:)
+  real(kind=wp), intent(out):: D_ni(:,:,:), D_fn(:,:,:,:,:), D_fi(:,:,:)
+
+  integer:: nstates, npesfile_f, npesfile_n, f_e, f_v, n_e, n_v, m
+
+  nstates = size(c_i,2)
+  npesfile_n = size(c_n,1)
+  npesfile_f = size(c_f,1)
+  
+
+  !
+  ! calculate dipole matrix elements between states 
+  !
+
+  do n_e =1, npesfile_n
+    do n_v =1,nstates 
+      do m=1,3
+        D_ni(n_e, n_v, m) = sum(c_n(n_e,:,n_v)*c_i(:,1))
+      end do
+    end do
+  end do
+
+  
+  do f_e = 1, npesfile_f
+    do f_v = 1, nstates ! final
+      
+      do n_e = 1, npesfile_n ! intermediate
+        do n_v = 1, nstates ! intermediate
+          
+          do m=1,3
+            !D_fn(f_e, f_v, n_e, n_v, m) = sum(dipole(f_e, n_e, :, m) * c_f(f_e, :, f_v) * c_n(n_e, :, n_v))   ! true dipole moment
+            D_fn(f_e, f_v, n_e, n_v, m) = sum(c_f(f_e, :, f_v) * c_n(n_e, :, n_v))  ! FC, dipole moment at eq geom
+            !D_fn(i,j,k,l) = dipole(i,21,l) * sum(c_f(i,:,j) * c_n(:,k)) ! FC, dipole moment at eq geom
+            !D_fn(i,j,k,l) = sum(c_f(i,:,j) * c_n(:,k))                  ! no dipole moment
+          end do
+          
+        end do
+      end do
+      
+    end  do
+  end do
+  
+  ! transitions from ground state directly to final states
+  do f_e = 1, npesfile_f
+     do f_v = 1, nstates ! final
+       do m=1,3
+         !D_fi(f_e, f_v ,m) = sum(dipole(f_e,:,m) * c_f(i,:,j) * c_i(:,1))   ! true dipole moment
+         D_fi(f_e, f_v ,m) = sum(c_f(f_e, :, f_v) * c_i(:,1))   ! FC
+       end do
+     end do
+   end do
+
+  write(6,*) "Calculated XES dipole matrix elements"
+
+end subroutine calculate_dipoles_KH_res
+
 
 
 
 subroutine spectrum_XES(eig_f, eig_n,  D_ni, D_fn, D_fi, omega, sigma, sigma_states, gamma)
   use m_precision, only: wp
 
-  real(kind=wp), intent(in):: eig_f(:,:), eig_n(:), D_ni(:), D_fn(:,:,:,:), D_fi(:,:,:), omega(:)
+  real(kind=wp), intent(in):: eig_f(:,:), eig_n(:), D_ni(:,:), D_fn(:,:,:,:), D_fi(:,:,:), omega(:)
   real(kind=wp), intent(out):: sigma(:), sigma_states(:,:)
   real(kind=wp), intent(in):: gamma
 
@@ -959,7 +1021,7 @@ subroutine spectrum_XES(eig_f, eig_n,  D_ni, D_fn, D_fi, omega, sigma, sigma_sta
            do k=1,nstates ! intermediate vib
               do m=1,3 ! polarization
 
-                 F(i,m) = F(i,m) + D_fn(j,l,k,m) * D_ni(k) / ( omega(i) - &
+                 F(i,m) = F(i,m) + D_fn(j,l,k,m) * D_ni(k,1) / ( omega(i) - &
                       (eig_n(k) - eig_f(j,l)) + dcmplx(0,gamma) )
 
                  ! direct contribution (no interference)
@@ -1022,37 +1084,199 @@ end subroutine spectrum_XES
 ! These are new routines for general XES spectrum calcultions with resonant and non-resonant on the same footing
 !
 
-subroutine compute_XES_res(E_i, E_n, E_f,  D_ni, D_fn, omega_in, omega_out, gamma, gamma2, sigma_final)
+!
+! n_vib_f: is in the case of the final state index being a composite index of electronic and vibrational states
+!          f_tot = (f_el-1) * n_vib_f + f_vib
+!          the vibrational subindices will be summed.
+!          In case n_vib_f = size(E_f) then all states will be summed, if n_vib_f =1, no states will be summed
+!
+
+subroutine compute_XES_res(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
+     gamma, gamma_inc, gamma_instr, flag_res, flag_nonres,&
+     sigma_final, lambda_F, lambda_G, lambda_H)
   use m_precision, only: wp
+  use m_KH_functions, only: gaussian
   
   real(kind=wp), intent(in):: E_i, E_n(:), E_f(:)
+  !integer, intent(in):: n_el_f   
   real(kind=wp), intent(in):: D_ni(:,:), D_fn(:,:,:)
   real(kind=wp), intent(in):: omega_in(:)
   real(kind=wp), intent(in):: omega_out(:)
   real(kind=wp), intent(in):: gamma
-  real(kind=wp), intent(in):: gamma2
-  real(kind=wp), intent(out):: sigma_final(:,:,:,:,:)
+  real(kind=wp), intent(in):: gamma_inc
+  real(kind=wp), intent(in):: gamma_instr
+  logical,intent(in):: flag_res, flag_nonres
+  real(kind=wp), intent(out):: sigma_final(:,:,:,:)
+  real(kind=wp), intent(out):: lambda_F(:,:)
+  real(kind=wp), intent(out):: lambda_G(:,:)
+  real(kind=wp), intent(out):: lambda_H(:,:)
 
-  integer:: om_in, om_out, i_f
+  integer:: om_in, om_out, i_f, m1, m2 !, i_vib_f, i_el_f, n_vib_f
   complex(wp):: F(3,3)
-  real(wp):: prefac
+  real(wp):: prefac, broadening
+  real(wp), allocatable:: sigma_tmp(:,:)
   
-  do om_in = 1, size(omega_in)
-    do om_out = 1, size(omega_out)
+  write(6,*) "compute_XES_res 0"
+
+  sigma_final = 0.0_wp
+  lambda_F =0 
+  lambda_G =0
+  lambda_H =0
+  
+  do om_out = 1, size(omega_out)
+      write(6,*) "om_out", om_out
+
       do i_f = 1, size(E_f)
+
+        call compute_amplitude_F(E_i, E_n, E_f(i_f), &
+             D_ni(:,:), D_fn(i_f,:,:), omega_out(om_out), gamma, F(:,:), &
+             flag_res, flag_nonres)
+
+        do om_in = 1, size(omega_in)
         
-        call compute_amplitude_F(E_n, E_f(i_f),  D_ni(:,:), D_fn(i_f,:,:), omega_out(om_out), gamma, F(:,:))
-        
-        prefac = omega_in(om_in) / omega_out(om_out) ! etc 
-        sigma_final(i_f, om_in, om_out,:,:) = prefac * abs(F)**2  &
-             * gamma2 / ((omega_in(om_in) - omega_out(om_out) - E_f(i_f)- E_i)**2 + gamma2**2 )
+          ! broadening, intitial distribution, including prefactor
+          ! broadening = (omega_in(om_in) / omega_out(om_out)) *  &
+          ! gamma_instr / ((omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i))**2 + gamma_instr ** 2 )
+
+          ! alt broadening, instrumental, including prefactor
+          ! prefac = omega_out(om_iout) / omega_in(om_in)
+          prefac = omega_out(om_out) / (omega_out(om_out) + (E_f(i_f)- E_i))
+          
+          broadening = prefac * gaussian(omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i), 0.0_wp, 2.0_wp *  gamma_inc)
+          !gamma_instr / ((omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i))**2 + gamma_instr ** 2 )
+          
+          sigma_final(om_in, om_out,:,:) =  sigma_final(om_in, om_out,:,:) + &
+               abs(F)**2 * broadening
+          
+          ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+          do m1=1,3
+            do m2=1,3
+              lambda_F(om_in, om_out) = lambda_F(om_in, om_out) +  real(F(m1,m1) * conjg(F(m2,m2)) ) * broadening
+              lambda_G(om_in, om_out) = lambda_G(om_in, om_out) +  real(F(m1,m2) * conjg(F(m1,m2)) ) * broadening
+              lambda_H(om_in, om_out) = lambda_H(om_in, om_out) +  real(F(m1,m2) * conjg(F(m2,m1)) ) * broadening
+            end do
+          end do
+          
+        end do
         
       end do
     end do
-  end do
-  
-end subroutine compute_XES_res
 
+    ! convolute with instrumental broadening
+    allocate(sigma_tmp(size(omega_in), size(omega_out)))
+
+    do m1=1,3
+      do m2=1,3
+        sigma_tmp = sigma_final(:,:,m1,m2)
+        call convolute_intrumental(sigma_tmp, omega_in, omega_out, gamma_instr, sigma_final(:,:,m1,m2))
+      end do
+    end do
+
+    sigma_tmp = lambda_F
+    call convolute_intrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_F)
+    sigma_tmp = lambda_G
+    call convolute_intrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_G)
+    sigma_tmp = lambda_H
+    call convolute_intrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_H)
+
+    
+  end subroutine compute_XES_res
+
+  ! here use F(\omega) instead of F(\omega'). Should be exactly the same, but we can save time if N_{\omega} < N_{\omega'}
+  subroutine compute_XES_res_alt(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
+       gamma, gamma_inc, gamma_instr, flag_res, flag_nonres,&
+       sigma_final, lambda_F, lambda_G, lambda_H)
+    use m_precision, only: wp
+    use m_KH_functions, only: gaussian
+    
+    real(kind=wp), intent(in):: E_i, E_n(:), E_f(:)
+    !integer, intent(in):: n_el_f   
+    real(kind=wp), intent(in):: D_ni(:,:), D_fn(:,:,:)
+    real(kind=wp), intent(in):: omega_in(:)
+    real(kind=wp), intent(in):: omega_out(:)
+    real(kind=wp), intent(in):: gamma
+    real(kind=wp), intent(in):: gamma_inc
+    real(kind=wp), intent(in):: gamma_instr
+    logical,intent(in):: flag_res, flag_nonres
+    real(kind=wp), intent(out):: sigma_final(:,:,:,:)
+    real(kind=wp), intent(out):: lambda_F(:,:)
+    real(kind=wp), intent(out):: lambda_G(:,:)
+    real(kind=wp), intent(out):: lambda_H(:,:)
+
+    integer:: om_in, om_out, i_f, m1, m2 !, i_vib_f, i_el_f, n_vib_f
+    complex(wp):: F(3,3)
+    real(wp):: prefac, broadening
+    real(wp), allocatable:: sigma_tmp(:,:)
+    
+    write(6,*) "compute_XES_res 0"
+    
+    sigma_final = 0.0_wp
+    lambda_F =0 
+    lambda_G =0
+    lambda_H =0
+    
+    do om_in = 1, size(omega_in)
+      write(6,*) "om_in", om_in
+      
+      do i_f = 1, size(E_f)
+        
+        ! switcha E_f och E_i, bor bli ekvivalent
+        call compute_amplitude_F(E_f(i_f), E_n, E_i, &
+             D_ni(:,:), D_fn(i_f,:,:), omega_in(om_in), gamma, F(:,:), &
+             flag_res, flag_nonres)
+
+        do om_out = 1, size(omega_out)
+        
+          ! broadening, intitial distribution, including prefactor
+          ! broadening = (omega_in(om_in) / omega_out(om_out)) *  &
+          ! gamma_instr / ((omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i))**2 + gamma_instr ** 2 )
+
+          ! alt broadening, instrumental, including prefactor
+          ! prefac = omega_out(om_iout) / omega_in(om_in)
+          !prefac = omega_out(om_out) / (omega_out(om_out) + (E_f(i_f)- E_i))
+          prefac = (omega_in(om_in) - (E_f(i_f)- E_i) ) /  omega_in(om_in) 
+          
+          broadening = prefac * gaussian(omega_out(om_out) - omega_in(om_in) + (E_f(i_f)- E_i), 0.0_wp, 2.0_wp *  gamma_instr)
+          !gamma_instr / ((omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i))**2 + gamma_instr ** 2 )
+          
+          sigma_final(om_in, om_out,:,:) =  sigma_final(om_in, om_out,:,:) + &
+               abs(F)**2 * broadening
+          
+          ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+          do m1=1,3
+            do m2=1,3
+              lambda_F(om_in, om_out) = lambda_F(om_in, om_out) +  real(F(m1,m1) * conjg(F(m2,m2)) ) * broadening
+              lambda_G(om_in, om_out) = lambda_G(om_in, om_out) +  real(F(m1,m2) * conjg(F(m1,m2)) ) * broadening
+              lambda_H(om_in, om_out) = lambda_H(om_in, om_out) +  real(F(m1,m2) * conjg(F(m2,m1)) ) * broadening
+            end do
+          end do
+          
+        end do
+        
+      end do
+    end do
+
+    ! convolute with incoming broadening
+    allocate(sigma_tmp(size(omega_in), size(omega_out)))
+
+    do m1=1,3
+      do m2=1,3
+        sigma_tmp = sigma_final(:,:,m1,m2)
+        call convolute_incoming(sigma_tmp, omega_in, omega_out, gamma_inc, sigma_final(:,:,m1,m2))
+      end do
+    end do
+
+    sigma_tmp = lambda_F
+    call convolute_incoming(sigma_tmp, omega_in, omega_out, gamma_inc, lambda_F)
+    sigma_tmp = lambda_G
+    call convolute_incoming(sigma_tmp, omega_in, omega_out, gamma_inc, lambda_G)
+    sigma_tmp = lambda_H
+    call convolute_incoming(sigma_tmp, omega_in, omega_out, gamma_inc, lambda_H)
+
+    
+  end subroutine compute_XES_res_alt
+
+  
 
 subroutine compute_XES_nonres_elec(E_i, E_n, E_f,  D_ni, D_fn, omega_out, gamma, sigma_m)
   use m_precision, only: wp
@@ -1065,51 +1289,102 @@ subroutine compute_XES_nonres_elec(E_i, E_n, E_f,  D_ni, D_fn, omega_out, gamma,
 
   real(kind=wp), allocatable:: E_n_tmp(:), E_f_tmp(:)
   real(kind=wp), allocatable:: D_ni_tmp(:,:), D_fn_tmp(:,:,:)
-  real(kind=wp), allocatable:: sigma_tmp(:,:,:,:)
-
+  real(kind=wp), allocatable:: sigma_tmp(:,:,:)
+  integer:: m, i_f
+  
   allocate(E_n_tmp(1))
-  allocate(E_f_tmp(size(E_f)))
+  allocate(E_f_tmp(1))
   allocate(D_ni_tmp(1,size(D_ni)))
   allocate(D_fn_tmp(1,size(D_fn,1), size(D_fn,2)))
-  allocate(sigma_tmp(size(E_f), 3, 3, size(omega_out)))
+  allocate(sigma_tmp(size(omega_out), 3, 3))
   
   E_n_tmp(1) = E_n
-  E_f_tmp(:) = E_f(:)
+  !E_f_tmp(:) = E_f(:)
   D_ni_tmp(1,:) = D_ni(:)
   D_fn_tmp(1,:,:) = D_fn(:,:)
   
-  call compute_XES_nonres(E_i, E_n_tmp, E_f_tmp, D_ni_tmp, D_fn_tmp, omega_out, gamma, sigma_tmp)
-  
-  sigma_m(:,:,:) = sigma_tmp(:,1,:,:)
-  
+  do i_f =1, size(E_f_tmp)
+    E_f_tmp(1) = E_f(i_f)
+    call compute_XES_nonres(E_i, E_n_tmp, E_f_tmp, D_ni_tmp, D_fn_tmp, omega_out, gamma, sigma_tmp)
+
+    do m=1,3
+      sigma_m(i_f,:,m) = sigma_tmp(:,m,m)
+    end do
+  end do
 end subroutine compute_XES_nonres_elec
 
-subroutine compute_XES_nonres(E_i, E_n, E_f,  D_ni, D_fn, omega_out, gamma, sigma_final)
+subroutine compute_XES_nonres(E_i, E_n, E_f, D_ni, D_fn, omega_out, gamma, sigma_pol)
   use m_precision, only: wp
-  
-  real(kind=wp), intent(in):: E_i, E_n(:), E_f(:)
+
+  real(kind=wp), intent(in):: E_i
+  real(kind=wp), intent(in):: E_n(:), E_f(:)
+ ! integer, intent(in):: n_el_f   
   real(kind=wp), intent(in):: D_ni(:,:), D_fn(:,:,:)
   real(kind=wp), intent(in):: omega_out(:)
   real(kind=wp), intent(in):: gamma
-  real(kind=wp), intent(out):: sigma_final(:,:,:,:)
+  real(kind=wp), intent(out):: sigma_pol(:,:,:)
 
-  integer:: i_f, om_out
+  integer:: i_f, om_out !, i_vib_f, i_el_f, n_vib_f
   complex(wp):: F(3,3)
-  
-  do i_f = 1, size(E_f) 
-    do om_out=1, size(omega_out)
-      call compute_amplitude_F(E_n, E_f(i_f),  D_ni, D_fn(i_f,:,:), omega_out(om_out), gamma, F(:,:))      
-      sigma_final(i_f, :,:, om_out) = abs(F(:,:))**2
+
+!  n_vib_f = size(E_f) / n_el_f
+
+  sigma_pol = 0.0_wp
+  do om_out=1, size(omega_out)
+    
+    !do i_el_f = 1, n_el_f !size(E_f)
+    !  sigma_final(i_el_f, om_out,:,:) = 0.0_wp
+    !  do i_vib_f = 1, n_vib_f
+    !    i_f = (i_el_f-1)*n_vib_f + i_vib_f
+    
+    do i_f =1, size(E_f)
+      call compute_amplitude_F(E_i, E_n, E_f(i_f),  D_ni, D_fn(i_f,:,:), &
+           omega_out(om_out), gamma, F(:,:), .true., .true.)      
+      
+      sigma_pol(om_out, :,:) = sigma_pol(om_out, :,:) + abs(F(:,:))**2
+      
     end do
+    
   end do
-  
+    
 end subroutine compute_XES_nonres
 
 ! scattering amplitude, for each frequency, and final state
 ! F_f(\omega') = \sum_{n} \frac{D_{in} D_{nf} } {\omega' -(E_n -E_f) + i\gamma }
-subroutine compute_amplitude_F(E_n, E_f,  D_ni, D_fn, omega_out, gamma, F)
+subroutine compute_amplitude_F(E_i, E_n, E_f, D_ni, D_fn, omega_out, gamma, F, flag_res, flag_nonres)
   use m_precision, only: wp
 
+  real(kind=wp), intent(in):: E_i
+  real(kind=wp), intent(in):: E_n(:), E_f
+  real(kind=wp), intent(in):: D_ni(:,:), D_fn(:,:)
+  real(kind=wp), intent(in):: omega_out
+  real(kind=wp), intent(in):: gamma
+  logical, intent(in):: flag_res, flag_nonres
+  complex(kind=wp), intent(out):: F(:,:)
+
+  integer:: m1, m2
+  complex(wp):: F_tmp(3,3)
+
+  F=0.0
+  
+  if (flag_res) then
+    call compute_amplitude_F_res(E_i, E_n, E_f, D_ni, D_fn, omega_out, gamma, F_tmp)    
+    F = F + F_tmp
+  end if
+
+  if (flag_nonres) then
+    call compute_amplitude_F_nonres(E_i, E_n, E_f, D_ni, D_fn, omega_out, gamma, F_tmp)    
+    F = F + F_tmp
+  end if
+  
+end subroutine compute_amplitude_F
+
+! scattering amplitude, for each frequency, and final state
+! F_f(\omega') = \sum_{n} \frac{D_{in} D_{nf} } {\omega' -(E_n -E_f) + i\gamma }
+subroutine compute_amplitude_F_res(E_i, E_n, E_f, D_ni, D_fn, omega_out, gamma, F)
+  use m_precision, only: wp
+  
+  real(kind=wp), intent(in):: E_i
   real(kind=wp), intent(in):: E_n(:), E_f
   real(kind=wp), intent(in):: D_ni(:,:), D_fn(:,:)
   real(kind=wp), intent(in):: omega_out
@@ -1117,15 +1392,105 @@ subroutine compute_amplitude_F(E_n, E_f,  D_ni, D_fn, omega_out, gamma, F)
   complex(kind=wp), intent(out):: F(:,:)
 
   integer:: m1, m2
+
+  F =0.0_wp
   
   do m1=1,3
     do m2=1,3
-      F(m1,m2) = sum(D_ni(:,m1)*D_fn(:,m2) / (omega_out -(E_n(:)-E_f) + cmplx(0, gamma,8)))
+      F(m1,m2) = sum(D_ni(:,m2)*D_fn(:,m1) / &
+           (omega_out -(E_n(:)-E_f) + cmplx(0, gamma,8)))
+    end do
+  end do
+  
+end subroutine compute_amplitude_F_res
+
+
+! scattering amplitude, for each frequency, and final state
+! F_f(\omega') = \sum_{n} \frac{D_{in} D_{nf} } {\omega' -(E_n -E_f) + i\gamma }
+subroutine compute_amplitude_F_nonres(E_i, E_n, E_f, D_ni, D_fn, omega_out, gamma, F)
+  use m_precision, only: wp
+
+  real(kind=wp), intent(in):: E_i
+  real(kind=wp), intent(in):: E_n(:), E_f
+  real(kind=wp), intent(in):: D_ni(:,:), D_fn(:,:)
+  real(kind=wp), intent(in):: omega_out
+  real(kind=wp), intent(in):: gamma
+  complex(kind=wp), intent(out):: F(:,:)
+
+  integer:: m1, m2
+
+  F =0.0_wp
+
+  do m1=1,3
+    do m2=1,3
+      F(m1,m2) = -sum(D_ni(:,m2)*D_fn(:,m1) /&
+           (omega_out + (E_n(:)-E_i)))
     end do
   end do
 
-end subroutine compute_amplitude_F
+end subroutine compute_amplitude_F_nonres
 
+! sigma(om_in, om_out)
+! convolute with respect to omega_out
+subroutine convolute_intrumental(sigma, omega_in, omega_out, gamma_instr, sigma_out)
+  use m_precision, only: wp
+  use m_KH_functions, only: gaussian
+  
+  real(wp), intent(in):: sigma(:,:)
+  real(wp), intent(in):: omega_in(:)
+  real(wp), intent(in):: omega_out(:)
+  real(wp), intent(in):: gamma_instr
+  real(wp), intent(out):: sigma_out(:,:)
+
+  integer:: om_in1, om_out1, om_out2
+  
+  sigma_out =0.0_wp
+  
+  !do om_in1 = 1, size(omega_in)
+  do om_out1 = 1, size(omega_out)
+    do om_out2 = 1, size(omega_out) 
+      sigma_out(:, om_out1) = sigma_out(:, om_out1) + sigma(:, om_out2) * &
+           gaussian(omega_out(om_out1)- omega_out(om_out2), &
+           0.0_wp, 2.0_wp * gamma_instr)
+    end do
+  end do
+  !end do
+  
+  sigma_out = sigma_out * (omega_out(2)- omega_out(1))
+  
+end subroutine convolute_intrumental
+
+! sigma(om_in, om_out)
+! convolute with respect to omega_out
+subroutine convolute_incoming(sigma, omega_in, omega_out, gamma_inc, sigma_out)
+  use m_precision, only: wp
+  use m_KH_functions, only: gaussian
+  
+  real(wp), intent(in):: sigma(:,:)
+  real(wp), intent(in):: omega_in(:)
+  real(wp), intent(in):: omega_out(:)
+  real(wp), intent(in):: gamma_inc
+  real(wp), intent(out):: sigma_out(:,:)
+
+  integer:: om_in1, om_in2, om_out1
+  
+  sigma_out =0.0_wp
+  
+  !do om_out1 = 1, size(omega_out)
+  do om_in1 = 1, size(omega_in)
+    do om_in2 = 1, size(omega_in)
+      sigma_out(om_in1, :) = sigma_out(om_in1, :) + &
+           sigma(om_in2, :) * gaussian(omega_in(om_in1)- omega_in(om_in2), &
+           0.0_wp, 2.0_wp * gamma_inc)
+    end do
+  end do
+  !end do
+
+  sigma_out = sigma_out * (omega_in(2)- omega_in(1))
+  
+end subroutine convolute_incoming
+
+  
 end module m_KH_utils
 
 

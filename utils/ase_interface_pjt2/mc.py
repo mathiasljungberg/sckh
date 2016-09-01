@@ -5,16 +5,18 @@ from ase.optimize.optimize import Dynamics
 from copy import copy
 import ase.units as units
 import weakref
+from ase.constraints import FixConstraint
 
 class Mc(Dynamics):
     """Simple Metropolis Monte Carlo class. All property calculations should be done with observers, 
     preferrably inherited from Mc_observer"""
 
-    def __init__(self, atoms, max_step = 0.5, T= 298.0, accept_ratio=None):
+    def __init__(self, atoms, max_step = 0.5, T= 298.0, accept_ratio=None, one_d_coord =None):
         self.max_step = max_step
         self.beta = 1.0 / (T * units.kB)
         self.accept_ratio = accept_ratio
-
+        self.one_d_coord = one_d_coord 
+        
         Dynamics.__init__(self, atoms,logfile=None, trajectory=None)
         
     def run(self, steps=50):
@@ -31,8 +33,13 @@ class Mc(Dynamics):
             
     def mc_step(self):
         # do a random move for a random coordinate
-        a = int(np.random.random() * len(self.atoms))
-        coord = int(np.random.random() * 3)
+        if self.one_d_coord is not None:
+            a = self.one_d_coord[0]
+            coord = self.one_d_coord[1]
+        else:
+            a = int(np.random.random() * len(self.atoms))
+            coord = int(np.random.random() * 3)
+
         pos= self.atoms.get_positions()
         pos_old = copy(pos)
         h = 2.0*(np.random.random()-0.5) * self.max_step
@@ -55,8 +62,14 @@ class Mc(Dynamics):
         if self.accept:
             self.E = self.E_new
         else:
-            self.atoms.set_positions(pos_old)
+            self.atoms.set_positions(pos_old)        
 
+class Fix_centre_of_mass(FixConstraint):
+
+    def adjust_positions(self, atoms, new):
+        new -= atoms.get_center_of_mass()
+              
+            
 # base observer class, only counts the number of accepted moves 
 class Mc_observer:
     def __init__(self, dyn, atoms):

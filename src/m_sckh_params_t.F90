@@ -39,16 +39,30 @@ module m_sckh_params_t
      ! 
      integer:: nstates
      integer:: npoints_in
+
+     ! omega_in
+     integer:: n_omega_in
+     real(wp):: omega_in_start
+     real(wp):: omega_in_end
+
+     ! omega_out
      integer:: n_omega
      real(wp):: omega_start
      real(wp):: omega_end
+
+     integer:: npesfile_n
      integer:: npesfile_f 
      integer:: shift_PES
      integer:: nonadiabatic
      real(wp):: mu
      real(wp):: dvr_start_in
      real(wp):: dx_in
-     real(wp):: gamma_FWHM 
+     real(wp):: gamma_FWHM
+     real(wp):: gamma_instr_FWHM
+     real(wp):: gamma_inc_FWHM 
+
+     character(80):: vib_solver
+
 
      ! sckh parameters
      ! for SCKH_PES
@@ -132,12 +146,25 @@ contains
     call init_parameter('nstates',inp, 100, p % nstates ,iv)
     ! npoints_in: the number of points in the supplied PES files
     call init_parameter('npoints_in',inp, 100, p % npoints_in ,iv)
+
+    ! n_omega_in: number of absorption frequencies
+    call init_parameter('n_omega_in',inp, 100, p % n_omega_in ,iv)
+    ! omega_in_start: starting absorption frequency [eV]
+    call init_parameter('omega_in_start',inp, 0.0_wp, p % omega_in_start ,iv)  
+    ! omega_in_end: ending absorption frequency [eV]
+    call init_parameter('omega_in_end',inp, 100.0_wp, p % omega_in_end ,iv)
+
+    
     ! n_omega: number of emission frequencies
     call init_parameter('n_omega',inp, 100, p % n_omega ,iv)
     ! omega_start: starting emission frequency [eV]
     call init_parameter('omega_start',inp, 0.0_wp, p % omega_start ,iv)  
     ! omega_end: ending emission frequency [eV]
     call init_parameter('omega_end',inp, 100.0_wp, p % omega_end ,iv)
+
+
+    ! npesfile_n: the number of intermediate state PES files
+    call init_parameter('npesfile_n',inp, 1, p % npesfile_n ,iv)
     ! npesfile_f: the number of final state PES files
     call init_parameter('npesfile_f',inp, 1, p % npesfile_f ,iv)
     ! shift_PES: =1, then use pes_file_lp_correct to correct the first final state, =0, do nothing
@@ -152,7 +179,13 @@ contains
     call init_parameter('dx_in',inp, 0.1_wp, p % dx_in ,iv)
     ! gamma_FWHM: lifetime broadening [eV]
     call init_parameter('gamma_FWHM',inp, 0.1_wp, p % gamma_FWHM ,iv)
+    ! gamma_instr_FWHM: instrumental broadening [eV]
+    call init_parameter('gamma_instr_FWHM',inp, 0.1_wp, p % gamma_instr_FWHM ,iv)
+    ! gamma_inc_FWHM: incoming distribution broadening [eV]
+    call init_parameter('gamma_inc_FWHM',inp, 0.1_wp, p % gamma_inc_FWHM ,iv)
 
+    ! vib_solver: 1d vibrational solver, SINC_DVR or FOURIER_REAL
+    call init_parameter('vib_solver',inp, "SINC_DVR", p % vib_solver ,iv)
 
     ! sckh parameters
     call init_parameter('samplemode',inp, 1, p % samplemode,iv)

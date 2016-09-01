@@ -5,34 +5,6 @@ module m_algebra
 #include "m_define_macro.F90"
 
   implicit none
-  private blas_int
- 
-  public dealloc_algebra 
-  public complex_eigen
-  public complex_inverse
-  public cross_product
-  public generaleigen
-  public matinv 
-  public matinv_c
-  public matinv_c_blas
-  public matinv_d
-  public matinv_csy
-  public matinv_zsy
-  public matinv_s
-  public matinv_z
-  public print_matrix
-  public real_inverse
-  public simplediagonalize
-  public simpleeigen
-  public Diagonalize
-  public SymmetricEigen
-  public dSymmGeneralEigen_blas_like
-  public t11_inverse_sp
-  public t11_inverse
-  public nonhermitian_eigen
-  public nonhermitian_eigen_new
-  public init_unit_matrix
-
 
   interface matinv
     module procedure matinv_c_simple
@@ -83,23 +55,6 @@ module m_algebra
      module procedure matmul_AtBC_d_work
      module procedure matmul_AtBC_d_nowork
   end interface
-
-  public zHermitGenDiag
-
-  public transpose_d
-  public transpose_dc
-  public transpose_A_d
-  public transpose_A_dc
-  public matmul_AtBC_d
-  public matmul_AB_d
-  public matmul_AtB_d
-  public matmul_ABt_d
-  public matmul_Ax_d
-  public matmul_Ax_z
-  public matmul_Atx_d
-  public make_A_diag_c  
-
-  private
 
   !! Variables for t11_inverse
   integer(blas_int) :: ndim_t11_inverse_sp=-999 

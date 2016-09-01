@@ -4,7 +4,9 @@ program vib_finite_diff
   use m_splines, only: linspace, spline_easy
   use m_vib_finite_diff, only: solve_finite_diff
   use m_fourier_grid, only: solve_fourier_grid
+  use m_fourier_grid, only: solve_fourier_grid_real
   use m_fourier_grid, only: fourier_grid_d1_fast
+  use m_fourier_grid, only: fourier_grid_d1_real_fast
   use m_KH_functions, only: solve_sinc_DVR
   use m_KH_functions, only: dsinc_mat_elems
   implicit none 
@@ -15,12 +17,13 @@ program vib_finite_diff
   ! loop variables
   integer::i,j
 
-  real(kind=wp)::mu_in, mu, dx
+  real(wp)::mu_in, mu, dx
   real(wp), allocatable:: x(:), y(:), x_new(:), y_new(:)
   real(wp), allocatable:: eigvec(:,:), eigval(:)
   complex(wp), allocatable:: eigvec_z(:,:)
   complex(wp), allocatable:: first_der(:,:)
   real(wp), allocatable:: first_der_sinc(:,:)
+  real(wp), allocatable:: first_der_real(:,:)
 
   ! read from standard input
   read(5,*) inputfile
@@ -65,7 +68,14 @@ program vib_finite_diff
   write(6,*) eigval(1:nstates) * const % cm 
   write(6,*) "solve_fourier_grid: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
 
-
+  ! fourier grid with sin cos, fast
+  eigval=0.0_wp
+  eigvec=0.0_wp
+  call solve_fourier_grid_real(dx, y_new, eigval, eigvec, mu, "SI", "fast")  
+  
+  write(6,*) eigval(1:nstates) * const % cm 
+  write(6,*) "solve_fourier_grid_real fast: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
+  
   ! sinc
   eigval=0.0_wp
   eigvec=0.0_wp
@@ -78,7 +88,14 @@ program vib_finite_diff
   allocate(first_der(npoints, npoints))
   call fourier_grid_d1_fast(npoints, dx, first_der)
 
-  write(6,*) "first derivaive matrix", abs(first_der * const % cm * const % hbar * dcmplx(0.0_wp, -1.0_wp)) 
+  write(6,*) "first derivaive matrix", abs(first_der * const % cm * const % hbar * dcmplx(0.0_wp, -1.0_wp))
+
+  ! look at first derivatives
+  allocate(first_der_real(npoints, npoints))
+  call fourier_grid_d1_real_fast(npoints, dx, first_der_real)
+
+  write(6,*) "first derivaive fourier real", first_der_real * const % cm * const % hbar 
+
 
   allocate(first_der_sinc(npoints, npoints))
   call dsinc_mat_elems(first_der_sinc,x_new)
