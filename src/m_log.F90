@@ -29,15 +29,15 @@ module m_log
   end interface log_size_note ! log_size_note
   
   integer :: ilog = 6, ilog_save = -999;
-  character(1000) :: log_filename='LOG-DOMIPROD';
+  character(1000) :: log_filename='LOG';
 
   integer :: itimes = -999;
-  character(1000) :: times_filename='TIMES-DOMIPROD';
+  character(1000) :: times_filename='TIMES';
 
   integer :: isizes = -999;
-  character(1000) :: sizes_filename='SIZES-DOMIPROD';
+  character(1000) :: sizes_filename='SIZES';
 
-  character(1000) :: memory_filename='MEMORY-DOMIPROD'
+  character(1000) :: memory_filename='MEMORY'
 
   integer, private :: log_memory_note_first = 1
   
@@ -69,7 +69,7 @@ subroutine init_logs(stdout_to_file, fname_suffix, mynode, iv, ilog, cdate, ctim
 
   !! Init iv and output files
   if(stdout_to_file>0) then
-    write(log_filename, '(a,i0.4,a)') 'LOG.DOMIPROD-', mynode, trim(fname_suffix);
+    write(log_filename, '(a,i0.4,a)') 'LOG', mynode, trim(fname_suffix);
     ilog = get_free_handle()
     open(ilog, file=log_filename, action='write', iostat=ios);
     if(ios==0) then;
@@ -85,7 +85,7 @@ subroutine init_logs(stdout_to_file, fname_suffix, mynode, iv, ilog, cdate, ctim
     write(6,*) 'init_parallel: see also ', trim(log_filename)
   endif
 
-  write(times_filename, '(a,i0.4,a)') 'TIMES.DOMIPROD-', mynode, trim(fname_suffix);
+  write(times_filename, '(a,i0.4,a)') 'TIMES', mynode, trim(fname_suffix);
   itimes=get_free_handle();
   open(itimes, file=times_filename, action='write', iostat=ios);
   if(ios==0) then;
@@ -94,7 +94,7 @@ subroutine init_logs(stdout_to_file, fname_suffix, mynode, iv, ilog, cdate, ctim
     write(0,*) 'init_logs: ', trim(times_filename), ' cannot be open';
   endif
 
-  write(sizes_filename, '(a,i0.4,a)') 'SIZES.DOMIPROD-', mynode, trim(fname_suffix);
+  write(sizes_filename, '(a,i0.4,a)') 'SIZES', mynode, trim(fname_suffix);
   isizes=get_free_handle();
   open(isizes, file=sizes_filename, action='write', iostat=ios);
   if(ios==0) then;
@@ -103,7 +103,7 @@ subroutine init_logs(stdout_to_file, fname_suffix, mynode, iv, ilog, cdate, ctim
     write(0,*) 'init_logs: ', trim(sizes_filename), ' cannot be open.';
   endif
 
-  write(memory_filename, '(a,i0.4,a)') 'MEMORY.DOMIPROD-', mynode, trim(fname_suffix);
+  write(memory_filename, '(a,i0.4,a)') 'MEMORY', mynode, trim(fname_suffix);
   if(iv>0) write(6,*)'init_logs: ', trim(memory_filename), ' will be open...';
 
 end subroutine !init_logs

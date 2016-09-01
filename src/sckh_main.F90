@@ -9,7 +9,6 @@ program sckh_main
   use m_SCKH_PES, only : calculate_SCKH_PES
   use m_SCKH, only : calculate_SCKH,compute_sckh_diagonal_nonresonant,&
        compute_sckh_offdiagonal
-  !use m_fact, only : init_fact
 
   implicit none
 
@@ -23,7 +22,7 @@ program sckh_main
   !
 
   !call read_input(input_par)
-  call init_logs(-1, '.SBE_multband.txt', 1, iv, ilog)
+  call init_logs(-1, '.SCKH.txt', 1, iv, ilog)
   !call init_fact(iv, ilog)
 
   call init_sckh_params_t(p)

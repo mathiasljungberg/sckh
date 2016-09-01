@@ -62,8 +62,8 @@ module m_sckh_params_t
      real(wp):: gamma_inc_FWHM 
 
      character(80):: vib_solver
-
-
+     character(80):: KH_amplitude_mode
+    
      ! sckh parameters
      ! for SCKH_PES
      integer:: samplemode
@@ -186,7 +186,9 @@ contains
 
     ! vib_solver: 1d vibrational solver, SINC_DVR or FOURIER_REAL
     call init_parameter('vib_solver',inp, "SINC_DVR", p % vib_solver ,iv)
-
+    ! KH_amplitude_mode: OUTGOING or INCOMING
+    call init_parameter('KH_amplitude_mode',inp, "OUTGOING", p % KH_amplitude_mode ,iv)
+    
     ! sckh parameters
     call init_parameter('samplemode',inp, 1, p % samplemode,iv)
 

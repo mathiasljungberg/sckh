@@ -272,5 +272,5 @@ contains
     
   end subroutine solve_vib_problem
   
-end module M_KH_functions
+end module m_KH_functions
 
