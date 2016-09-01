@@ -1,0 +1,37 @@
+
+runmode KH_resonant_el
+
+! files
+pes_file_i           initial_PES_spline_2001.dat
+pes_file_n           test_energy_tot_exc.dat
+shift_PES            0
+#pes_file_lp_corr    test_lp_lp_energy.dat
+npesfile_n           1
+pes_file_list_n      pes_file_list_n.txt
+dipole_file_list_n   dipole_file_list_n.txt
+npesfile_f           1
+pes_file_list_f      pes_file_list_f.txt
+dipole_file_list_f   dipole_file_list_f.txt
+outfile              spectrum_resonant
+
+
+!for vib solver 
+npoints_in 401
+nstates 401
+mu 0.972222222222222
+dvr_start_in 0.8
+dx_in 0.0146 
+
+! frequencies
+omega_in_start 199
+omega_in_end   207
+n_omega_in     100
+omega_start    180
+omega_end      200
+n_omega        1000
+gamma_FWHM 0.45
+gamma_inc_FWHM 1.45
+gamma_instr_FWHM 0.01
+
+
+
