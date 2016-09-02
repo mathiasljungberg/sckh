@@ -9,7 +9,8 @@ program sckh_main
   use m_SCKH_PES, only : calculate_SCKH_PES
   use m_SCKH, only : calculate_SCKH,compute_sckh_diagonal_nonresonant,&
        compute_sckh_offdiagonal
-
+  use m_XAS_eigenstates, only: calculate_XAS
+  
   implicit none
 
   type(sckh_params_t):: p
@@ -28,28 +29,36 @@ program sckh_main
   call init_sckh_params_t(p)
   !write(*,*) ' ',p%runmode_sckh
 
-  if(upper(p % runmode) .eq. "KH") then
+  if(upper(p % runmode) .eq. "XAS") then
+    call calculate_XAS(p)
+    
+  else if(upper(p % runmode) .eq. "KH") then
     call calculate_KH_nonres(p)
+
   else  if(upper(p % runmode) .eq. "KH_RESONANT") then
     call calculate_KH_res(p)
+    
   else  if(upper(p % runmode) .eq. "KH_RESONANT_EL") then
     call calculate_KH_res_el(p)
+    
   else if (upper(p % runmode) .eq. "SCKH_PES") then
     call calculate_SCKH_PES(p)
+    
   else if (upper(p % runmode) .eq. "SCKH") then
-   if  (upper(p%runmode_sckh) .eq. "NONRESONANT") then
-    call calculate_SCKH(p)
-   endif
-   if (upper(p%runmode_sckh) .eq. "NONRESONANT_DIAGONAL") then
-     call compute_sckh_diagonal_nonresonant(p)
-   endif
-   if (upper(p%runmode_sckh) .eq. "NONRESONANT_OFFDIAGONAL") then
-     call compute_sckh_offdiagonal(p)
-   endif
+    if  (upper(p%runmode_sckh) .eq. "NONRESONANT") then
+      call calculate_SCKH(p)
+    endif
+    if (upper(p%runmode_sckh) .eq. "NONRESONANT_DIAGONAL") then
+      call compute_sckh_diagonal_nonresonant(p)
+    endif
+    if (upper(p%runmode_sckh) .eq. "NONRESONANT_OFFDIAGONAL") then
+      call compute_sckh_offdiagonal(p)
+    endif
+    
   else 
     write(6,*) "runmode must be either 'KH','SCKH_PES', or 'SCKH' ", upper(p % runmode)
     stop
   end if
-
+  
 end program sckh_main
 

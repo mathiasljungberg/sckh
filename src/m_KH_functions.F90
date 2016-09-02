@@ -251,6 +251,7 @@ contains
   subroutine solve_vib_problem(dx, V_i, eigval, eigvec, mu, vib_solver)
     use m_precision, only: wp
     use m_fourier_grid, only: solve_fourier_grid_real
+    use m_fourier_grid, only: solve_hartley_grid
     use m_upper, only : upper
     
     real(wp), intent(in):: dx
@@ -261,12 +262,22 @@ contains
     character(*), intent(in):: vib_solver
     
     if (upper(vib_solver) .eq. "FOURIER_REAL") then
+
       write(6,*) "solve_vib_problem: using FOURIER_REAL"
       call solve_fourier_grid_real(dx, V_i, eigval, eigvec, mu, "SI", "fast")
+
+    else if (upper(vib_solver) .eq. "HARTLEY") then
+      
+      write(6,*) "solve_vib_problem: using HARTLEY"
+      call solve_hartley_grid(dx, V_i, eigval, eigvec, mu, "SI", "fast")
+
     else if (upper(vib_solver) .eq. "SINC_DVR") then 
+
       write(6,*) "solve_vib_problem: using SINC_DVR"
       call solve_sinc_DVR(dx, mu, V_i, eigvec, eigval)
+
     else
+
       write(6,*) "vib_solver must be either FOURIER_REAL or SINC_DVR"
     end if
     

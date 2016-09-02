@@ -473,8 +473,190 @@ contains
     
   end subroutine fourier_grid_d1_real_fast
 
-
+  !
+  ! Rouines with basis of cas(kx) = cos(kx) +sin(kx), k = 2 \pi n /L, n=0,N-1, x=i \Delta x, i=0, N-1  
+  ! 
   
+  subroutine solve_hartley_grid(dx, V_i, eigval, eigvec, mu, units_in, mode_kin_energy_in)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: get_order_fftw
+    use m_algebra, only: dSymmetricEigen
+    
+    real(wp), intent(in):: dx
+    real(wp), intent(in):: V_i(:)
+    real(wp), intent(out):: eigval(:)
+    real(wp), intent(out):: eigvec(:,:)
+    real(wp), intent(in):: mu
+    character(*), intent(in), optional:: units_in
+    character(*), intent(in), optional:: mode_kin_energy_in
+    
+    real(wp), allocatable:: H_mat(:,:) 
+    
+    integer:: nstates, i
+    character(80):: units
+    character(80):: mode_kin_energy
+    real(wp):: hbar
+    real(wp):: prefac_me
+    real(wp), allocatable::  H_kin(:,:) 
+
+    if(present(units_in)) then
+      units = units_in
+    else
+      units = "SI"
+    end if
+
+    if(present(mode_kin_energy_in)) then
+      mode_kin_energy = mode_kin_energy_in      
+    else
+      mode_kin_energy = "fast"
+    end if
+
+    if (units .eq. "SI") then
+      hbar = const % hbar
+    else if (units .eq. "AU") then
+      hbar =1.0_wp
+    end if
+
+    nstates = size(V_i)
+
+    !write(6,*) "hello from solve_fourier_grid"
+
+    allocate(H_mat(nstates,nstates))
+    allocate(H_kin(nstates,nstates))
+    
+    H_mat =0.0_wp
+
+    ! potential energy in real space
+    do i=1, nstates
+      H_mat(i,i) = V_i(i)
+    end do
+    
+    ! kinetic energy, in fourier space
+    prefac_me= -hbar**2/ (2.0_wp * mu)
+
+    H_kin = 0.0_wp
+    if(mode_kin_energy .eq. "slow" ) then
+      write(6,*) "solve_fourier_grid_real: mode slow"
+      ! slow mode for testing purposes, N^3 scaling
+      !write(6,*) "slow mode"
+      !call fourier_grid_d2_real_slow(nstates, dx, H_kin)
+    else
+      ! fast mode, default, N^2 scaling by precomputing some factors, noting that only difference i-j contributes
+      !call fourier_grid_d2_fast(nstates, dx, H_kin)
+      call hartley_grid_d2_fast(nstates, dx, H_kin)            
+    end if
+
+    H_kin = prefac_me * H_kin 
+
+    H_mat = H_mat + H_kin
+    
+    eigval =0.0_wp
+    call dSymmetricEigen(H_mat, eigval, eigvec)
+    
+  end subroutine solve_hartley_grid
+  
+  
+  subroutine hartley_grid_d2_fast(nstates, dx, H_kin)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: get_order_fftw
+    
+    integer, intent(in):: nstates
+    real(wp), intent(in):: dx
+    real(wp), intent(out):: H_kin(:,:)
+
+    integer:: i,j,k, k_mod, ncoeff
+    real(wp):: recip_vec, prefac_d2, prefac
+    real(wp), allocatable:: phase_and_prefac(:)
+    
+    recip_vec = 2.0_wp * const % pi  / (dx * nstates) 
+    
+    H_kin = 0.0_wp
+
+    ncoeff = (nstates -1) / 2  ! excluding zero
+
+    allocate(phase_and_prefac(nstates))   
+    phase_and_prefac =0.0_wp
+
+    ! index shifted one, to avoid to index zero. i=1 corresponds to zero
+    do i=1, nstates
+      do k =1, nstates
+
+        ! cyclic in frequency 
+        if(k -1 .le. ncoeff) then
+          k_mod = k-1
+        else
+          k_mod = nstates - (k-1)
+        end if
+
+        prefac = -1.0_wp * (k_mod * recip_vec) ** 2 / nstates        
+        phase_and_prefac(i) = phase_and_prefac(i) + prefac * &
+             cos(2.0_wp * const % pi * (i-1) * k_mod / nstates)
+      end do
+    end do
+
+    do i=1, nstates
+      H_kin(i,i) = phase_and_prefac(1)
+      do j=i+1, nstates
+        H_kin(i,j) = phase_and_prefac(j-i +1)
+        H_kin(j,i) =  H_kin(i,j)        
+      end do
+    end do
+    
+  end subroutine hartley_grid_d2_fast
+
+  subroutine hartley_grid_d1_fast(nstates, dx, H_kin)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: get_order_fftw
+    
+    integer, intent(in):: nstates
+    real(wp), intent(in):: dx
+    real(wp), intent(out):: H_kin(:,:)
+
+    integer:: i,j,k, k_mod, ncoeff
+    real(wp):: recip_vec, prefac_d2, prefac
+    real(wp), allocatable:: phase_and_prefac(:)
+    
+    recip_vec = 2.0_wp * const % pi  / (dx * nstates) 
+    
+    H_kin = 0.0_wp
+
+    ncoeff = (nstates -1) / 2  ! excluding zero
+
+    allocate(phase_and_prefac(nstates))   
+    phase_and_prefac =0.0_wp
+
+    ! index shifted one, to avoid to index zero. i=1 corresponds to zero
+    do i=1, nstates
+      do k =1, nstates
+
+        ! cyclic in frequency 
+        if(k -1 .le. ncoeff) then
+          k_mod = k-1
+        else
+          k_mod = nstates - (k-1)
+        end if
+
+        prefac = -1.0_wp * (k_mod * recip_vec) / nstates        
+        phase_and_prefac(i) = phase_and_prefac(i) + prefac * &
+             sin(2.0_wp * const % pi * (i-1) * k_mod / nstates)
+      end do
+    end do
+
+    do i=1, nstates
+      H_kin(i,i) = phase_and_prefac(1)
+      do j=i+1, nstates
+        H_kin(i,j) = phase_and_prefac(j-i +1)
+        H_kin(j,i) =  H_kin(i,j)        
+      end do
+    end do
+    
+  end subroutine hartley_grid_d1_fast
+  
+  
+
   
   
 end module m_fourier_grid

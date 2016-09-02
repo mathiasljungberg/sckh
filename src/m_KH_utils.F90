@@ -25,9 +25,6 @@ subroutine solve_non_adiabatic(eig_f, c_f, nac, eig_na, c_na)
 
   write(6,*) "solving nonadiabatic matrix elements", nstates_na
 
-
-  !write(6,*) "solve_sinc_dvr: nstates=", nstates
- 
   LWORK = 3*nstates_na
   
   !
