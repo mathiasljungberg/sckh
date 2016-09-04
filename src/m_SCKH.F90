@@ -1,5 +1,4 @@
 module m_SCKH
-  !use parameters
   implicit none
 
 contains
@@ -8,6 +7,8 @@ subroutine  calculate_SCKH(p)
   use m_precision, only: wp
   use m_constants, only: const
   use m_SCKH_utils, only: compute_SCKH
+  use m_SCKH_utils, only: compute_SCKH_FFTW
+  use m_fftw3, only: get_omega_reordered_fftw
   use m_sckh_params_t, only: sckh_params_t
   use m_io, only: get_free_handle
   use m_splines, only: spline_easy
@@ -20,8 +21,8 @@ subroutine  calculate_SCKH(p)
   ! input/output                                                                                                                                                                                                  
   character(80):: dummy
   character(80), dimension(:),allocatable:: traj_files
-  integer:: ntraj, ntsteps_inp, nfinal, ntsteps , n_omega, ntsteps_pad
-  integer:: ntsteps_pad_pow, nproj 
+  integer:: ntraj, ntsteps_inp, nfinal, ntsteps , n_omega 
+  integer:: nproj 
   real(kind=wp),dimension(:),allocatable::  time_inp2, E_n_inp, time, E_n, traj_weights 
   real(kind=wp),dimension(:,:),allocatable:: E_f_inp, E_f, E_trans, projvec
   real(kind=wp),dimension(:,:,:),allocatable:: D_fn_inp, D_fn 
@@ -72,8 +73,6 @@ subroutine  calculate_SCKH(p)
 
   close(ifile)
   
-  call next_power_of_2(ntsteps, ntsteps_pad, ntsteps_pad_pow)
-
   ! allocate everything (changed dimension of E_n_inp etc) 
   allocate(time_inp(ntsteps_inp),time_inp2(ntsteps_inp), E_gs_inp(ntsteps_inp),E_n_inp(ntsteps_inp), &
        E_f_inp(nfinal,ntsteps_inp), D_fn_inp(nfinal,ntsteps_inp,3), time(ntsteps),&
@@ -94,7 +93,7 @@ subroutine  calculate_SCKH(p)
   call linspace(time, time_inp(1), time_inp(ntsteps_inp), ntsteps)
 
   delta_t = time(2)-time(1)
-  time_l2 = (ntsteps_pad-1) * delta_t 
+  time_l2 = (ntsteps-1) * delta_t 
 
   ! some output
   write(6,*) "gamma_FWHM (fwhm of lorentzian broadening)", p % gamma_FWHM
@@ -102,15 +101,12 @@ subroutine  calculate_SCKH(p)
   write(6,*) "ntsteps", ntsteps
   write(6,*) "delta_t", delta_t
   write(6,*) "time_l", time_l
-  write(6,*) "ntsteps_pad", ntsteps_pad, "= 2 **", ntsteps_pad_pow 
-  write(6,*) "time_l2 (padded time)", time_l2
   write(6,*)
   write(6,*) "Fundamental frequency resolution", 2 * const % pi * const % hbar /( time_l * const % eV)
-  write(6,*) "Padded frequency resolution", 2 * const % pi * const % hbar /( time_l2 * const % eV)
   write(6,*) "new delta t", delta_t
   write(6,*) "max freq",  const % pi * const % hbar /( delta_t  * const % eV)
 
-  n_omega = ntsteps_pad 
+  n_omega = ntsteps !_pad 
   allocate(sigma_m(nfinal,n_omega,3), sigma(nfinal,n_omega), sigma_tot(n_omega), &
        sigma_proj(p % nproj,n_omega), sigma_tmp(nfinal,n_omega), omega(n_omega))
 
@@ -158,21 +154,14 @@ subroutine  calculate_SCKH(p)
       ! first time, compute the mean transition energy
       if (traj .eq. 1) then
         E_fn_mean = sum(E_f(nfinal,:) - E_n(:)) / max(1,size(E_n(:))) 
-        
-        ! omega centered around E_fn_mean
-        j=1
-        do i=n_omega/2, 1, -1
-          omega(j) = -2.0_wp * const % pi * (i) * const % hbar / (time_l2 * const % eV) - E_fn_mean
-          j=j+1
-        end do
-        do i=0, n_omega/2-1
-          omega(j) =  2.0_wp * const % pi * (i) * const % hbar / (time_l2 * const % eV) - E_fn_mean
-          j=j+1
-        end do
+
+        call get_omega_reordered_fftw(time_l2 * const % eV /  const % hbar, omega)
+        omega = omega - E_fn_mean
         
       end if
       
-      call compute_SCKH(E_n, E_f, E_fn_mean, D_fn, time,  sigma_m, gamma)
+      !call compute_SCKH(E_n, E_f, E_fn_mean, D_fn, time,  sigma_m, gamma)
+      call compute_SCKH_FFTW(E_n, E_f, E_fn_mean, D_fn, time,  sigma_m, gamma)
       
     end if
     

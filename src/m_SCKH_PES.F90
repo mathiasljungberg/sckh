@@ -7,25 +7,25 @@ contains
 subroutine calculate_SCKH_PES(p)
   use m_precision, only: wp
   use m_constants, only: const
-  use m_KH_functions, only: solve_sinc_DVR
   use m_SCKH_utils, only: sample_x_mom
   use m_SCKH_utils, only: compute_SCKH
+  use m_SCKH_utils, only: compute_SCKH_FFTW
   use m_SCKH_utils, only: verlet_trajectory
   use m_sckh_params_t, only: sckh_params_t 
   use hist_class, only: hist, hist_init, hist_add
   use hist_class, only: hist_broadening, hist_write
   use m_io, only: get_free_handle
   use m_splines, only: spline_easy
-  use m_FFT, only: next_power_of_2
   use m_PES_io, only: read_dipole_file
   use m_PES_io, only: read_nac_file
   use m_PES_io, only: read_PES_file
-
+  use m_KH_functions, only: solve_vib_problem
+  
   type(sckh_params_t), intent(inout):: p 
 
   ! input/output
-  integer:: nfinal, ntsteps,  ntsteps_pad
-  integer:: ntsteps_pad_pow, npoints_in  
+  integer:: nfinal, ntsteps  
+  integer:: npoints_in  
   real(kind=wp),dimension(:),allocatable::  E_n_inp, time, E_n, E_dyn_inp 
   real(kind=wp),dimension(:,:),allocatable:: E_f_inp, E_f, E_trans
   real(kind=wp),dimension(:,:,:),allocatable:: D_fn_inp, D_fn 
@@ -98,12 +98,6 @@ subroutine calculate_SCKH_PES(p)
     p % projvec(3,3) =1.0_wp
 
   end if
-
-  !outfile = p % outfile
-
-  call next_power_of_2(ntsteps, ntsteps_pad, ntsteps_pad_pow)
-
-  write(6,*) "ntsteps_pad_pow", ntsteps_pad, ntsteps_pad_pow
 
   if(p % samplemode .eq. 1) then
      npoints_x_mom_sampl = npoints_x_sampl * npoints_mom_sampl
@@ -198,6 +192,18 @@ subroutine calculate_SCKH_PES(p)
   end if
 
 
+  !write(6,*) E_n_inp(30) -E_f_inp(1,30)
+  
+  
+  !
+  ! Solve the vibrational problem for initial state to be able to sample initial distribution
+  !  
+  
+  !call solve_sinc_DVR(dx, mu_SI, E_i_inp * const % eV, c_i, eig_i)
+  call solve_vib_problem(dx, E_i_inp, eig_i, c_i, mu_SI, p % vib_solver)
+  write(6,*) "Calculated initial state eigenfunctions"
+  write(6,*) "Initial state fundamental", (eig_i(2) -eig_i(1))*const % cm
+
   ! convert to eV units
   E_i_inp = E_i_inp  / const % eV
   E_n_inp = E_n_inp  / const % eV
@@ -207,18 +213,6 @@ subroutine calculate_SCKH_PES(p)
      E_f_inp(j,:) = E_f_inp(j,:) / const % eV
   end do
   
-  !write(6,*) E_n_inp(30) -E_f_inp(1,30)
-
-
-  !
-  ! Solve the vibrational problem for initial state to be able to sample initial distribution
-  !  
-
-  call solve_sinc_DVR(dx, mu_SI, E_i_inp * const % eV, c_i, eig_i)
-  write(6,*) "Calculated initial state eigenfunctions"
-  write(6,*) "Initial state fundamental", (eig_i(2) -eig_i(1))*const % cm
-
-
   if(p % samplemode .eq. 1) then  
      call sample_x_mom(X_dvr, c_i(:,1), x_sampl, mom_sampl, x_mom_sampl, 1)
   else if(p % samplemode .eq. 2) then  
@@ -251,21 +245,18 @@ subroutine calculate_SCKH_PES(p)
 
   delta_t = delta_t * 1.d-15 ! femtoseconds
   time_l = (ntsteps-1) * delta_t
-  time_l2 = (ntsteps_pad-1) * delta_t 
+  time_l2 = (ntsteps-1) * delta_t 
 
   write(6,*) "outfile", p % outfile
   write(6,*) "gamma (hwhm of lorentzian broadening)", gamma
   write(6,*) "mu_SI", mu_SI 
   write(6,*) "time_l", time_l
-  write(6,*) "ntsteps_pad", ntsteps_pad, "= 2 **", ntsteps_pad_pow 
-  write(6,*) "time_l2 (padded time)", time_l2
   write(6,*)
   write(6,*) "Fundamental frequency resolution", 2.0_wp * const % pi * const % hbar /( time_l * const % eV)
-  write(6,*) "Padded frequency resolution", 2.0_wp * const % pi * const % hbar /( time_l2 * const % eV)
   write(6,*) "delta t", delta_t
   write(6,*) "max freq",  const % pi * const % hbar /( delta_t  * const % eV), "eV"
 
-  n_omega = ntsteps_pad 
+  n_omega = ntsteps
   allocate(sigma_m(nfinal,n_omega,3), sigma(nfinal,n_omega), sigma_tot(n_omega), &
        sigma_proj(p % nproj,n_omega), sigma_tmp(nfinal,n_omega), omega(n_omega))
 
@@ -353,7 +344,8 @@ subroutine calculate_SCKH_PES(p)
         
      end if
 
-     call compute_SCKH(E_n, E_f, E_fn_mean, D_fn, time,  sigma_m, gamma)
+     !call compute_SCKH(E_n, E_f, E_fn_mean, D_fn, time,  sigma_m, gamma)
+     call compute_SCKH_FFTW(E_n, E_f, E_fn_mean, D_fn, time,  sigma_m, gamma)
 
      ! static spectrum
      ! call compute_XES_spectrum_novib(E_n(1), E_f(:,1), E_fn_mean, D_fn(1), sigma_m_static, gamma)

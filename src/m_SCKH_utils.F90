@@ -1,11 +1,7 @@
 module m_SCKH_utils
-  !use parameters
-  !use spline_m
-  !use FFT_m
-  !use KH_functions
-  !use trajectory_class
-  implicit none
 
+  implicit none
+  
 contains
 
   subroutine sample_x_mom(x, funct, x_sampl, mom_sampl, x_mom_sampl, mode)
@@ -490,7 +486,7 @@ contains
           funct = D_fn(k,:,m) * e_factor1(k,:) * exp(-gamma * const % eV * time(:) / const % hbar)
 
           call FFT_complex(time,funct, sigma_m(k,:,m), omega_out)
-
+          
        end do ! m
     end do ! k
     
@@ -498,6 +494,67 @@ contains
     
   end subroutine compute_SCKH
 
+  ! same as above, but use FFTW to make things more standard  
+  subroutine compute_SCKH_FFTW(E_n, E_f, E_fn_mean, D_fn, time, sigma_m, gamma)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_forward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    use m_fftw3, only: get_omega_reordered_fftw
+    
+    ! passed variables
+    real(kind=wp), dimension(:), intent(in):: E_n,time
+    real(kind=wp), dimension(:,:), intent(in):: E_f
+    real(kind=wp),dimension(:,:,:),intent(in):: D_fn 
+    complex(kind=wp), dimension(:,:,:),intent(out) ::  sigma_m
+    real(kind=wp), intent(in):: E_fn_mean, gamma
+    ! local variables
+    integer:: ntsteps, ntsteps_pad, nfinal
+    complex(kind=wp), dimension(:),allocatable:: funct
+    complex(kind=wp), dimension(:,:),allocatable::  e_factor1
+    real(kind=wp), dimension(:,:),allocatable:: int_W_I
+    real(kind=wp),dimension(:),allocatable::  omega_out 
+    real(kind=wp):: delta_t
+    integer:: i,k,m 
+
+    ntsteps = size(time) 
+    nfinal = size(E_f,1) 
+    ntsteps_pad = size(sigma_m,2) 
+    
+    allocate(funct(ntsteps), int_W_I(nfinal, ntsteps), &
+         e_factor1(nfinal,ntsteps), omega_out(ntsteps_pad) )
+   
+    delta_t = time(2)-time(1)
+        
+    int_W_I(:,1) = E_f(:,1) - E_n(1)  - E_fn_mean  
+    
+    do i = 2, ntsteps
+       int_W_I(:,i) = int_W_I(:,i-1) + ( E_f(:,i) - E_n(i)) - E_fn_mean  
+    end do
+    int_W_I =  int_W_I * delta_t
+    
+    do i = 1,nfinal 
+       e_factor1(i,:) = exp(dcmplx(0, -(const % eV  / const % hbar) *int_W_I(i,:)  ))
+    end do
+    
+    sigma_m = 0.0_wp
+    
+    do k =1,nfinal! final state 
+      do m=1,3 ! polarization     
+        
+        funct = D_fn(k,:,m) * e_factor1(k,:) * exp(-gamma * const % eV * time(:) / const % hbar)
+        
+        call fft_c2c_1d_forward(funct, sigma_m(k,:,m))
+        call reorder_sigma_fftw_z(sigma_m(k,:,m))
+
+      end do ! m
+    end do ! k
+      
+    call get_omega_reordered_fftw(time(ntsteps)-time(1), omega_out)
+    
+  end subroutine compute_SCKH_FFTW
+
+  
 !  subroutine compute_SCKH_one(E_n, E_f, E_fn_mean, D_fn, time, sigma_m, gamma)
 !    use m_precision, only: wp
 !    use m_constants, only: const

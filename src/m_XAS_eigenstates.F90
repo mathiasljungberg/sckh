@@ -16,15 +16,10 @@ contains
     use m_splines, only: linspace
     use m_PES_io, only: read_PES_file
     use m_PES_io, only: read_dipole_file
-    !use m_PES_io, only: read_nac_file
-    !use m_KH_utils, only: calculate_dipoles_KH_res
-    !use m_KH_utils, only: compute_XES_res
-    !use m_KH_utils, only: compute_XES_res_alt
     use m_io, only: get_free_handle
     use m_KH_functions, only: solve_vib_problem
     use m_upper, only : upper
     use m_XAS_functions, only : calculate_dipoles_XAS
-    !use m_XAS_functions, only : spectrum_XAS
     use m_XAS_functions, only : compute_XAS_spectrum
     
     type(sckh_params_t), intent(inout):: p
@@ -129,13 +124,11 @@ contains
     
     
     ! initial state
-    !call solve_sinc_DVR(dx,mu_SI, E_i, c_i, eig_i)
     call solve_vib_problem(dx, E_i, eig_i, c_i, mu_SI, p % vib_solver)
     write(6,*) "Initial state fundamental", (eig_i(2) -eig_i(1)) * const % cm
     
     ! final states
     do j=1,p % npesfile_n
-      !call solve_sinc_DVR(dx,mu_SI, E_n(j,:), c_n(j,:,:), eig_n(j,:))
       call solve_vib_problem(dx, E_n(j,:), eig_n(j,:), c_n(j,:,:), mu_SI, p % vib_solver)
       write(6,*) "Final state fundamental",j, (eig_n(j,2) -eig_n(j,1)) * const % cm
     end do
@@ -174,8 +167,6 @@ contains
     ! convolute with incoming distribution
 
     do j=1,p % npesfile_n    
-        !call compute_XES_nonres(eig_i(1), eig_n, eig_f(j,:), D_ni(:,:), D_fn(j,:,:,:), &
-        !     omega, gamma, sigma_final(j,:,:,:))
       call compute_XAS_spectrum(eig_i(1), eig_n(j,:), D_ni(j,:,:), &
            omega_in, gamma, gamma_inc, sigma_final(j,:,:,:))
     end do

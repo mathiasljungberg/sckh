@@ -17,18 +17,15 @@ program sckh_main
   integer :: iv
   iv = 1
 
-
   !
   ! This progam calclates the XAS or XES cross section including non-adiabatic couplings
   !
 
-  !call read_input(input_par)
   call init_logs(-1, '.SCKH.txt', 1, iv, ilog)
-  !call init_fact(iv, ilog)
 
   call init_sckh_params_t(p)
-  !write(*,*) ' ',p%runmode_sckh
 
+  ! routines working in the eigestate basis, 1d vibrational PES
   if(upper(p % runmode) .eq. "XAS") then
     call calculate_XAS(p)
     
@@ -40,10 +37,12 @@ program sckh_main
     
   else  if(upper(p % runmode) .eq. "KH_RESONANT_EL") then
     call calculate_KH_res_el(p)
-    
+
+  ! routines working with 1d  PES, but use classical trajectories on that
   else if (upper(p % runmode) .eq. "SCKH_PES") then
     call calculate_SCKH_PES(p)
     
+  ! rotines working with general used-supplied trajectories
   else if (upper(p % runmode) .eq. "SCKH") then
     if  (upper(p%runmode_sckh) .eq. "NONRESONANT") then
       call calculate_SCKH(p)
@@ -56,7 +55,8 @@ program sckh_main
     endif
     
   else 
-    write(6,*) "runmode must be either 'KH','SCKH_PES', or 'SCKH' ", upper(p % runmode)
+    write(6,*) "runmode must be one of 'XAS', 'KH', 'KH_RESONANT', 'KH_RESONANT_EL',&
+         'SCKH_PES', 'SCKH' ", upper(p % runmode)
     stop
   end if
   

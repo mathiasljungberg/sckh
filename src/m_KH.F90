@@ -697,7 +697,6 @@ contains
       else if (upper(p % KH_amplitude_mode) .eq. "INGOING") then
 
         ! alternative formula with F(\omega) and instrumental broadening instead of incoming broadening
-
         do f_e = 1,p % npesfile_f
           call compute_XES_res_alt(eig_i(1), eig_n_cmp(:), eig_f(f_e,:), &
                D_ni_cmp(:,:), D_fn_cmp(f_e,:,:,:), &
