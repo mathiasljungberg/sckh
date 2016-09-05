@@ -8,7 +8,7 @@ if sckh_path is None:
                        ' the SCKH_PATH' +
                        ' environment variable')
 
-dirs = ['SCKH_PES', 'SCKH','vib_finite_diff', 'KH', 'KH_resonant', 'KH_resonant_el']
+dirs = ['XAS', 'SCKH_PES', 'SCKH','vib_finite_diff', 'KH', 'KH_resonant', 'KH_resonant_el']
 
 old_dir = os.getcwd()
 err_tot=0

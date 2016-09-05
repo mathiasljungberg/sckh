@@ -1,0 +1,28 @@
+
+runmode KH
+
+! files
+pes_file_i    test_energy_tot.dat
+pes_file_n    test_energy_tot_exc.dat
+pes_file_lp_corr   test_lp_lp_energy.dat
+pes_file_list_f    pes_file_list_f.txt
+dipole_file_list_f dipole_file_list_f.txt
+outfile testout
+
+npesfile_f 6
+shift_PES 1
+
+!for vib solver 
+npoints_in 77
+nstates 77
+mu 1.0078825
+dvr_start_in 0.5
+dx_in 0.025 
+
+! frequencies
+omega_start 517
+omega_end  528
+n_omega 100
+gamma_FWHM 0.18
+
+

@@ -193,7 +193,7 @@ contains
     ! 
     
     ! write spectra to file
-    file="_sigma_"
+    file="_sigma"
     file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
     
     ifile = get_free_handle()
