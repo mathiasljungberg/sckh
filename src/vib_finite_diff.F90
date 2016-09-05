@@ -45,6 +45,9 @@ program vib_finite_diff
 
   close(10)
 
+  ! open outputfile
+  open(11,file=outputfile,status='unknown')
+
   mu = mu_in * const % u
   y = y -minval(y)
   y =y * const % hartree
@@ -61,6 +64,10 @@ program vib_finite_diff
   write(6,*) eigval * const % cm 
   write(6,*) "solve_finite_diff: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
 
+  do i=1, nstates
+    write(11,*) eigval(i) * const % cm
+  end do
+  
   ! fourier grid, slow but reliable
   allocate(eigvec_z(npoints, npoints))
   deallocate(eigval)
@@ -70,6 +77,10 @@ program vib_finite_diff
   write(6,*) eigval(1:nstates) * const % cm 
   write(6,*) "solve_fourier_grid: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
 
+  do i=1, nstates
+    write(11,*) eigval(i) * const % cm
+  end do
+  
   ! fourier grid with sin cos, fast
   eigval=0.0_wp
   eigvec=0.0_wp
@@ -78,6 +89,10 @@ program vib_finite_diff
   write(6,*) eigval(1:nstates) * const % cm 
   write(6,*) "solve_fourier_grid_real fast: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
 
+  do i=1, nstates
+    write(11,*) eigval(i) * const % cm
+  end do
+  
   ! hartely grid with cos + sin, fast
   eigval=0.0_wp
   eigvec=0.0_wp
@@ -86,6 +101,10 @@ program vib_finite_diff
   write(6,*) eigval(1:nstates) * const % cm 
   write(6,*) "solve_hatrley_grid fast: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
 
+  do i=1, nstates
+    write(11,*) eigval(i) * const % cm
+  end do
+  
   ! sinc
   eigval=0.0_wp
   eigvec=0.0_wp
@@ -93,6 +112,10 @@ program vib_finite_diff
 
   write(6,*) eigval(1:nstates) * const % cm 
   write(6,*) "solve_sinc_DVR: fundamental frequency", (eigval(2)-eigval(1)) * const % cm
+
+  do i=1, nstates
+    write(11,*) eigval(i) * const % cm
+  end do
 
   ! look at first derivatives
   allocate(first_der(npoints, npoints))
