@@ -1,0 +1,27 @@
+from __future__ import print_function
+import os, sys
+import test_mod
+
+def run_test():
+
+    # get env variable
+    sckh_path = os.environ.get('SCKH_PATH')
+
+    # prepare rundir and go to it
+    old_dir = os.getcwd()
+    os.system('mkdir -p rundir')
+    os.system('rm rundir/*')
+    os.system('cp input/* rundir/*')
+    os.chdir('rundir')
+    
+    # run calcultion
+
+    err_code = test_mod.my_bash.my_exec(sckh_path +'/sckh_main', test.out, test.err)
+    
+    # clean up
+    os.chdir(old_dir)
+    os.system('ls')
+    
+    # return 0 if tests succeded
+    return error_code
+                                                     

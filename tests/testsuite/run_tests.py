@@ -8,9 +8,10 @@ if sckh_path is None:
                        ' the SCKH_PATH' +
                        ' environment variable')
 
-dirs = ['KH_simple', 'KH_resonant_simple']
+dirs = ['SCKH_PES', 'SCKH','vib_finite_diff', 'KH', 'KH_resonant', 'KH_resonant_el']
 
 old_dir = os.getcwd()
+err_tot=0
 
 for d in dirs:
 
@@ -21,6 +22,8 @@ for d in dirs:
     import tests 
     
     err_code = tests.run_test()
+
+    err_tot += err_code 
     
     if err_code > 0:
         print('test ' +d + ' failed!')
@@ -32,3 +35,7 @@ for d in dirs:
     os.chdir(old_dir)
     print('Exiting')
 
+if err_tot ==0:
+    print('All tests passed')
+else:
+    print('{} test failed'.format(err_tot))
