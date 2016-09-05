@@ -1,0 +1,2 @@
+f
+__all__= ['mod_tests', 'my_bash']
