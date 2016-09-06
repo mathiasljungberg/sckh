@@ -1,3 +1,4 @@
+
 module m_KH
   implicit none
 
@@ -25,8 +26,7 @@ contains
 
     character(80):: file,string
     real(kind=wp):: mu_SI, dx,dvr_start, gamma, E_n_mean 
-    integer:: npoints 
-    real(kind=wp), dimension(:),allocatable:: X_dvr,E_i, E_n, E_lp_corr, eig_i, eig_n, shift
+    real(kind=wp), dimension(:),allocatable:: X_r,E_i, E_n, E_lp_corr, eig_i, eig_n, shift
     real(kind=wp), dimension(:),allocatable::  sigma, omega
     real(kind=wp), dimension(:,:),allocatable::  c_i, c_n, &
          eig_f, E_f, sigma_states, D_ni
@@ -43,7 +43,7 @@ contains
 
     gamma = p % gamma_FWHM /  2 
 
-    allocate( X_dvr(p % nstates), E_i(p % nstates), E_n(p % nstates), E_lp_corr(p % nstates), &
+    allocate( X_r(p % nstates), E_i(p % nstates), E_n(p % nstates), E_lp_corr(p % nstates), &
          E_f(p % npesfile_f,p % nstates), eig_i(p % nstates),eig_n(p % nstates),eig_f(p % npesfile_f,p % nstates), &
          shift(p % nstates))
     allocate( omega(p % n_omega), sigma(p % n_omega), D_ni(p % nstates, 3) )
@@ -62,25 +62,18 @@ contains
       stop
     end if
 
-    npoints = (p % nstates-1)/2
     mu_SI = p % mu * const % u
     dvr_start = p % dvr_start_in * 1.0d-10
     dx = p % dx_in * 1.0d-10
 
-    !
-    ! set up DVR points
-    !
-
-    do i = -npoints,npoints
-      ii = i + npoints +1
-      X_dvr(ii) = (ii-1)*dx + dvr_start
+    ! set up grid points
+    do i = 1, p % npoints_in
+      X_r(i) = (i-1)*dx + dvr_start
     end do
 
-    !write(6,*) "X_dvr", X_dvr
-
     ! read PES files
-    call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_dvr, E_i)
-    call read_PES_file(p % pes_file_n, p % npoints_in, p % nstates, X_dvr, E_n)
+    call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_r, E_i)
+    call read_PES_file(p % pes_file_n, p % npoints_in, p % nstates, X_r, E_n)
 
     ! final state pes_files and dipole_files
     ifile = get_free_handle()
@@ -106,18 +99,18 @@ contains
     close(ifile)
 
     do j=1,p % npesfile_f
-      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % nstates, X_dvr, E_f(j,:))
-      call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_dvr, dipole(j,:,:))
+      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % nstates, X_r, E_f(j,:))
+      call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_r, dipole(j,:,:))
     end do
 
     !  if (p % nonadiabatic .eq. 1) then
-    !     call read_nac_file(p % nac_file, p % npoints_in, p %nstates, X_dvr, p % npesfile_f, nac)
+    !     call read_nac_file(p % nac_file, p % npoints_in, p %nstates, X_r, p % npesfile_f, nac)
     !  end if
 
     ! Shift orbital energies so that E_f(1,:) have energies E_lp_corr
     ! and the spacing between the intermediate and final states are preserved
     if( p % shift_PES .eq.  1) then
-      call read_PES_file(p % pes_file_lp_corr, p % npoints_in, p % nstates, X_dvr, E_lp_corr)
+      call read_PES_file(p % pes_file_lp_corr, p % npoints_in, p % nstates, X_r, E_lp_corr)
 
       shift = E_lp_corr -E_f(1,:) 
 
@@ -373,7 +366,7 @@ contains
     !   open(10,file=file,status='unknown')
     !   do i=1,p % nstates
     !      do j=1,p % nstates
-    !         write(10,*) X_dvr(j), c_i(j,i)
+    !         write(10,*) X_r(j), c_i(j,i)
     !      end do
     !      write(10,*) 
     !      write(10,*) 
@@ -386,7 +379,7 @@ contains
     !  open(10,file=file,status='unknown')
     !   do i=1,p % nstates
     !      do j=1,p % nstates
-    !         write(10,*) X_dvr(j), c_n(j,i)
+    !         write(10,*) X_r(j), c_n(j,i)
     !      end do
     !      write(10,*) 
     !      write(10,*) 
@@ -402,7 +395,7 @@ contains
     !      open(10,file=file,status='unknown')
     !
     !      do j=1,p % nstates
-    !         write(10,*) X_dvr(j), c_n(j,i)
+    !         write(10,*) X_r(j), c_n(j,i)
     !      end do
     !      write(10,*)
     !      write(10,*)
@@ -418,7 +411,7 @@ contains
     !      open(10,file=file,status='unknown')
     !
     !      do j=1,p % nstates
-    !         write(10,*) X_dvr(j), c_f(1,j,i)
+    !         write(10,*) X_r(j), c_f(1,j,i)
     !      end do
     !      write(10,*)
     !      write(10,*)
@@ -434,7 +427,7 @@ contains
     !
     !      do i=1,p % nstates
     !         do j=1,p % nstates
-    !            write(10,*) X_dvr(j), c_f(k,j,i)
+    !            write(10,*) X_r(j), c_f(k,j,i)
     !         end do
     !
     !         write(10,*) 
@@ -486,8 +479,7 @@ contains
 
     character(80):: file,string
     real(kind=wp):: mu_SI, dx,dvr_start, gamma, gamma_instr, gamma_inc, E_n_mean 
-    integer:: npoints 
-    real(kind=wp), dimension(:),allocatable:: X_dvr,E_i, E_lp_corr, eig_i, shift
+    real(kind=wp), dimension(:),allocatable:: X_r,E_i, E_lp_corr, eig_i, shift
     real(kind=wp), dimension(:),allocatable::  sigma, omega, omega_in
     real(kind=wp), dimension(:,:),allocatable::  c_i, &
          eig_f, E_f, sigma_states, E_n, eig_n
@@ -510,7 +502,7 @@ contains
     gamma_instr = p % gamma_instr_FWHM /  2
     gamma_inc = p % gamma_inc_FWHM /  2 
 
-    allocate( X_dvr(p % nstates), E_i(p % nstates), E_n(p % npesfile_n, p % nstates), E_lp_corr(p % nstates), &
+    allocate( X_r(p % nstates), E_i(p % nstates), E_n(p % npesfile_n, p % nstates), E_lp_corr(p % nstates), &
          E_f(p % npesfile_f,p % nstates), eig_i(p % nstates),eig_n(p % npesfile_n, p % nstates),&
          eig_f(p % npesfile_f,p % nstates), &
          shift(p % nstates))
@@ -540,26 +532,22 @@ contains
       stop
     end if
 
-    npoints = (p % nstates-1)/2
     mu_SI = p % mu * const % u
     dvr_start = p % dvr_start_in * 1.0d-10
     dx = p % dx_in * 1.0d-10
 
-    !
-    ! set up DVR points
-    !
-
-    do i = -npoints,npoints
-      ii = i + npoints +1
-      X_dvr(ii) = (ii-1)*dx + dvr_start
+    ! set up grid points
+    do i = 1, p % npoints_in
+      X_r(i) = (i-1)*dx + dvr_start
     end do
+
     
     !
     ! read PES files
     !
 
     ! iniital state
-    call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_dvr, E_i)
+    call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_r, E_i)
 
     ! intermediate states
     ifile = get_free_handle()
@@ -586,8 +574,8 @@ contains
     
     do j=1,p % npesfile_n
       call read_PES_file(p % pes_files_n(j), p % npoints_in, &
-           p % nstates, X_dvr, E_n(j,:))
-      call read_dipole_file(p % dipolefile_n(j), p % npoints_in, p % nstates, X_dvr, dipole_n(j,:,:))
+           p % nstates, X_r, E_n(j,:))
+      call read_dipole_file(p % dipolefile_n(j), p % npoints_in, p % nstates, X_r, dipole_n(j,:,:))
     end do
 
     ! final state pes_files and dipole_files
@@ -614,18 +602,18 @@ contains
     close(ifile)
 
     do j=1,p % npesfile_f
-      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % nstates, X_dvr, E_f(j,:))
-      call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_dvr, dipole_f(j,:,:))
+      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % nstates, X_r, E_f(j,:))
+      call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_r, dipole_f(j,:,:))
     end do
 
     !  if (p % nonadiabatic .eq. 1) then
-    !     call read_nac_file(p % nac_file, p % npoints_in, p %nstates, X_dvr, p % npesfile_f, nac)
+    !     call read_nac_file(p % nac_file, p % npoints_in, p %nstates, X_r, p % npesfile_f, nac)
     !  end if
 
     ! Shift orbital energies so that E_f(1,:) have energies E_lp_corr
     ! and the spacing between the intermediate and final states are preserved
     if( p % shift_PES .eq.  1) then
-      call read_PES_file(p % pes_file_lp_corr, p % npoints_in, p % nstates, X_dvr, E_lp_corr)
+      call read_PES_file(p % pes_file_lp_corr, p % npoints_in, p % nstates, X_r, E_lp_corr)
 
       shift = E_lp_corr -E_f(1,:) 
 
@@ -731,7 +719,7 @@ contains
         open(ifile,file=file,status='unknown')
         
         do i=1, p % n_omega 
-          write(ifile,'(4ES18.10)') omega(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+          write(ifile,'(4F18.10)') omega(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
         end do
 
         close(ifile) 
@@ -760,8 +748,7 @@ contains
 
     character(80):: file,string
     real(kind=wp):: mu_SI, dx,dvr_start, gamma, gamma_instr, gamma_inc, E_n_mean 
-    integer:: npoints 
-    real(kind=wp), dimension(:),allocatable:: X_dvr,E_i, E_lp_corr, eig_i, shift
+    real(kind=wp), dimension(:),allocatable:: X_r,E_i, E_lp_corr, eig_i, shift
     real(kind=wp), dimension(:),allocatable::  sigma, omega, omega_in
     real(kind=wp), dimension(:,:),allocatable::  c_i, &
          eig_f, E_f, sigma_states, E_n, eig_n
@@ -786,7 +773,7 @@ contains
 
     nstates = 1
 
-    allocate( X_dvr(p % nstates), E_i(p % nstates), E_n(p % npesfile_n, p % nstates), E_lp_corr(p % nstates), &
+    allocate( X_r(p % nstates), E_i(p % nstates), E_n(p % npesfile_n, p % nstates), E_lp_corr(p % nstates), &
          E_f(p % npesfile_f,p % nstates), eig_i(nstates),eig_n(p % npesfile_n, nstates),&
          eig_f(p % npesfile_f,nstates), &
          shift(p % nstates))
@@ -809,26 +796,21 @@ contains
     allocate(lambda_G(p % npesfile_f, p % n_omega_in, p % n_omega))
     allocate(lambda_H(p % npesfile_f, p % n_omega_in, p % n_omega))
 
-    npoints = (p % nstates-1)/2
     mu_SI = p % mu * const % u
     dvr_start = p % dvr_start_in * 1.0d-10
     dx = p % dx_in * 1.0d-10
     
-    !
-    ! set up DVR points
-    !
-
-    do i = -npoints,npoints
-      ii = i + npoints +1
-      X_dvr(ii) = (ii-1)*dx + dvr_start
+    ! set up grid points
+    do i = 1, p %npoints_in
+      X_r(i) = (i-1)*dx + dvr_start
     end do
-
+    
     !
     ! read PES files
     !
 
     ! iniital state
-    call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_dvr, E_i)
+    call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_r, E_i)
     
     ! intermediate states
     ifile = get_free_handle()
@@ -855,8 +837,8 @@ contains
     
     do j=1,p % npesfile_n
       call read_PES_file(p % pes_files_n(j), p % npoints_in, &
-           p % nstates, X_dvr, E_n(j,:))
-      call read_dipole_file(p % dipolefile_n(j), p % npoints_in, p % nstates, X_dvr, dipole_n(j,:,:))
+           p % nstates, X_r, E_n(j,:))
+      call read_dipole_file(p % dipolefile_n(j), p % npoints_in, p % nstates, X_r, dipole_n(j,:,:))
     end do
 
     ! final state pes_files and dipole_files
@@ -883,14 +865,14 @@ contains
     close(ifile)
 
     do j=1,p % npesfile_f
-      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % nstates, X_dvr, E_f(j,:))
-      call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_dvr, dipole_f(j,:,:))
+      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % nstates, X_r, E_f(j,:))
+      call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_r, dipole_f(j,:,:))
     end do
 
     ! Shift orbital energies so that E_f(1,:) have energies E_lp_corr
     ! and the spacing between the intermediate and final states are preserved
     if( p % shift_PES .eq.  1) then
-      call read_PES_file(p % pes_file_lp_corr, p % npoints_in, p % nstates, X_dvr, E_lp_corr)
+      call read_PES_file(p % pes_file_lp_corr, p % npoints_in, p % nstates, X_r, E_lp_corr)
 
       shift = E_lp_corr -E_f(1,:) 
 
@@ -995,7 +977,7 @@ contains
         open(ifile,file=file,status='unknown')
         
         do i=1, p % n_omega 
-          write(ifile,'(4ES18.10)') omega(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+          write(ifile,'(4F18.10)') omega(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
         end do
         
         close(ifile) 

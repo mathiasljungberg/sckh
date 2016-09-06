@@ -14,12 +14,15 @@ IF(CMAKE_Fortran_COMPILER MATCHES ifort)
 
    SET(MKLROOT "/opt/intel/composer_xe_2013_sp1/mkl")
    SET(LAPACK_LIB " -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_sequential.a -Wl,--end-group -lpthread -lm")
+
    IF(USER_OS STREQUAL LinuxMint )
-   SET(MKLROOT "/opt/intel/composer_xe_2013_sp1/mkl")
-   SET(INCDIR " -I${MKLROOT}/include")
-  #SET(OMP_FLAGS "")
-   SET(FFTW_LIB "-L/usr/lib -lfftw3 -lm")
-   SET(LAPACK_LIB " -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_sequential.a -Wl,--end-group -lpthread -lm")
+
+     SET(MKLROOT "/opt/intel/composer_xe_2013_sp1/mkl")
+     SET(INCDIR " -I${MKLROOT}/include")
+    #SET(OMP_FLAGS "")
+     SET(FFTW_LIB "-L/usr/lib -lfftw3 -lm")
+     SET(LAPACK_LIB " -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_sequential.a -Wl,--end-group -lpthread -lm")
+
    ENDIF(USER_OS STREQUAL LinuxMint)
 
 ELSE(CMAKE_Fortran_COMPILER MATCHES gfortran)

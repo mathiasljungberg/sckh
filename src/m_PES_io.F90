@@ -204,6 +204,74 @@ subroutine read_nac_file(filename, npoints_in, nstates, X_dvr, npesfiles, nac)
 
 end subroutine read_nac_file
 
+subroutine get_projections(p)
+  use m_sckh_params_t, only: sckh_params_t 
+  use m_precision, only: wp
+  use m_io, only: get_free_handle
+  
+  type(sckh_params_t), intent(inout):: p 
+
+  integer:: ifile,i
+  real(8):: dnrm2
+  
+  if(p % use_proj) then
+    
+    ifile = get_free_handle()
+    open(ifile, file= p % proj_file, action='read')    
+    read(ifile,*) p % nproj
+    
+    if(allocated(p % projvec)) deallocate(p % projvec)
+    allocate(p % projvec(p % nproj,3))
+    
+    do i=1, p % nproj                                         
+      read(ifile,*) p % projvec(i,1), p % projvec(i,2), p % projvec(i,3) 
+      
+      !normalize projvec                               
+      p % projvec(i,:) = p % projvec(i,:) / dnrm2(3,p % projvec(i,:),1)
+      write(6,*) "projvector", i,  p % projvec(i,:)            
+    end do
+    
+    close(ifile)
+  else
+    ! the three cartesian directions
+    p % nproj =3
+    
+    if(allocated(p % projvec)) deallocate(p % projvec)
+    allocate(p % projvec(p % nproj,3))
+    
+    p % projvec =0.0_wp
+    p % projvec(1,1) =1.0_wp
+    p % projvec(2,2) =1.0_wp
+    p % projvec(3,3) =1.0_wp
+    
+  end if
+  
+end subroutine get_projections
+
+subroutine read_file_list(filename, nfiles, file_list)
+  use m_io, only: get_free_handle
+  
+  character(*), intent(in):: filename
+  integer, intent(in):: nfiles
+  character(*), intent(out), allocatable:: file_list(:)
+
+  integer:: ifile, i
+  
+  ifile = get_free_handle()
+  open(ifile, file= filename, action='read')
+  
+  if(allocated(file_list)) deallocate(file_list)
+  allocate(file_list(nfiles))
+
+  do i=1, nfiles
+    read(ifile,*) file_list(i)
+    write(6,*) file_list(i)
+  end do
+  
+  close(ifile)
+
+end subroutine read_file_list
+
 end module m_PES_io
 
 

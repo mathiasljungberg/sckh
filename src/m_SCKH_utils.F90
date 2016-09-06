@@ -75,7 +75,7 @@ contains
     call reorder_sigma1(funct_imag)
 
     do i=1,npoints_pad
-       write(19,'(5ES16.6)') x_mom(i), funct_real(i), funct_imag(i), &
+       write(19,'(5F16.6)') x_mom(i), funct_real(i), funct_imag(i), &
             funct_real(i) ** 2 + funct_imag(i) ** 2, &
             (funct_real(i) ** 2 + funct_imag(i) ** 2) * 4.0_wp * const % pi * x_mom(i)**2
     end do
@@ -319,7 +319,66 @@ contains
     deallocate(yder)
 
   end subroutine sample_random
-  
+
+  ! wrapper routine for sample_x_mom
+  subroutine sample_x_mom_modes(npoints_x_sampl, npoints_mom_sampl, samplemode, X_dvr, c_i, x_mom_sampl)
+    use m_precision, only: wp
+    use m_io, only: get_free_handle
+    !use m_sckh_params_t, only: sckh_params_t 
+
+    
+    integer, intent(in):: npoints_x_sampl
+    integer, intent(inout):: npoints_mom_sampl
+    integer, intent(in):: samplemode
+    real(wp), intent(in):: X_dvr(:)
+    real(wp), intent(in):: c_i(:)
+    real(wp), intent(out), allocatable:: x_mom_sampl(:,:)
+    
+    real(wp), allocatable:: x_sampl(:)
+    real(wp), allocatable:: mom_sampl(:)
+    integer:: npoints_x_mom_sampl
+    integer:: i, ifile
+    
+    if(samplemode .eq. 1) then
+      npoints_x_mom_sampl = npoints_x_sampl * npoints_mom_sampl
+    else if(samplemode .eq. 2) then
+      npoints_x_mom_sampl = npoints_x_sampl !* 2 !npoints_x_sampl * npoints_mom_sampl
+      npoints_mom_sampl =  npoints_x_sampl
+    else
+      write(6,*) "samplemode muste be either 1 or 2!"
+     stop
+   end if
+   
+   allocate(x_sampl(npoints_x_sampl))
+   allocate(mom_sampl(npoints_mom_sampl))
+   allocate(x_mom_sampl(npoints_x_mom_sampl, 2))
+   
+   if(samplemode .eq. 1) then  
+     call sample_x_mom(X_dvr, c_i(:), x_sampl, mom_sampl, x_mom_sampl, 1)
+   else if(samplemode .eq. 2) then  
+     call sample_x_mom(X_dvr, c_i(:), x_sampl, mom_sampl, x_mom_sampl, 2)
+   end if
+   
+   write(6,*) "Sampling done"
+   
+   !check
+   ifile = get_free_handle()
+   open(ifile, file="sampled_points.txt", action='write')
+   do i=1,npoints_x_sampl
+     write(ifile,*) x_sampl(i)
+   end do
+   close(ifile)
+   
+   ifile = get_free_handle()
+   open(ifile, file="x_mom_sampl.txt", action='write')
+   do i=1,npoints_x_mom_sampl
+     write(22,*) x_mom_sampl(i,1), x_mom_sampl(i,2)
+   end do
+   close(ifile)
+   
+ end subroutine sample_x_mom_modes
+
+
   subroutine verlet_trajectory(x_in, v_in, V_x, V_y, dt, my_SI, x_out)
     use m_precision, only: wp
     !use m_constants, only: const
@@ -495,64 +554,47 @@ contains
   end subroutine compute_SCKH
 
   ! same as above, but use FFTW to make things more standard  
-  subroutine compute_SCKH_FFTW(E_n, E_f, E_fn_mean, D_fn, time, sigma_m, gamma)
+  subroutine compute_F_fi_omp_m(E_n, E_f, E_fn_mean, D_fn, time, F_fi_omp_m, gamma)
     use m_precision, only: wp
     use m_constants, only: const
     use m_fftw3, only: fft_c2c_1d_forward
     use m_fftw3, only: reorder_sigma_fftw_z
-    use m_fftw3, only: get_omega_reordered_fftw
     
-    ! passed variables
     real(kind=wp), dimension(:), intent(in):: E_n,time
     real(kind=wp), dimension(:,:), intent(in):: E_f
     real(kind=wp),dimension(:,:,:),intent(in):: D_fn 
-    complex(kind=wp), dimension(:,:,:),intent(out) ::  sigma_m
+    complex(kind=wp), dimension(:,:,:),intent(out) ::  F_fi_omp_m
     real(kind=wp), intent(in):: E_fn_mean, gamma
-    ! local variables
-    integer:: ntsteps, ntsteps_pad, nfinal
+
+    integer:: ntsteps, nfinal
     complex(kind=wp), dimension(:),allocatable:: funct
     complex(kind=wp), dimension(:,:),allocatable::  e_factor1
-    real(kind=wp), dimension(:,:),allocatable:: int_W_I
-    real(kind=wp),dimension(:),allocatable::  omega_out 
-    real(kind=wp):: delta_t
-    integer:: i,k,m 
+    integer:: f_e, m 
 
     ntsteps = size(time) 
     nfinal = size(E_f,1) 
-    ntsteps_pad = size(sigma_m,2) 
     
-    allocate(funct(ntsteps), int_W_I(nfinal, ntsteps), &
-         e_factor1(nfinal,ntsteps), omega_out(ntsteps_pad) )
+    allocate(funct(ntsteps), &
+         e_factor1(nfinal,ntsteps))
    
-    delta_t = time(2)-time(1)
-        
-    int_W_I(:,1) = E_f(:,1) - E_n(1)  - E_fn_mean  
-    
-    do i = 2, ntsteps
-       int_W_I(:,i) = int_W_I(:,i-1) + ( E_f(:,i) - E_n(i)) - E_fn_mean  
+    do f_e = 1,nfinal 
+      call compute_efactor(E_f(f_e,:), E_n, E_fn_mean, time, e_factor1(f_e,:), .true.)
     end do
-    int_W_I =  int_W_I * delta_t
+  
+    F_fi_omp_m = 0.0_wp
     
-    do i = 1,nfinal 
-       e_factor1(i,:) = exp(dcmplx(0, -(const % eV  / const % hbar) *int_W_I(i,:)  ))
-    end do
-    
-    sigma_m = 0.0_wp
-    
-    do k =1,nfinal! final state 
+    do f_e =1,nfinal! final state 
       do m=1,3 ! polarization     
         
-        funct = D_fn(k,:,m) * e_factor1(k,:) * exp(-gamma * const % eV * time(:) / const % hbar)
+        funct = D_fn(f_e,:,m) * e_factor1(f_e,:) * exp(-gamma * const % eV * time(:) / const % hbar)
         
-        call fft_c2c_1d_forward(funct, sigma_m(k,:,m))
-        call reorder_sigma_fftw_z(sigma_m(k,:,m))
+        call fft_c2c_1d_forward(funct, F_fi_omp_m(f_e,:,m))
+        call reorder_sigma_fftw_z(F_fi_omp_m(f_e,:,m))
 
       end do ! m
-    end do ! k
-      
-    call get_omega_reordered_fftw(time(ntsteps)-time(1), omega_out)
+    end do ! f_e
     
-  end subroutine compute_SCKH_FFTW
+  end subroutine compute_F_fi_omp_m
 
   
 !  subroutine compute_SCKH_one(E_n, E_f, E_fn_mean, D_fn, time, sigma_m, gamma)
@@ -1039,6 +1081,43 @@ subroutine ODE_solver(A_matrix,times,nstates,ntsteps)
 end subroutine ODE_solver
 
 
-  
+  subroutine compute_efactor(E_f, E_n, E_fn_mean, time, efactor, negative)
+    use m_precision,only:wp     
+    use m_constants, only: const
+    
+    real(kind=wp), intent(in):: E_f(:), E_n(:), time(:), E_fn_mean
+    complex(kind=wp), intent(out):: efactor(:)
+    logical:: negative
+    
+    real(kind=wp):: delta_t, factor
+    real(kind=wp), allocatable:: int_W_I(:)
+    integer:: i, ntsteps
+    
+    ntsteps = size(time,1)
+    
+    allocate(int_W_I(ntsteps) )
+    
+    if (negative) then
+      factor = -1.0_wp
+    else
+      factor = 1.0_wp
+    end if
+    
+    delta_t = time(2)-time(1)
+    
+    int_W_I(1) = E_f(1) - E_n(1)  - E_fn_mean  
+    do i = 2, ntsteps
+      int_W_I(i) = int_W_I(i-1) + ( E_f(i) - E_n(i) ) - E_fn_mean  
+    end do
+    int_W_I =  int_W_I * delta_t
+    efactor = exp(dcmplx(0, factor * (const % eV  / const % hbar) *int_W_I ))    
+    
+    deallocate(int_W_I)
+    
+  end subroutine compute_efactor
+
+
+
+
 end module m_SCKH_utils
 
