@@ -1,0 +1,33 @@
+To install the SCKH codes CMake, BLAS, LAPACK, FFTW are required.
+
+To build, create a build directory, cd to it and type
+
+> cmake path_to_source
+
+where path_to_source is the path to the src directory. Now cmake tries to set up your system, if it doesn't work,
+you can pass arguments, most commonly CMAKE_Fortran_COMPILER, LAPACK_LIB, FFTW_LIB by typing
+
+> cmake -Doption=something path_to_source
+
+Another option is to add an architecture option in CMakeLists.txt in src. Be sure not to break anything though.
+When cmake has succesfully set up you can type
+
+> make
+
+or, if you only want to build a specific excecutable, for example sckh_main,
+
+> make sckh_main
+
+To run the tests, copy the whole sckh/test/testsuite folder to a temporary folder, and cd to it. Then type
+
+> SCKH_PATH=path_to_buld; python run_tests.py
+
+path_to build is the path to the build directory.
+
+
+
+
+
+
+
+
