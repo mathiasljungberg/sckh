@@ -37,9 +37,9 @@ contains
     real(kind=wp),allocatable:: sigma_f(:,:)
     real(kind=wp),dimension(:),allocatable:: x_sampl, mom_sampl, x_new, omega
     real(kind=wp),dimension(:,:),allocatable:: sigma_proj, c_i, x_mom_sampl
-    real(kind=wp):: gamma, time_l, delta_t, norm, E_fn_mean, mu_SI, dx
+    real(kind=wp):: gamma, time_l, delta_t, norm, E_nf_mean, mu_SI, dx
     integer:: n_omega, npoints_x_sampl, npoints_mom_sampl, npoints_x_mom_sampl
-    complex(kind=wp), dimension(:,:,:),allocatable::  F_fi_omp_m
+    complex(kind=wp), dimension(:,:,:),allocatable::  F_if_omp_m
     real(kind=wp),dimension(:),allocatable:: eig_i, E_i_inp, E_lp_corr, shift 
     type(hist), dimension(:), allocatable:: time_h
     type(hist):: time_h_0, time_h_0_mom
@@ -165,7 +165,7 @@ contains
     write(6,*) "max freq",  const % pi * const % hbar /( delta_t  * const % eV), "eV"
 
     n_omega = ntsteps
-    allocate(F_fi_omp_m(nfinal,n_omega,3), sigma_f(nfinal,n_omega), sigma_tot(n_omega), &
+    allocate(F_if_omp_m(nfinal,n_omega,3), sigma_f(nfinal,n_omega), sigma_tot(n_omega), &
          sigma_proj(p % nproj,n_omega), sigma_mm(nfinal,n_omega,3,3), omega(n_omega))
 
     !
@@ -184,80 +184,86 @@ contains
 
     sigma_mm=0.0_wp
 
+    !
+    !
+    !
+    
     do traj=1, npoints_x_mom_sampl
 
-      ! Compute trajectory
-      !call hist_add(time_h_0, x_mom_sampl(traj,1), 1.0d0)   
-      !call hist_add(time_h_0_mom, x_mom_sampl(traj,2), 1.0d0)    
-
-      call verlet_trajectory(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, X_r, &
-           E_dyn_inp * const % eV, delta_t, mu_SI, x_new )
-
-      !do i=1, ntsteps
-      !  call hist_add(time_h(i), x_new(i), 1.0d0)
-      !end do
-
-      ! look up energies as a function of distance (which in turn is a function of time)
-      call spline_easy(X_r, E_n_inp, npoints_in, x_new, E_n, ntsteps)
+      call verlet_trajectory_xva(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, X_r, &
+           E_dyn_inp * const % eV, delta_t, mu_SI, x_new, v_new, a_new )
       
+      call spline_easy(X_r, E_n_inp, npoints_in, x_new, E_n, ntsteps)
       do i=1,nfinal
         call spline_easy(X_r, E_f_inp(i,:), npoints_in, x_new, E_f(i,:), ntsteps)  
       end do
-            
-      ! here, compute efactor
 
-
-      do traj2=1, ntsteps 
+      ! here, compute efactor for E_fi
+      do f_e = 1,nfinal 
+        call compute_efactor(E_f(f_e,:), E_i, E_fi_mean, time, e_factor1(f_e,:), .true.)
+      end do
+      
+      do traj2 =1, ntsteps2 
+        traj_pos = (traj2-1) * traj_stride +1
         
-
-        call verlet_trajectory(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, X_r, &
-             E_dyn_inp * const % eV, delta_t, mu_SI, x_new )
+        call verlet_trajectory_xva(x_new(traj_pos), v_new(traj_pos), X_r, &
+             E_dyn2_inp * const % eV, delta_t, mu_SI, x_new2, v_new2, a_new2 )
         
-        ! look up energies as a function of distance (which in turn is a function of time)
-        call spline_easy(X_r, E_n_inp, npoints_in, x_new, E_n, ntsteps)
+        call spline_easy(X_r, E_n_inp, npoints_in, x_new2, E_n, ntsteps)
 
         do i=1,nfinal
-          call spline_easy(X_r, E_f_inp(i,:), npoints_in, x_new, E_f(i,:), ntsteps)  
+          call spline_easy(X_r, E_f_inp(i,:), npoints_in, x_new2, E_f(i,:), ntsteps)  
         end do
         
         do i=1,nfinal
           do m=1,3
-            call spline_easy(X_r, D_fn_inp(i,:,m) , npoints_in, x_new, D_fn(i,:,m) , ntsteps)  
+            call spline_easy(X_r, D_fn_inp(i,:,m) , npoints_in, x_new2, D_fn(i,:,m) , ntsteps)  
           end do
         end do
         
-
         ! first time, compute the mean transition energy, and frequency
         if (traj .eq. 1) then
           ind = minloc(E_i_inp)
-          E_fn_mean =  E_f(nfinal,ind(1)) - E_n(ind(1))
-          write(6,*) "E_fn_mean", E_fn_mean
+          E_nf_mean =  E_n(ninter, ind(1)) - E_f(nfinal,ind(1))
+          write(6,*) "E_nf_mean", E_nf_mean
           
           call get_omega_reordered_fftw(time_l * const % eV /  const % hbar, omega)
-          omega = omega - E_fn_mean
+          omega = omega + E_nf_mean
         end if
         
-        call compute_SCKH_res_FFTW(E_n, E_f, E_fn_mean, D_fn, time,  F_fi_omp_t, gamma)
+        call compute_F_if_omp_many_n(E_n(:,:), E_f(:,:), E_nf_mean, D_fn(:,:,:,:), D_ni(:, traj_pos, :), time,  F_if_omp_t(:,:,traj2,:,:), gamma)
+        
+      end do ! do traj2 =1, ntsteps2
 
-        
-        ! compute full tensor
-        do m1=1,3
-          do m2=1,3
-            sigma_mm(:,:,m1,m2) = sigma_mm(:,:,m1,m2) + real( conjg(F_fi_omp_m(:,:,m1)) * F_fi_omp_m(:,:,m2))
-          end do
-        end do
-        
-      end do ! end traj
+
+      call compute_F_if_omp_om(F_if_omp_t, e_factor1, F_if_omp_om)
+      ! should contain the things below
       
-      ! compute other sigmas
-      sigma_f(:,:) = 0.0_wp
-      do m1=1,3
-        sigma_f(:,:) = sigma_f(:,:) + sigma_mm(:,:,m1,m1)
-      end do
+!      !fourier transform F_if_omp_t
+!      do f_e= 1, nfinal
+!        do om_out= 1, n_omega_out
+!          do m1 =1, 3
+!            do m2 =1, 3
+!               call fft_c2c_1d_backward( e_factor1(f_e,:) * F_if_omp_t(f_e, om_out, :,m1,m2), &
+!                                         F_if_omp_om(f_e, om_out, :,m1,m2))
+!              call reorder_sigma_fftw_z(F_if_omp_om(f_e,om_out, :, m1,m2))
+!          end do
+!        end do
+!      end do
+
+      ! here collect spectrum parts 
       
-      sigma_tot = sum(sigma_f(:,:),1)
-      
-      sigma_proj =0.0_wp
+    end do ! end traj
+    
+    ! compute other sigmas
+    sigma_f(:,:) = 0.0_wp
+    do m1=1,3
+      sigma_f(:,:) = sigma_f(:,:) + sigma_mm(:,:,m1,m1)
+    end do
+    
+    sigma_tot = sum(sigma_f(:,:),1)
+    
+    sigma_proj =0.0_wp
       do i=1,p % nproj
         do m1=1,3
           do m2=1,3

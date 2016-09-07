@@ -6,7 +6,7 @@ contains
   subroutine  calculate_SCKH(p)
     use m_precision, only: wp
     use m_constants, only: const
-    use m_SCKH_utils, only: compute_F_fi_omp_m
+    use m_SCKH_utils, only: compute_F_if_omp
     use m_fftw3, only: get_omega_reordered_fftw
     use m_sckh_params_t, only: sckh_params_t
     use m_io, only: get_free_handle
@@ -29,10 +29,10 @@ contains
     character(80)::  string, file
     real(kind=wp),dimension(:),allocatable:: sigma_tot, time_inp, freq, funct_real, funct_imag
     real(kind=wp),dimension(:,:),allocatable:: sigma_f, sigma_proj
-    real(kind=wp):: gamma,  time_l, E, delta_t, time_l2, norm, E_fn_mean, D_proj
+    real(kind=wp):: gamma,  time_l, E, delta_t, time_l2, norm, E_nf_mean, D_proj
     integer:: ntrans
     integer, dimension(:), allocatable:: freq_ind
-    complex(kind=wp), dimension(:,:,:),allocatable::  F_fi_omp_m
+    complex(kind=wp), allocatable::  F_if_omp(:,:,:,:)
     real(kind=wp),allocatable:: sigma_mm(:,:,:,:)
     real(kind=wp),dimension(:),allocatable:: E_IP1s, E_gs_inp 
     real(kind=wp),dimension(:),allocatable:: omega
@@ -68,7 +68,6 @@ contains
 
     close(ifile)
 
-    ! allocate everything (changed dimension of E_n_inp etc) 
     allocate(time_inp(ntsteps_inp),time_inp2(ntsteps_inp), E_gs_inp(ntsteps_inp),E_n_inp(ntsteps_inp), &
          E_f_inp(nfinal,ntsteps_inp), D_fn_inp(nfinal,ntsteps_inp,3), time(ntsteps),&
          E_n(ntsteps), E_f(nfinal,ntsteps), D_fn(nfinal,ntsteps,3),&
@@ -90,7 +89,6 @@ contains
     delta_t = time(2)-time(1)
     time_l2 = (ntsteps-1) * delta_t 
 
-    ! some output
     write(6,*) "gamma_FWHM (fwhm of lorentzian broadening)", p % gamma_FWHM
     write(6,*) "gamma (hwhm of lorentzian broadening)", gamma
     write(6,*) "ntsteps", ntsteps
@@ -102,7 +100,7 @@ contains
     write(6,*) "max freq",  const % pi * const % hbar /( delta_t  * const % eV)
 
     n_omega = ntsteps !_pad 
-    allocate(F_fi_omp_m(nfinal,n_omega,3), sigma_f(nfinal,n_omega), sigma_tot(n_omega), &
+    allocate(F_if_omp(nfinal,n_omega,3,3), sigma_f(nfinal,n_omega), sigma_tot(n_omega), &
          sigma_proj(p % nproj,n_omega), sigma_mm(nfinal,n_omega,3,3), omega(n_omega))
 
     !
@@ -144,22 +142,17 @@ contains
 
       ! first time, compute the mean transition energy
       if (traj .eq. 1) then
-        E_fn_mean = sum(E_f(nfinal,:) - E_n(:)) / max(1,size(E_n(:))) 
+        E_nf_mean = sum(E_n(:)-  E_f(nfinal,:)) / max(1,size(E_n(:))) 
 
         call get_omega_reordered_fftw(time_l2 * const % eV /  const % hbar, omega)
-        omega = omega - E_fn_mean
+        omega =  omega + E_nf_mean !E_nf_mean - omega !omega - E_nf_mean
 
       end if
 
-      call compute_F_fi_omp_m(E_n, E_f, E_fn_mean, D_fn, time,  F_fi_omp_m, gamma)
+      call compute_F_if_omp(E_n, E_f, E_nf_mean, D_fn, D_ni, time,  F_if_omp, gamma)
 
-      ! compute full tensor
-      do m1=1,3
-        do m2=1,3
-          sigma_mm(:,:,m1,m2) = sigma_mm(:,:,m1,m2) + real( conjg(F_fi_omp_m(:,:,m1)) * F_fi_omp_m(:,:,m2))
-        end do
-      end do
-
+      sigma_mm = sigma_mm + abs(F_if_omp)**2
+      
       write(6,*) "Computed trajectory", traj
 
     end do !end traj

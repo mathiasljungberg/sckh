@@ -8,8 +8,7 @@ contains
     use m_precision, only: wp
     use m_constants, only: const
     use m_SCKH_utils, only: sample_x_mom_modes
-    !use m_SCKH_utils, only: compute_SCKH
-    use m_SCKH_utils, only: compute_F_fi_omp_m 
+    use m_SCKH_utils, only: compute_F_if_omp
     use m_SCKH_utils, only: verlet_trajectory
     use m_sckh_params_t, only: sckh_params_t 
     use hist_class, only: hist, hist_init, hist_add
@@ -38,9 +37,9 @@ contains
     real(kind=wp),allocatable:: sigma_f(:,:)
     real(kind=wp),dimension(:),allocatable:: x_sampl, mom_sampl, x_new, omega
     real(kind=wp),dimension(:,:),allocatable:: sigma_proj, c_i, x_mom_sampl
-    real(kind=wp):: gamma, time_l, delta_t, norm, E_fn_mean, mu_SI, dx
+    real(kind=wp):: gamma, time_l, delta_t, norm, E_nf_mean, mu_SI, dx
     integer:: n_omega, npoints_x_sampl, npoints_mom_sampl, npoints_x_mom_sampl
-    complex(kind=wp), dimension(:,:,:),allocatable::  F_fi_omp_m
+    complex(kind=wp), allocatable::  F_if_omp(:,:,:,:)
     real(kind=wp),dimension(:),allocatable:: eig_i, E_i_inp, E_lp_corr, shift 
     type(hist), dimension(:), allocatable:: time_h
     type(hist):: time_h_0, time_h_0_mom
@@ -52,7 +51,8 @@ contains
     integer:: npoints, ii
     real(8):: dnrm2
     integer::i,j,m,m1,m2, traj
-
+    real(kind=wp),dimension(:),allocatable:: D_ni(:)
+    
     ! set some local variables
     ntsteps = p % ntsteps
     npoints_x_sampl = p % npoints_x_sampl
@@ -87,7 +87,10 @@ contains
          x_new(ntsteps),&
          time_h(ntsteps))
     allocate(X_r(npoints_in))
+    allocate(D_ni(3))
 
+    D_ni = 1.0_wp
+    
     ! set up grid points
     do i = 1, npoints_in
       X_r(i) = (i-1)*dx + dvr_start
@@ -154,7 +157,6 @@ contains
 
     delta_t = delta_t * 1.d-15 ! femtoseconds
     time_l = (ntsteps-1) * delta_t
-    !time_l2 = (ntsteps-1) * delta_t 
 
     write(6,*) "outfile", p % outfile
     write(6,*) "gamma (hwhm of lorentzian broadening)", gamma
@@ -166,7 +168,7 @@ contains
     write(6,*) "max freq",  const % pi * const % hbar /( delta_t  * const % eV), "eV"
 
     n_omega = ntsteps
-    allocate(F_fi_omp_m(nfinal,n_omega,3), sigma_f(nfinal,n_omega), sigma_tot(n_omega), &
+    allocate(F_if_omp(nfinal,n_omega,3,3), sigma_f(nfinal,n_omega), sigma_tot(n_omega), &
          sigma_proj(p % nproj,n_omega), sigma_mm(nfinal,n_omega,3,3), omega(n_omega))
 
     !
@@ -187,7 +189,6 @@ contains
 
     do traj=1, npoints_x_mom_sampl
 
-      ! Compute trajectory
       call hist_add(time_h_0, x_mom_sampl(traj,1), 1.0d0)   
       call hist_add(time_h_0_mom, x_mom_sampl(traj,2), 1.0d0)    
 
@@ -213,24 +214,16 @@ contains
       ! first time, compute the mean transition energy, and frequency
       if (traj .eq. 1) then
         ind = minloc(E_i_inp)
-        E_fn_mean =  E_f(nfinal,ind(1)) - E_n(ind(1))
-        write(6,*) "E_fn_mean", E_fn_mean
+        E_nf_mean =  E_n(ind(1)) -E_f(nfinal,ind(1)) 
+        write(6,*) "E_nf_mean", E_nf_mean
 
         call get_omega_reordered_fftw(time_l * const % eV /  const % hbar, omega)
-        omega = omega - E_fn_mean
+        omega = omega + E_nf_mean
       end if
       
-      call compute_F_fi_omp_m(E_n, E_f, E_fn_mean, D_fn, time,  F_fi_omp_m, gamma)
-      
-      ! static spectrum
-      ! call compute_XES_spectrum_novib(E_n(1), E_f(:,1), E_fn_mean, D_fn(1), F_fi_omp_m_static, gamma)
+      call compute_F_if_omp(E_n, E_f, E_nf_mean, D_fn, D_ni, time,  F_if_omp, gamma)
 
-      ! compute full tensor
-      do m1=1,3
-        do m2=1,3
-          sigma_mm(:,:,m1,m2) = sigma_mm(:,:,m1,m2) + real( conjg(F_fi_omp_m(:,:,m1)) * F_fi_omp_m(:,:,m2))
-        end do
-      end do
+      sigma_mm = sigma_mm + abs(F_if_omp)**2
       
     end do ! end traj
     
