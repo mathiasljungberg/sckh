@@ -90,6 +90,7 @@ m_fftw3.F90
 m_wave_packet_dynamics.F90
 m_XAS_eigenstates.F90
 m_XAS_functions.F90
+m_SCKH_resonant_PES.F90
 )
 
 SET(ALL_MODULES_F 

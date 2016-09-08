@@ -20,9 +20,9 @@ dvr_start_in 0.5
 dx_in 0.025 
 
 ! frequencies
-omega_start 517
-omega_end  528
-n_omega 100
+omega_out_start 517
+omega_out_end  528
+n_omega_out 100
 gamma_FWHM 0.18
 
 

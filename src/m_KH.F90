@@ -12,7 +12,8 @@ contains
     use m_splines, only: linspace
     use m_PES_io, only: read_PES_file
     use m_PES_io, only: read_dipole_file
-    use m_PES_io, only: read_nac_file
+    !use m_PES_io, only: read_nac_file
+    use m_PES_io, only: read_file_list
     use m_sckh_params_t, only: sckh_params_t 
     use m_KH_utils, only: calculate_dipoles_KH_nonres
     use m_KH_utils, only: spectrum_XES
@@ -27,7 +28,7 @@ contains
     character(80):: file,string
     real(kind=wp):: mu_SI, dx,dvr_start, gamma, E_n_mean 
     real(kind=wp), dimension(:),allocatable:: X_r,E_i, E_n, E_lp_corr, eig_i, eig_n, shift
-    real(kind=wp), dimension(:),allocatable::  sigma, omega
+    real(kind=wp), dimension(:),allocatable::  sigma, omega_out
     real(kind=wp), dimension(:,:),allocatable::  c_i, c_n, &
          eig_f, E_f, sigma_states, D_ni
     real(kind=wp), dimension(:,:,:),allocatable:: c_f, dipole, D_fi
@@ -46,12 +47,12 @@ contains
     allocate( X_r(p % nstates), E_i(p % nstates), E_n(p % nstates), E_lp_corr(p % nstates), &
          E_f(p % npesfile_f,p % nstates), eig_i(p % nstates),eig_n(p % nstates),eig_f(p % npesfile_f,p % nstates), &
          shift(p % nstates))
-    allocate( omega(p % n_omega), sigma(p % n_omega), D_ni(p % nstates, 3) )
+    allocate( omega_out(p % n_omega_out), sigma(p % n_omega_out), D_ni(p % nstates, 3) )
     allocate(c_i(p % nstates,p % nstates),c_f(p % npesfile_f,p % nstates,p % nstates),c_n(p % nstates,p % nstates), &
          D_fn(p % npesfile_f,p % nstates,p % nstates,3))
-    allocate(dipole(p % npesfile_f, p % nstates, 3), sigma_states(p % npesfile_f,p % n_omega))
+    allocate(dipole(p % npesfile_f, p % nstates, 3), sigma_states(p % npesfile_f,p % n_omega_out))
     allocate(D_fi(p % npesfile_f,p % nstates,3) )
-    allocate(sigma_final(p % npesfile_f,p % n_omega,3,3))
+    allocate(sigma_final(p % npesfile_f,p % n_omega_out,3,3))
 
     if (p % nonadiabatic .eq. 1) then
       allocate(nac(p % npesfile_f, p % npesfile_f, p % nstates, 2) )
@@ -75,42 +76,19 @@ contains
     call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_r, E_i)
     call read_PES_file(p % pes_file_n, p % npoints_in, p % nstates, X_r, E_n)
 
-    ! final state pes_files and dipole_files
-    ifile = get_free_handle()
-    open(ifile, file= p % pes_file_list_f, action='read')
-
-    allocate(p % pes_files_f(p % npesfile_f))
-    do i=1, p % npesfile_f
-      read(ifile,*) p % pes_files_f(i)
-      write(6,*) p % pes_files_f(i)
-    end do
-
-    close(ifile)
-
-    ifile = get_free_handle()
-    open(ifile, file= p % dipole_file_list_f, action='read')
-
-    write(6,*) "p % dipole_file_list_f", p % dipole_file_list_f
-    allocate(p % dipolefile_f(p % npesfile_f))
-    do i=1, p % npesfile_f
-      read(ifile,*) p % dipolefile_f(i)
-    end do
-
-    close(ifile)
+    ! read list of final state pes_files and dipole_files
+    call read_file_list(p % pes_file_list_f, p % npesfile_f, p % pes_files_f)
+    call read_file_list(p % dipole_file_list_f, p % npesfile_f, p % dipolefile_f)
 
     do j=1,p % npesfile_f
-      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % nstates, X_r, E_f(j,:))
+      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % npoints_in, X_r, E_f(j,:))
       call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_r, dipole(j,:,:))
     end do
-
-    !  if (p % nonadiabatic .eq. 1) then
-    !     call read_nac_file(p % nac_file, p % npoints_in, p %nstates, X_r, p % npesfile_f, nac)
-    !  end if
 
     ! Shift orbital energies so that E_f(1,:) have energies E_lp_corr
     ! and the spacing between the intermediate and final states are preserved
     if( p % shift_PES .eq.  1) then
-      call read_PES_file(p % pes_file_lp_corr, p % npoints_in, p % nstates, X_r, E_lp_corr)
+      call read_PES_file(p % pes_file_lp_corr, p % npoints_in, p % npoints_in, X_r, E_lp_corr)
 
       shift = E_lp_corr -E_f(1,:) 
 
@@ -120,13 +98,12 @@ contains
       write(6,*) "Shifted PES:s"
     end if
 
-    !create omega
-    call linspace(omega, p % omega_start,p % omega_end, p % n_omega ) 
+    !create omega_out
+    call linspace(omega_out, p % omega_out_start,p % omega_out_end, p % n_omega_out ) 
 
     !
     ! Solve the vibrational problem for all eigenfunctions
     !
-
 
     ! initial state
     call solve_vib_problem(dx, E_i, eig_i, c_i, mu_SI, p % vib_solver)
@@ -166,14 +143,14 @@ contains
     !
 
     if (p % nonadiabatic .eq. 1) then
-      !call spectrum_XES_nonadiabatic(eig_na, eig_n, c_na, D_ni, D_fn, D_fi, omega, sigma, sigma_states)
+      !call spectrum_XES_nonadiabatic(eig_na, eig_n, c_na, D_ni, D_fn, D_fi, omega_out, sigma, sigma_states)
       stop
     else
-      !call spectrum_XES(eig_f, eig_n, D_ni, D_fn, D_fi, omega, sigma, sigma_states, gamma)
+      !call spectrum_XES(eig_f, eig_n, D_ni, D_fn, D_fi, omega_out, sigma, sigma_states, gamma)
 
       do j=1,p % npesfile_f    
         call compute_XES_nonres(eig_i(1), eig_n, eig_f(j,:), D_ni(:,:), D_fn(j,:,:,:), &
-             omega, gamma, sigma_final(j,:,:,:))
+             omega_out, gamma, sigma_final(j,:,:,:))
       end do
 
       sigma_states(:,:) = 0.0_wp
@@ -183,7 +160,7 @@ contains
 
       sigma = sum(sigma_states,1)
 
-      norm = sum(sigma) *(omega(2)-omega(1))
+      norm = sum(sigma) *(omega_out(2)-omega_out(1))
       sigma = sigma / norm
       sigma_states = sigma_states / norm
 
@@ -199,8 +176,8 @@ contains
 
     open(10,file=file,status='unknown')
 
-    do i=1,p % n_omega
-      write(10,*) omega(i), sigma(i)
+    do i=1,p % n_omega_out
+      write(10,*) omega_out(i), sigma(i)
     end do
 
     close(10) 
@@ -216,8 +193,8 @@ contains
     !
     !open(10,file=file,status='unknown')
     !
-    !do i=1,p % n_omega
-    !   write(10,*) omega(i), sigma_dir(i)
+    !do i=1,p % n_omega_out
+    !   write(10,*) omega_out(i), sigma_dir(i)
     !end do
     !
     !close(10)
@@ -228,8 +205,8 @@ contains
     !
     !open(10,file=file,status='unknown')
     !
-    !do i=1,p % n_omega
-    !   write(10,*) omega(i), sigma_max_int(i)
+    !do i=1,p % n_omega_out
+    !   write(10,*) omega_out(i), sigma_max_int(i)
     !end do
     !
     !close(10)
@@ -242,8 +219,8 @@ contains
     !
     !   open(10,file=file,status='unknown')
     !
-    !   do i=1,p % n_omega
-    !      write(10,*) omega(i), sigma_states(j,i)
+    !   do i=1,p % n_omega_out
+    !      write(10,*) omega_out(i), sigma_states(j,i)
     !   end do
     !
     !   close(10)
@@ -257,8 +234,8 @@ contains
     !
     !   open(10,file=file,status='unknown')
     !
-    !   do i=1,p % n_omega
-    !      write(10,*) omega(i), sigma_dir_states(j,i)
+    !   do i=1,p % n_omega_out
+    !      write(10,*) omega_out(i), sigma_dir_states(j,i)
     !   end do
     !
     !   close(10)
@@ -272,8 +249,8 @@ contains
     !
     !   open(10,file=file,status='unknown')
     !
-    !   do i=1,p % n_omega
-    !      write(10,*) omega(i), sigma_max_int_states(j,i)
+    !   do i=1,p % n_omega_out
+    !      write(10,*) omega_out(i), sigma_max_int_states(j,i)
     !   end do
     !
     !   close(10)
@@ -466,7 +443,8 @@ contains
     use m_splines, only: linspace
     use m_PES_io, only: read_PES_file
     use m_PES_io, only: read_dipole_file
-    use m_PES_io, only: read_nac_file
+    !use m_PES_io, only: read_nac_file
+    use m_PES_io, only: read_file_list
     use m_sckh_params_t, only: sckh_params_t 
     use m_KH_utils, only: calculate_dipoles_KH_res
     use m_KH_utils, only: compute_XES_res
@@ -480,7 +458,7 @@ contains
     character(80):: file,string
     real(kind=wp):: mu_SI, dx,dvr_start, gamma, gamma_instr, gamma_inc, E_n_mean 
     real(kind=wp), dimension(:),allocatable:: X_r,E_i, E_lp_corr, eig_i, shift
-    real(kind=wp), dimension(:),allocatable::  sigma, omega, omega_in
+    real(kind=wp), dimension(:),allocatable::  sigma, omega_out, omega_in
     real(kind=wp), dimension(:,:),allocatable::  c_i, &
          eig_f, E_f, sigma_states, E_n, eig_n
     real(kind=wp), dimension(:,:,:),allocatable:: c_n, c_f, dipole_f, dipole_n, D_fi, D_ni
@@ -506,22 +484,22 @@ contains
          E_f(p % npesfile_f,p % nstates), eig_i(p % nstates),eig_n(p % npesfile_n, p % nstates),&
          eig_f(p % npesfile_f,p % nstates), &
          shift(p % nstates))
-    allocate( omega(p % n_omega), sigma(p % n_omega), D_ni(p % npesfile_n, p % nstates, 3) )
+    allocate( omega_out(p % n_omega_out), sigma(p % n_omega_out), D_ni(p % npesfile_n, p % nstates, 3) )
     allocate( omega_in(p % n_omega_in))
     allocate(c_i(p % nstates,p % nstates),c_f(p % npesfile_f,p % nstates,p % nstates), &
          c_n(p % npesfile_n, p % nstates,p % nstates), &
          D_fn(p % npesfile_f,p % nstates,p % npesfile_n, p % nstates,3))
-    allocate(dipole_f(p % npesfile_f, p % nstates, 3), sigma_states(p % npesfile_f,p % n_omega))
+    allocate(dipole_f(p % npesfile_f, p % nstates, 3), sigma_states(p % npesfile_f,p % n_omega_out))
     allocate(dipole_n(p % npesfile_n, p % nstates, 3))
     allocate(D_fi(p % npesfile_f,p % nstates,3) )
-    write(6,*) "", p % npesfile_f, p % n_omega_in,  p % n_omega 
-    allocate(sigma_final(p % npesfile_f, p % n_omega_in, p % n_omega,3,3))
+    write(6,*) "", p % npesfile_f, p % n_omega_in,  p % n_omega_out 
+    allocate(sigma_final(p % npesfile_f, p % n_omega_in, p % n_omega_out,3,3))
     allocate(eig_n_cmp(p % npesfile_n * p % nstates))
     allocate(D_ni_cmp(p % npesfile_n * p % nstates, 3))
     allocate(D_fn_cmp(p % npesfile_f,p % nstates, p % npesfile_n * p % nstates, 3))
-    allocate(lambda_F(p % npesfile_f, p % n_omega_in, p % n_omega))
-    allocate(lambda_G(p % npesfile_f, p % n_omega_in, p % n_omega))
-    allocate(lambda_H(p % npesfile_f, p % n_omega_in, p % n_omega))
+    allocate(lambda_F(p % npesfile_f, p % n_omega_in, p % n_omega_out))
+    allocate(lambda_G(p % npesfile_f, p % n_omega_in, p % n_omega_out))
+    allocate(lambda_H(p % npesfile_f, p % n_omega_in, p % n_omega_out))
 
     if (p % nonadiabatic .eq. 1) then
     !  allocate(nac(p % npesfile_f, p % npesfile_f, p % nstates, 2) )
@@ -549,28 +527,9 @@ contains
     ! iniital state
     call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_r, E_i)
 
-    ! intermediate states
-    ifile = get_free_handle()
-    open(ifile, file= p % pes_file_list_n, action='read')
-
-    allocate(p % pes_files_n(p % npesfile_n))
-    do i=1, p % npesfile_n
-      read(ifile,*) p % pes_files_n(i)
-      write(6,*) p % pes_files_n(i)
-    end do
-    
-    close(ifile)
-
-    ifile = get_free_handle()
-    open(ifile, file= p % dipole_file_list_n, action='read')
-
-    write(6,*) "p % dipole_file_list_n  ", p % dipole_file_list_n
-    allocate(p % dipolefile_n(p % npesfile_n))
-    do i=1, p % npesfile_n
-      read(ifile,*) p % dipolefile_n(i)
-    end do
-
-    close(ifile)
+    ! read list of intermediate state pes_files and dipole_files
+    call read_file_list(p % pes_file_list_n, p % npesfile_n, p % pes_files_n)
+    call read_file_list(p % dipole_file_list_n, p % npesfile_n, p % dipolefile_n)
     
     do j=1,p % npesfile_n
       call read_PES_file(p % pes_files_n(j), p % npoints_in, &
@@ -578,31 +537,13 @@ contains
       call read_dipole_file(p % dipolefile_n(j), p % npoints_in, p % nstates, X_r, dipole_n(j,:,:))
     end do
 
-    ! final state pes_files and dipole_files
-    ifile = get_free_handle()
-    open(ifile, file= p % pes_file_list_f, action='read')
-
-    allocate(p % pes_files_f(p % npesfile_f))
-    do i=1, p % npesfile_f
-      read(ifile,*) p % pes_files_f(i)
-      write(6,*) p % pes_files_f(i)
-    end do
-
-    close(ifile)
-
-    ifile = get_free_handle()
-    open(ifile, file= p % dipole_file_list_f, action='read')
-
-    write(6,*) "p % dipole_file_list_f  ", p % dipole_file_list_f
-    allocate(p % dipolefile_f(p % npesfile_f))
-    do i=1, p % npesfile_f
-      read(ifile,*) p % dipolefile_f(i)
-    end do
-
-    close(ifile)
+    
+    ! read list of final state pes_files and dipole_files
+    call read_file_list(p % pes_file_list_f, p % npesfile_f, p % pes_files_f)
+    call read_file_list(p % dipole_file_list_f, p % npesfile_f, p % dipolefile_f)
 
     do j=1,p % npesfile_f
-      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % nstates, X_r, E_f(j,:))
+      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % npoints_in, X_r, E_f(j,:))
       call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_r, dipole_f(j,:,:))
     end do
 
@@ -624,7 +565,7 @@ contains
     end if
 
     call linspace(omega_in, p % omega_in_start,p % omega_in_end, p % n_omega_in )
-    call linspace(omega, p % omega_start,p % omega_end, p % n_omega ) 
+    call linspace(omega_out, p % omega_out_start,p % omega_out_end, p % n_omega_out ) 
 
     !
     ! Solve the vibrational problem for all eigenfunctions
@@ -677,7 +618,7 @@ contains
         do f_e = 1,p % npesfile_f
           call compute_XES_res(eig_i(1), eig_n_cmp(:), eig_f(f_e,:), &
                D_ni_cmp(:,:), D_fn_cmp(f_e,:,:,:), &
-               omega_in, omega, gamma, gamma_inc, gamma_instr, .true., .true., &
+               omega_in, omega_out, gamma, gamma_inc, gamma_instr, .true., .true., &
                sigma_final(f_e,:,:,:,:), &
                lambda_F(f_e,:,:), lambda_G(f_e,:,:), lambda_H(f_e,:,:))
         end do
@@ -688,7 +629,7 @@ contains
         do f_e = 1,p % npesfile_f
           call compute_XES_res_alt(eig_i(1), eig_n_cmp(:), eig_f(f_e,:), &
                D_ni_cmp(:,:), D_fn_cmp(f_e,:,:,:), &
-               omega_in, omega, gamma, gamma_inc, gamma_instr, .true., .true., &
+               omega_in, omega_out, gamma, gamma_inc, gamma_instr, .true., .true., &
                sigma_final(f_e,:,:,:,:), &
                lambda_F(f_e,:,:), lambda_G(f_e,:,:), lambda_H(f_e,:,:))
         end do
@@ -718,8 +659,8 @@ contains
         ifile = get_free_handle()
         open(ifile,file=file,status='unknown')
         
-        do i=1, p % n_omega 
-          write(ifile,'(4F18.10)') omega(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+        do i=1, p % n_omega_out 
+          write(ifile,'(4F18.10)') omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
         end do
 
         close(ifile) 
@@ -736,7 +677,8 @@ contains
     use m_splines, only: linspace
     use m_PES_io, only: read_PES_file
     use m_PES_io, only: read_dipole_file
-    use m_PES_io, only: read_nac_file
+    !use m_PES_io, only: read_nac_file
+    use m_PES_io, only: read_file_list
     use m_sckh_params_t, only: sckh_params_t 
     use m_KH_utils, only: calculate_dipoles_KH_res
     use m_KH_utils, only: compute_XES_res
@@ -749,7 +691,7 @@ contains
     character(80):: file,string
     real(kind=wp):: mu_SI, dx,dvr_start, gamma, gamma_instr, gamma_inc, E_n_mean 
     real(kind=wp), dimension(:),allocatable:: X_r,E_i, E_lp_corr, eig_i, shift
-    real(kind=wp), dimension(:),allocatable::  sigma, omega, omega_in
+    real(kind=wp), dimension(:),allocatable::  sigma, omega_out, omega_in
     real(kind=wp), dimension(:,:),allocatable::  c_i, &
          eig_f, E_f, sigma_states, E_n, eig_n
     real(kind=wp), dimension(:,:,:),allocatable:: c_n, c_f, dipole_f, dipole_n, D_fi, D_ni
@@ -777,24 +719,24 @@ contains
          E_f(p % npesfile_f,p % nstates), eig_i(nstates),eig_n(p % npesfile_n, nstates),&
          eig_f(p % npesfile_f,nstates), &
          shift(p % nstates))
-    allocate( omega(p % n_omega), sigma(p % n_omega), D_ni(p % npesfile_n, nstates, 3) )
+    allocate( omega_out(p % n_omega_out), sigma(p % n_omega_out), D_ni(p % npesfile_n, nstates, 3) )
     allocate( omega_in(p % n_omega_in))
     allocate(c_i(nstates,nstates),c_f(p % npesfile_f,nstates,nstates), &
          c_n(p % npesfile_n, nstates,nstates), &
          D_fn(p % npesfile_f,nstates,p % npesfile_n, nstates,3))
-    allocate(dipole_f(p % npesfile_f, p % nstates, 3), sigma_states(p % npesfile_f,p % n_omega))
+    allocate(dipole_f(p % npesfile_f, p % nstates, 3), sigma_states(p % npesfile_f,p % n_omega_out))
     allocate(dipole_n(p % npesfile_n, p % nstates, 3))
     allocate(D_fi(p % npesfile_f,nstates,3) )
 
-    write(6,*) "", p % npesfile_f, p % n_omega_in,  p % n_omega 
+    write(6,*) "", p % npesfile_f, p % n_omega_in,  p % n_omega_out 
 
-    allocate(sigma_final(p % npesfile_f, p % n_omega_in, p % n_omega,3,3))
+    allocate(sigma_final(p % npesfile_f, p % n_omega_in, p % n_omega_out,3,3))
     allocate(eig_n_cmp(p % npesfile_n * nstates))
     allocate(D_ni_cmp(p % npesfile_n * nstates, 3))
     allocate(D_fn_cmp(p % npesfile_f,nstates, p % npesfile_n * nstates, 3))
-    allocate(lambda_F(p % npesfile_f, p % n_omega_in, p % n_omega))
-    allocate(lambda_G(p % npesfile_f, p % n_omega_in, p % n_omega))
-    allocate(lambda_H(p % npesfile_f, p % n_omega_in, p % n_omega))
+    allocate(lambda_F(p % npesfile_f, p % n_omega_in, p % n_omega_out))
+    allocate(lambda_G(p % npesfile_f, p % n_omega_in, p % n_omega_out))
+    allocate(lambda_H(p % npesfile_f, p % n_omega_in, p % n_omega_out))
 
     mu_SI = p % mu * const % u
     dvr_start = p % dvr_start_in * 1.0d-10
@@ -811,29 +753,10 @@ contains
 
     ! iniital state
     call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_r, E_i)
-    
-    ! intermediate states
-    ifile = get_free_handle()
-    open(ifile, file= p % pes_file_list_n, action='read')
 
-    allocate(p % pes_files_n(p % npesfile_n))
-    do i=1, p % npesfile_n
-      read(ifile,*) p % pes_files_n(i)
-      write(6,*) p % pes_files_n(i)
-    end do
-    
-    close(ifile)
-
-    ifile = get_free_handle()
-    open(ifile, file= p % dipole_file_list_n, action='read')
-
-    write(6,*) "p % dipole_file_list_n  ", p % dipole_file_list_n
-    allocate(p % dipolefile_n(p % npesfile_n))
-    do i=1, p % npesfile_n
-      read(ifile,*) p % dipolefile_n(i)
-    end do
-
-    close(ifile)
+    ! read list of intermediate state pes_files and dipole_files
+    call read_file_list(p % pes_file_list_n, p % npesfile_n, p % pes_files_n)
+    call read_file_list(p % dipole_file_list_n, p % npesfile_n, p % dipolefile_n)
     
     do j=1,p % npesfile_n
       call read_PES_file(p % pes_files_n(j), p % npoints_in, &
@@ -841,33 +764,19 @@ contains
       call read_dipole_file(p % dipolefile_n(j), p % npoints_in, p % nstates, X_r, dipole_n(j,:,:))
     end do
 
-    ! final state pes_files and dipole_files
-    ifile = get_free_handle()
-    open(ifile, file= p % pes_file_list_f, action='read')
-
-    allocate(p % pes_files_f(p % npesfile_f))
-    do i=1, p % npesfile_f
-      read(ifile,*) p % pes_files_f(i)
-      write(6,*) p % pes_files_f(i)
-    end do
-
-    close(ifile)
-
-    ifile = get_free_handle()
-    open(ifile, file= p % dipole_file_list_f, action='read')
-
-    write(6,*) "p % dipole_file_list_f  ", p % dipole_file_list_f
-    allocate(p % dipolefile_f(p % npesfile_f))
-    do i=1, p % npesfile_f
-      read(ifile,*) p % dipolefile_f(i)
-    end do
-
-    close(ifile)
+    
+    ! read list of final state pes_files and dipole_files
+    call read_file_list(p % pes_file_list_f, p % npesfile_f, p % pes_files_f)
+    call read_file_list(p % dipole_file_list_f, p % npesfile_f, p % dipolefile_f)
 
     do j=1,p % npesfile_f
-      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % nstates, X_r, E_f(j,:))
+      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % npoints_in, X_r, E_f(j,:))
       call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_r, dipole_f(j,:,:))
     end do
+
+    !  if (p % nonadiabatic .eq. 1) then
+    !     call read_nac_file(p % nac_file, p % npoints_in, p %nstates, X_r, p % npesfile_f, nac)
+    !  end if
 
     ! Shift orbital energies so that E_f(1,:) have energies E_lp_corr
     ! and the spacing between the intermediate and final states are preserved
@@ -883,7 +792,7 @@ contains
     end if
 
     call linspace(omega_in, p % omega_in_start,p % omega_in_end, p % n_omega_in )
-    call linspace(omega, p % omega_start,p % omega_end, p % n_omega ) 
+    call linspace(omega_out, p % omega_out_start,p % omega_out_end, p % n_omega_out ) 
     
     !
     ! locate minimum of initial state PES and use only that point
@@ -934,7 +843,7 @@ contains
 
         do f_e = 1,p % npesfile_f
           call compute_XES_res(eig_i(1), eig_n_cmp(:), eig_f(f_e,:), D_ni_cmp(:,:), D_fn_cmp(f_e,:,:,:), &
-               omega_in, omega, gamma, gamma_inc, gamma_instr, .true., .true., &
+               omega_in, omega_out, gamma, gamma_inc, gamma_instr, .true., .true., &
                sigma_final(f_e,:,:,:,:), &
                lambda_F(f_e,:,:), lambda_G(f_e,:,:), lambda_H(f_e,:,:))
         end do
@@ -945,7 +854,7 @@ contains
         
         do f_e = 1,p % npesfile_f
           call compute_XES_res_alt(eig_i(1), eig_n_cmp(:), eig_f(f_e,:), D_ni_cmp(:,:), D_fn_cmp(f_e,:,:,:), &
-               omega_in, omega, gamma, gamma_inc, gamma_instr, .true., .true., &
+               omega_in, omega_out, gamma, gamma_inc, gamma_instr, .true., .true., &
                sigma_final(f_e,:,:,:,:), &
                lambda_F(f_e,:,:), lambda_G(f_e,:,:), lambda_H(f_e,:,:))
         end do
@@ -976,8 +885,8 @@ contains
         ifile = get_free_handle()
         open(ifile,file=file,status='unknown')
         
-        do i=1, p % n_omega 
-          write(ifile,'(4F18.10)') omega(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+        do i=1, p % n_omega_out 
+          write(ifile,'(4F18.10)') omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
         end do
         
         close(ifile) 

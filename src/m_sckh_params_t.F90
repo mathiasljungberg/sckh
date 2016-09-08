@@ -13,6 +13,7 @@ module m_sckh_params_t
      character(80):: pes_file_i
      character(80):: pes_file_n
      character(80):: pes_file_dyn
+     character(80):: pes_file_dyn2
      character(80):: pes_file_lp_corr
      character(80):: pes_file_ch_corr
 
@@ -46,9 +47,9 @@ module m_sckh_params_t
      real(wp):: omega_in_end
 
      ! omega_out
-     integer:: n_omega
-     real(wp):: omega_start
-     real(wp):: omega_end
+     integer:: n_omega_out
+     real(wp):: omega_out_start
+     real(wp):: omega_out_end
 
      integer:: npesfile_n
      integer:: npesfile_f 
@@ -72,6 +73,7 @@ module m_sckh_params_t
      integer:: ntsteps
      integer:: ntsteps2
      real(kind=wp):: delta_t
+     real(kind=wp):: delta_t2
      logical:: use_dynamics_file
      
      ! for SCKH
@@ -113,8 +115,10 @@ contains
     call init_parameter('pes_file_i',inp, "pes_file_i.txt", p % pes_file_i  ,iv)
     ! pes_file_n: PES file for the intermediate state, XES
     call init_parameter('pes_file_n',inp, "pes_file_n.txt", p % pes_file_n  ,iv)
-    ! pes_file_n: PES file for the dynamics, usually equal to pes_file_n, XES
+    ! pes_file_n: PES file for the dynamics, usually equal to pes_file_n, XES, or pes_file_i for RIXS
     call init_parameter('pes_file_dyn',inp, "pes_file_n.txt", p % pes_file_dyn  ,iv)
+    ! pes_file_n: PES file for the second dynamics in RIXS, usually equal to pes_file_n
+    call init_parameter('pes_file_dyn2',inp, "pes_file_n.txt", p % pes_file_dyn2  ,iv)
     ! pes_file_lp_corr: PES for first final state, computed more accurately
     call init_parameter('pes_file_lp_corr',inp, "pes_file_lp_corr.txt", p % pes_file_lp_corr ,iv)
     ! pes_file_ch_corr: PES for the core hole state, computed more accurately
@@ -155,12 +159,12 @@ contains
     call init_parameter('omega_in_end',inp, 100.0_wp, p % omega_in_end ,iv)
 
     
-    ! n_omega: number of emission frequencies
-    call init_parameter('n_omega',inp, 100, p % n_omega ,iv)
+    ! n_omega_out: number of emission frequencies
+    call init_parameter('n_omega_out',inp, 100, p % n_omega_out ,iv)
     ! omega_start: starting emission frequency [eV]
-    call init_parameter('omega_start',inp, 0.0_wp, p % omega_start ,iv)  
+    call init_parameter('omega_out_start',inp, 0.0_wp, p % omega_out_start ,iv)  
     ! omega_end: ending emission frequency [eV]
-    call init_parameter('omega_end',inp, 100.0_wp, p % omega_end ,iv)
+    call init_parameter('omega_out_end',inp, 100.0_wp, p % omega_out_end ,iv)
 
 
     ! npesfile_n: the number of intermediate state PES files
@@ -202,9 +206,12 @@ contains
 
     call init_parameter('delta_t',inp, 0.1_wp, p % delta_t,iv)
 
+    call init_parameter('delta_t2',inp, 0.1_wp, p % delta_t2,iv)
+
     call init_parameter('ntraj',inp, 1, p % ntraj, iv)
 
     call init_parameter('nfinal',inp, 1, p % nfinal, iv)
+
     call init_parameter('runmode_sckh',inp,'nonresonant',p%runmode_sckh,iv)
 
     ! projections

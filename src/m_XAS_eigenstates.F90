@@ -16,6 +16,7 @@ contains
     use m_splines, only: linspace
     use m_PES_io, only: read_PES_file
     use m_PES_io, only: read_dipole_file
+    use m_PES_io, only: read_file_list
     use m_io, only: get_free_handle
     use m_KH_functions, only: solve_vib_problem
     use m_upper, only : upper
@@ -83,28 +84,9 @@ contains
     ! read PES files
     call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_dvr, E_i)
 
-    ! final state pes_files and dipole_files
-    ifile = get_free_handle()
-    open(ifile, file= p % pes_file_list_n, action='read')
-    
-    allocate(p % pes_files_n(p % npesfile_n))
-    do i=1, p % npesfile_n
-      read(ifile,*) p % pes_files_n(i)
-      write(6,*) p % pes_files_n(i)
-    end do
-    
-    close(ifile)
-    
-    ifile = get_free_handle()
-    open(ifile, file= p % dipole_file_list_n, action='read')
-    
-    write(6,*) "p % dipole_file_list_n", p % dipole_file_list_n
-    allocate(p % dipolefile_n(p % npesfile_n))
-    do i=1, p % npesfile_n
-      read(ifile,*) p % dipolefile_n(i)
-    end do
-
-    close(ifile)
+    ! read list of final state pes_files and dipole_files
+    call read_file_list(p % pes_file_list_n, p % npesfile_n, p % pes_files_n)
+    call read_file_list(p % dipole_file_list_n, p % npesfile_n, p % dipolefile_n)
     
     do j=1,p % npesfile_n
       call read_PES_file(p % pes_files_n(j), p % npoints_in, p % nstates, X_dvr, E_n(j,:))
@@ -151,21 +133,10 @@ contains
     ! convert eigenvalues to eV units
     eig_i =eig_i / const % eV
     eig_n =eig_n / const % eV
-    !eig_na =eig_na / const % eV
+
     
     write(6,*) eig_n(1,1) - eig_i(1)
     
-    !write(6,*) "eig_i", eig_i(:)
-    !write(6,*) "eig_n(1,:)", eig_n(1,:)
-    
-    ! calculate spectrum
-    !if (p % nonadiabatic .eq. 1) then
-      !   call spectrum_XAS_nonadiabatic(eig_na, eig_i, c_na, D_ni, omega_in, sigma, sigma_states, gamma)
-    !else
-    !call spectrum_XAS(eig_n, eig_i, D_ni, omega_in, sigma, sigma_states, gamma)
-
-    ! convolute with incoming distribution
-
     do j=1,p % npesfile_n    
       call compute_XAS_spectrum(eig_i(1), eig_n(j,:), D_ni(j,:,:), &
            omega_in, gamma, gamma_inc, sigma_final(j,:,:,:))

@@ -29,9 +29,9 @@ kh_amplitude_mode outgoing
 omega_in_start 199
 omega_in_end   207
 n_omega_in     100
-omega_start    180
-omega_end      200
-n_omega        100
+omega_out_start    180
+omega_out_end      200
+n_omega_out        100
 gamma_FWHM 0.045
 gamma_inc_FWHM 0.1
 gamma_instr_FWHM 0.1

@@ -138,10 +138,7 @@ contains
     E_i_inp = E_i_inp  / const % eV
     E_n_inp = E_n_inp  / const % eV
     E_dyn_inp = E_dyn_inp  / const % eV
-
-    do j=1,nfinal
-      E_f_inp(j,:) = E_f_inp(j,:) / const % eV
-    end do
+    E_f_inp = E_f_inp / const % eV
 
     ifile = get_free_handle()
     open(ifile, file="inital_state_eigvec.txt", action='write')

@@ -10,6 +10,7 @@ program sckh_main
   use m_SCKH, only : calculate_SCKH,compute_sckh_diagonal_nonresonant,&
        compute_sckh_offdiagonal
   use m_XAS_eigenstates, only: calculate_XAS
+  use m_SCKH_resonant_PES, only: calculate_SCKH_res_PES
   
   implicit none
 
@@ -41,6 +42,9 @@ program sckh_main
   ! routines working with 1d  PES, but use classical trajectories on that
   else if (upper(p % runmode) .eq. "SCKH_PES") then
     call calculate_SCKH_PES(p)
+
+  else if (upper(p % runmode) .eq. "SCKH_RESONANT_PES") then
+    call calculate_SCKH_res_PES(p)
     
   ! rotines working with general used-supplied trajectories
   else if (upper(p % runmode) .eq. "SCKH") then

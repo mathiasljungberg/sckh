@@ -9,16 +9,16 @@ contains
     use m_constants, only: const
     use m_FFT, only: SFFTEU, next_power_of_2, reorder_sigma1
 
-    real(kind=wp), dimension(:), intent(in):: x, funct
-    real(kind=wp), dimension(:), intent(out):: x_sampl, mom_sampl
-    real(kind=wp), dimension(:,:), intent(out)::x_mom_sampl
+    real(wp), dimension(:), intent(in):: x, funct
+    real(wp), dimension(:), intent(out):: x_sampl, mom_sampl
+    real(wp), dimension(:,:), intent(out)::x_mom_sampl
     integer, intent(in):: mode
     !local variables
     integer::  npoints_x_sampl, npoints, npoints_mom_sampl,npoints_x_mom_sampl, &
          npoints_pad, npoints_pad_pow
-    real(kind=wp),dimension(:),allocatable:: funct_real, funct_imag, x_mom
+    real(wp),dimension(:),allocatable:: funct_real, funct_imag, x_mom
     integer::i,j,k
-    real(kind=wp):: dx, pes_l
+    real(wp):: dx, pes_l
 
     npoints = size(x) 
     npoints_x_sampl = size(x_sampl) 
@@ -117,13 +117,13 @@ contains
     use m_splines, only: spline_easy
     !use m_constants, only: const
 
-    real(kind=wp), dimension(:), intent(in):: x, funct, E_i_inp
-    real(kind=wp), dimension(:), intent(out):: x_sampl
-    real(kind=wp), dimension(:,:), intent(out):: x_mom_sampl
-    real(kind=wp):: E_gs, my_SI
+    real(wp), dimension(:), intent(in):: x, funct, E_i_inp
+    real(wp), dimension(:), intent(out):: x_sampl
+    real(wp), dimension(:,:), intent(out):: x_mom_sampl
+    real(wp):: E_gs, my_SI
     !local variables
     integer:: npoints, npoints_x_sampl, npoints_x_mom_sampl
-    real(kind=wp),dimension(:),allocatable:: V_sampl
+    real(wp),dimension(:),allocatable:: V_sampl
     integer::i
 
     ! sample space and assign momentum according to conservation of energy
@@ -187,13 +187,13 @@ contains
     !use m_constants, only: const
 
     ! passed variables
-    real(kind=wp), dimension(:), intent(in)::x, funct
-    real(kind=wp), dimension(:), intent(out)::x_sampl
+    real(wp), dimension(:), intent(in)::x, funct
+    real(wp), dimension(:), intent(out)::x_sampl
     ! local variables
     integer,parameter:: npoints_new=10000
     integer:: npoints, npoints_sampl
-    real(kind=wp), dimension(npoints_new)::funct_spl, I_x, x_new
-    real(kind=wp), dimension(:),allocatable::points_sampl
+    real(wp), dimension(npoints_new)::funct_spl, I_x, x_new
+    real(wp), dimension(:),allocatable::points_sampl
     integer:: i,j
     
     npoints =size(x) 
@@ -245,13 +245,13 @@ contains
     !use m_constants, only: const
 
     ! passed variables
-    real(kind=wp), dimension(:), intent(in)::x, funct
-    real(kind=wp), dimension(:), intent(out)::x_sampl
+    real(wp), dimension(:), intent(in)::x, funct
+    real(wp), dimension(:), intent(out)::x_sampl
     ! local variables
     integer,parameter:: npoints_new=10000
     integer:: npoints, npoints_sampl
-    real(kind=wp), dimension(:),allocatable::yder
-    real(kind=wp):: funct_x_tmp, x_tmp, y_tmp, tol, x_min, x_max,y_min, y_max, x_l, y_l,ran1,ran2
+    real(wp), dimension(:),allocatable::yder
+    real(wp):: funct_x_tmp, x_tmp, y_tmp, tol, x_min, x_max,y_min, y_max, x_l, y_l,ran1,ran2
     integer:: i,j
     
     npoints = size(x)
@@ -385,14 +385,14 @@ contains
 
     implicit none
     ! passed variables
-    real(kind=wp), dimension(:), intent(in):: V_x, V_y
-    real(kind=wp), intent(in):: x_in,v_in, dt, my_SI    
-    real(kind=wp), dimension(:), intent(out)::x_out
+    real(wp), dimension(:), intent(in):: V_x, V_y
+    real(wp), intent(in):: x_in,v_in, dt, my_SI    
+    real(wp), dimension(:), intent(out)::x_out
         
     ! local variables
     integer:: ntsteps, V_len
     integer:: i,j
-    real(kind=wp):: a, x, v, x_new, v_new, a_new,t
+    real(wp):: a, x, v, x_new, v_new, a_new,t
     
     V_len =size(V_x)     
     ntsteps = size(x_out)
@@ -434,16 +434,16 @@ contains
 
     implicit none
     ! passed variables
-    real(kind=wp), intent(in):: V_x(:), V_y(:)
-    real(kind=wp), intent(in):: x_in,v_in, dt, my_SI    
-    real(kind=wp), intent(out):: x_out(:)
-    real(kind=wp), intent(out):: v_out(:)
-    real(kind=wp), intent(out):: a_out(:)
+    real(wp), intent(in):: V_x(:), V_y(:)
+    real(wp), intent(in):: x_in,v_in, dt, my_SI    
+    real(wp), intent(out):: x_out(:)
+    real(wp), intent(out):: v_out(:)
+    real(wp), intent(out):: a_out(:)
         
     ! local variables
     integer:: ntsteps, V_len
     integer:: i,j
-    real(kind=wp):: a, x, v, x_new, v_new, a_new,t
+    real(wp):: a, x, v, x_new, v_new, a_new,t
     
     V_len =size(V_x)     
     ntsteps = size(x_out)
@@ -548,18 +548,18 @@ contains
     use m_FFT, only: FFT_complex 
 
     ! passed variables
-    real(kind=wp), dimension(:), intent(in):: E_n,time
-    real(kind=wp), dimension(:,:), intent(in):: E_f
-    real(kind=wp),dimension(:,:,:),intent(in):: D_fn 
-    complex(kind=wp), dimension(:,:,:),intent(out) ::  sigma_m
-    real(kind=wp), intent(in):: E_fn_mean, gamma
+    real(wp), dimension(:), intent(in):: E_n,time
+    real(wp), dimension(:,:), intent(in):: E_f
+    real(wp),dimension(:,:,:),intent(in):: D_fn 
+    complex(wp), dimension(:,:,:),intent(out) ::  sigma_m
+    real(wp), intent(in):: E_fn_mean, gamma
     ! local variables
     integer:: ntsteps, ntsteps_pad, nfinal
-    complex(kind=wp), dimension(:),allocatable:: funct
-    complex(kind=wp), dimension(:,:),allocatable::  e_factor1
-    real(kind=wp), dimension(:,:),allocatable:: int_W_I
-    real(kind=wp),dimension(:),allocatable::  omega_out 
-    real(kind=wp):: delta_t
+    complex(wp), dimension(:),allocatable:: funct
+    complex(wp), dimension(:,:),allocatable::  e_factor1
+    real(wp), dimension(:,:),allocatable:: int_W_I
+    real(wp),dimension(:),allocatable::  omega_out 
+    real(wp):: delta_t
     integer:: i,k,m 
 
     ntsteps = size(time) 
@@ -611,15 +611,15 @@ contains
 !    use m_fftw3, only: fft_c2c_1d_backward
 !    use m_fftw3, only: reorder_sigma_fftw_z
 !    
-!    real(kind=wp), dimension(:), intent(in):: E_n,time
-!    real(kind=wp), dimension(:,:), intent(in):: E_f
-!    real(kind=wp),dimension(:,:,:),intent(in):: D_fn 
-!    complex(kind=wp), dimension(:,:,:),intent(out) ::  F_if_omp_m
-!    real(kind=wp), intent(in):: E_nf_mean, gamma
+!    real(wp), dimension(:), intent(in):: E_n,time
+!    real(wp), dimension(:,:), intent(in):: E_f
+!    real(wp),dimension(:,:,:),intent(in):: D_fn 
+!    complex(wp), dimension(:,:,:),intent(out) ::  F_if_omp_m
+!    real(wp), intent(in):: E_nf_mean, gamma
 !
 !    integer:: ntsteps, nfinal
-!    complex(kind=wp), dimension(:),allocatable:: funct
-!    complex(kind=wp), dimension(:,:),allocatable::  e_factor1
+!    complex(wp), dimension(:),allocatable:: funct
+!    complex(wp), dimension(:,:),allocatable::  e_factor1
 !    integer:: f_e, m 
 !
 !    ntsteps = size(time) 
@@ -655,12 +655,12 @@ contains
     use m_fftw3, only: fft_c2c_1d_backward
     use m_fftw3, only: reorder_sigma_fftw_z
     
-    real(kind=wp), dimension(:), intent(in):: E_n,time
-    real(kind=wp), dimension(:,:), intent(in):: E_f
-    real(kind=wp),dimension(:,:,:),intent(in):: D_fn 
-    real(kind=wp),dimension(:),intent(in):: D_ni 
-    complex(kind=wp), dimension(:,:,:,:),intent(out) ::  F_if_omp
-    real(kind=wp), intent(in):: E_nf_mean, gamma
+    real(wp), dimension(:), intent(in):: E_n,time
+    real(wp), dimension(:,:), intent(in):: E_f
+    real(wp),dimension(:,:,:),intent(in):: D_fn 
+    real(wp),dimension(:),intent(in):: D_ni 
+    complex(wp), dimension(:,:,:,:),intent(out) ::  F_if_omp
+    real(wp), intent(in):: E_nf_mean, gamma
     
     integer:: nfinal, f_e
 
@@ -679,13 +679,13 @@ contains
     use m_fftw3, only: fft_c2c_1d_backward
     use m_fftw3, only: reorder_sigma_fftw_z
     
-    real(kind=wp), intent(in):: E_n(:,:)
-    real(kind=wp), intent(in):: time(:)
-    real(kind=wp), intent(in):: E_f(:,:)
-    real(kind=wp), intent(in):: D_fn(:,:,:,:) 
-    real(kind=wp), intent(in):: D_ni(:,:) 
-    complex(kind=wp), dimension(:,:,:,:),intent(out) ::  F_if_omp
-    real(kind=wp), intent(in):: E_nf_mean, gamma
+    real(wp), intent(in):: E_n(:,:)
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_f(:,:)
+    real(wp), intent(in):: D_fn(:,:,:,:) 
+    real(wp), intent(in):: D_ni(:,:) 
+    complex(wp), dimension(:,:,:,:),intent(out) ::  F_if_omp
+    real(wp), intent(in):: E_nf_mean, gamma
     
     integer:: nfinal, f_e, n_e, ntsteps
     complex(wp), allocatable:: F_tmp(:,:,:)
@@ -711,18 +711,18 @@ contains
     use m_fftw3, only: fft_c2c_1d_backward
     use m_fftw3, only: reorder_sigma_fftw_z
     
-    real(kind=wp), intent(in):: E_n(:)
-    real(kind=wp), intent(in):: time(:)
-    real(kind=wp), intent(in):: E_f(:)
-    real(kind=wp), intent(in):: D_fn(:,:)
-    real(kind=wp), intent(in):: D_ni(:) 
-    complex(kind=wp), intent(out) ::  F_ifn_omp(:,:,:)
-    real(kind=wp), intent(in):: E_nf_mean, gamma
+    real(wp), intent(in):: E_n(:)
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_f(:)
+    real(wp), intent(in):: D_fn(:,:)
+    real(wp), intent(in):: D_ni(:) 
+    complex(wp), intent(out) ::  F_ifn_omp(:,:,:)
+    real(wp), intent(in):: E_nf_mean, gamma
 
     integer:: ntsteps, nfinal
-    complex(kind=wp), allocatable:: funct(:)
-    complex(kind=wp), allocatable:: funct_fft(:)
-    complex(kind=wp), allocatable::  e_factor1(:)
+    complex(wp), allocatable:: funct(:)
+    complex(wp), allocatable:: funct_fft(:)
+    complex(wp), allocatable::  e_factor1(:)
     integer:: m1, m2 
 
     ntsteps = size(time) 
@@ -758,17 +758,17 @@ contains
     use m_fftw3, only: fft_c2c_1d_backward
     use m_fftw3, only: reorder_sigma_fftw_z
     
-    real(kind=wp), intent(in):: E_n(:,:)
-    real(kind=wp), intent(in):: time(:)
-    real(kind=wp), intent(in):: E_f(:)
-    real(kind=wp), intent(in):: D_fn(:,:,:)
-    real(kind=wp), intent(in):: D_ni(:,:) 
-    complex(kind=wp), intent(out) ::  F_if_omp(:,:,:)
-    real(kind=wp), intent(in):: E_nf_mean, gamma
+    real(wp), intent(in):: E_n(:,:)
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_f(:)
+    real(wp), intent(in):: D_fn(:,:,:)
+    real(wp), intent(in):: D_ni(:,:) 
+    complex(wp), intent(out) ::  F_if_omp(:,:,:)
+    real(wp), intent(in):: E_nf_mean, gamma
 
     integer:: ntsteps, ninter
-    complex(kind=wp), allocatable:: funct(:,:,:)
-    complex(kind=wp), allocatable::  e_factor1(:)
+    complex(wp), allocatable:: funct(:,:,:)
+    complex(wp), allocatable::  e_factor1(:)
     integer:: m1, m2, n_e 
 
     ntsteps = size(time) 
@@ -804,68 +804,46 @@ contains
   end subroutine compute_F_if_omp_sum_n
 
 
-  
-  
-!  subroutine compute_SCKH_one(E_n, E_f, E_fn_mean, D_fn, time, sigma_m, gamma)
-!    use m_precision, only: wp
-!    use m_constants, only: const
-!    use m_FFT, only: FFT_complex 
-!
-!    ! passed variables
-!    real(kind=wp), dimension(:), intent(in):: E_n,time
-!    real(kind=wp), dimension(:,:), intent(in):: E_f
-!    real(kind=wp),dimension(:,:,:),intent(in):: D_fn 
-!    complex(kind=wp), dimension(:,:,:),intent(out) ::  sigma_m
-!    real(kind=wp), intent(in):: E_fn_mean, gamma
-!    ! local variables
-!    integer:: ntsteps, ntsteps_pad, nfinal
-!    complex(kind=wp), dimension(:),allocatable:: funct
-!    complex(kind=wp), dimension(:,:),allocatable::  e_factor1
-!    real(kind=wp), dimension(:,:),allocatable:: int_W_I
-!    real(kind=wp),dimension(:),allocatable::  omega_out 
-!    real(kind=wp):: delta_t
-!    integer:: i,k,m 
-!
-!    ntsteps = size(time) 
-!    !nfinal = size(E_f,1) 
-!    ntsteps_pad = size(sigma_m,1) 
-!    
-!    allocate(funct(ntsteps), int_W_I( ntsteps), &
-!         e_factor1(ntsteps), omega_out(ntsteps_pad) )
-!    
-!    delta_t = time(2)-time(1)
-!        
-!    int_W_I(1) = E_f(1) - E_n(1)  - E_fn_mean  
-!    
-!    do i = 2, ntsteps
-!       int_W_I(i) = int_W_I(i-1) + ( E_f(i) - E_n(i)) - E_fn_mean  
-!    end do
-!    int_W_I =  int_W_I * delta_t
-!    
-!    !do i = 1,nfinal 
-!    e_factor1(:) = exp(dcmplx(0, -(const % eV  / const % hbar) *int_W_I(:)  ))
-!   ! end do
-!    
-!    ! compute A_{fm}(t) = D^m_{fn}(t) * e_factor_f(t) * exp(-gamma * eV * time(:) / hbar)
-!    ! and fourer transform
-!    
-!    sigma_m = 0.0_wp
-!    
-!    !do a FFT
-!    !do k =1,nfinal! final state 
-!    do m=1,3 ! polarization     
-!          
-!      funct = D_fn(:,m) * e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar)
-!      
-!      call FFT_complex(time,funct, sigma_m(:,m), omega_out)
-!      
-!    end do ! m
-!    ! end do ! k
-!    
-!    deallocate(funct, int_W_I)
-!    
-!  end subroutine compute_SCKH_one
+  subroutine compute_F_if_om_omp(F_if_t_omp, E_f, E_fi_mean, time, E_i, F_if_om_omp)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_backward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    complex(wp), intent(in) ::  F_if_t_omp(:,:,:,:,:)
+    real(wp), intent(in):: E_f(:,:)
+    real(wp), intent(in):: E_fi_mean
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_i(:)
+    complex(wp), intent(out) ::  F_if_om_omp(:,:,:,:,:)
 
+    integer:: nfinal, n_omega_in, n_omega_out, f_e, om_out, m1, m2
+    complex(wp), allocatable ::  e_factor1(:)
+    
+    nfinal = size(F_if_t_omp,1)
+    n_omega_in = size(F_if_t_omp,2)
+    n_omega_out = size(F_if_t_omp,3)
+    
+    allocate(e_factor1(n_omega_in))
+    
+    do f_e= 1, nfinal
+      
+      call compute_efactor(E_f(f_e,:), E_i, E_fi_mean, time, e_factor1(:), .true.)
+      
+      do om_out= 1, n_omega_out
+        do m1 =1, 3
+          do m2 =1, 3
+            
+            call fft_c2c_1d_backward( e_factor1(:) * F_if_t_omp(f_e, :,om_out, m1,m2), &
+                 F_if_om_omp(f_e, om_out, :,m1,m2))
+            call reorder_sigma_fftw_z(F_if_om_omp(f_e,:, om_out, m1,m2))
+            
+          end do
+        end do
+      end do
+    end do
+    
+  end subroutine compute_F_if_om_omp
   
   
   subroutine compute_SCXAS(E_i, E_f, E_fi_mean, D_fi, time, sigma_m, gamma)
@@ -874,18 +852,18 @@ contains
     use m_FFT, only: FFT_complex 
 
     ! passed variables
-    real(kind=wp), dimension(:), intent(in):: E_i, time
-    real(kind=wp), dimension(:,:), intent(in):: E_f
-    real(kind=wp),dimension(:,:,:),intent(in):: D_fi 
-    complex(kind=wp), dimension(:,:,:),intent(out) ::  sigma_m
-    real(kind=wp), intent(in):: E_fi_mean, gamma
+    real(wp), dimension(:), intent(in):: E_i, time
+    real(wp), dimension(:,:), intent(in):: E_f
+    real(wp),dimension(:,:,:),intent(in):: D_fi 
+    complex(wp), dimension(:,:,:),intent(out) ::  sigma_m
+    real(wp), intent(in):: E_fi_mean, gamma
     ! local variables
     integer:: ntsteps, ntsteps_pad, nfinal
-    complex(kind=wp), dimension(:),allocatable:: funct
-    complex(kind=wp), dimension(:,:),allocatable::  e_factor1
-    real(kind=wp), dimension(:,:),allocatable:: int_W_I
-    real(kind=wp),dimension(:),allocatable::  omega_out 
-    real(kind=wp):: delta_t
+    complex(wp), dimension(:),allocatable:: funct
+    complex(wp), dimension(:,:),allocatable::  e_factor1
+    real(wp), dimension(:,:),allocatable:: int_W_I
+    real(wp),dimension(:),allocatable::  omega_out 
+    real(wp):: delta_t
     integer:: i,k,m 
 
     ntsteps = size(time) 
@@ -936,14 +914,14 @@ contains
     use m_FFT, only: FFT_complex 
 
     ! passed variables
-    real(kind=wp), dimension(:), intent(in):: time
-    complex(kind=wp), dimension(:,:,:),intent(in) ::  corr_fn
-    complex(kind=wp), dimension(:,:,:),intent(out) ::  sigma_m
-    real(kind=wp), intent(in):: gamma
+    real(wp), dimension(:), intent(in):: time
+    complex(wp), dimension(:,:,:),intent(in) ::  corr_fn
+    complex(wp), dimension(:,:,:),intent(out) ::  sigma_m
+    real(wp), intent(in):: gamma
     ! local variables
     integer:: ntsteps, ntsteps_pad, nfinal
-    complex(kind=wp), dimension(:),allocatable:: funct
-    real(kind=wp),dimension(:),allocatable::  omega_out 
+    complex(wp), dimension(:),allocatable:: funct
+    real(wp),dimension(:),allocatable::  omega_out 
     integer:: k,m 
 
     ntsteps = size(time) 
@@ -977,18 +955,18 @@ contains
     use m_constants, only: const
 
     ! passed variables
-    real(kind=wp), dimension(:), intent(in):: E_i, time
-    real(kind=wp), dimension(:,:), intent(in):: E_f
-    real(kind=wp),dimension(:,:,:),intent(in):: D_fi 
-    complex(kind=wp), dimension(:,:,:),intent(inout) ::  corr_fn
-    real(kind=wp), intent(in):: E_fi_mean
+    real(wp), dimension(:), intent(in):: E_i, time
+    real(wp), dimension(:,:), intent(in):: E_f
+    real(wp),dimension(:,:,:),intent(in):: D_fi 
+    complex(wp), dimension(:,:,:),intent(inout) ::  corr_fn
+    real(wp), intent(in):: E_fi_mean
     ! local variables
     integer:: ntsteps,  nfinal
-    !complex(kind=wp), dimension(:),allocatable:: funct
-    complex(kind=wp), dimension(:,:),allocatable::  e_factor1
-    real(kind=wp), dimension(:,:),allocatable:: int_W_I
-    !real(kind=wp),dimension(:),allocatable::  omega_out 
-    real(kind=wp):: delta_t
+    !complex(wp), dimension(:),allocatable:: funct
+    complex(wp), dimension(:,:),allocatable::  e_factor1
+    real(wp), dimension(:,:),allocatable:: int_W_I
+    !real(wp),dimension(:),allocatable::  omega_out 
+    real(wp):: delta_t
     integer:: i,k,m
 
     ntsteps = size(time) 
@@ -1042,19 +1020,19 @@ contains
     use m_FFT, only: FFT_complex 
 
     ! passed variables
-    real(kind=wp), dimension(:), intent(in):: E_i, time
-    real(kind=wp), dimension(:,:), intent(in):: E_f
-    real(kind=wp),dimension(:,:,:),intent(in):: D_fi 
-    real(kind=wp),intent(in):: gamma
-    complex(kind=wp), dimension(:,:,:,:),intent(out) ::  corr_fn_FT_tmp
-    real(kind=wp), intent(in):: E_fi_mean
+    real(wp), dimension(:), intent(in):: E_i, time
+    real(wp), dimension(:,:), intent(in):: E_f
+    real(wp),dimension(:,:,:),intent(in):: D_fi 
+    real(wp),intent(in):: gamma
+    complex(wp), dimension(:,:,:,:),intent(out) ::  corr_fn_FT_tmp
+    real(wp), intent(in):: E_fi_mean
     ! local variables
     integer:: ntsteps,  nfinal, ntsteps_pad
-    complex(kind=wp), dimension(:,:),allocatable::  e_factor1
-    real(kind=wp), dimension(:,:),allocatable:: int_W_I
-    complex(kind=wp), allocatable::  funct(:), funct_out(:,:)    
-    real(kind=wp), allocatable:: omega_out(:)
-    real(kind=wp):: delta_t
+    complex(wp), dimension(:,:),allocatable::  e_factor1
+    real(wp), dimension(:,:),allocatable:: int_W_I
+    complex(wp), allocatable::  funct(:), funct_out(:,:)    
+    real(wp), allocatable:: omega_out(:)
+    real(wp):: delta_t
     integer:: i,k,m, m1, m2
 
     ntsteps = size(time) 
@@ -1114,11 +1092,11 @@ contains
   subroutine reorder_sigma(sigma)
     use m_precision, only: wp
     
-    complex(kind=wp), dimension(:,:,:), intent(inout)::sigma
+    complex(wp), dimension(:,:,:), intent(inout)::sigma
     !local variables    
     integer::nfreq
     integer:: i,j
-    complex(kind=wp), dimension(:,:,:), allocatable::sigma_tmp
+    complex(wp), dimension(:,:,:), allocatable::sigma_tmp
     
     nfreq = size(sigma,2) 
 
@@ -1142,12 +1120,12 @@ contains
     use m_precision, only: wp
     use m_constants, only: const
    
-    real(kind=wp), dimension(:), intent(in)::x
-    real(kind=wp), dimension(:), intent(inout)::y
-    real(kind=wp):: fwhm
+    real(wp), dimension(:), intent(in)::x
+    real(wp), dimension(:), intent(inout)::y
+    real(wp):: fwhm
 
-    real(kind=wp), dimension(size(y)):: y2
-    real(kind=wp):: alpha
+    real(wp), dimension(size(y)):: y2
+    real(wp):: alpha
     integer::i,j
 
     alpha=4.0_wp*log(2.0_wp)/(fwhm**2.0_wp)
@@ -1177,11 +1155,11 @@ contains
     use m_precision, only: wp
     use m_constants, only: const
 
-    real(kind=wp), dimension(:), intent(inout)::x
-    real(kind=wp), intent(in):: dt, cutoff
+    real(wp), dimension(:), intent(inout)::x
+    real(wp), intent(in):: dt, cutoff
 
-    real(kind=wp), dimension(size(x)):: y
-    real(kind=wp):: RC, alpha
+    real(wp), dimension(size(x)):: y
+    real(wp):: RC, alpha
     integer::i
 
 
@@ -1207,12 +1185,12 @@ contains
     use m_constants, only: const
     use m_KH_functions, only: sinc
 
-    real(kind=wp), dimension(:), intent(in)::x
-    real(kind=wp), dimension(:), intent(inout)::y
-    real(kind=wp), intent(in):: cutoff
+    real(wp), dimension(:), intent(in)::x
+    real(wp), dimension(:), intent(inout)::y
+    real(wp), intent(in):: cutoff
 
-    real(kind=wp), dimension(size(x)):: y2
-    real(kind=wp):: B, dx
+    real(wp), dimension(size(x)):: y2
+    real(wp):: B, dx
     integer::i,j
 
     B = cutoff * const % ev / (2.0_wp * const %  pi * const % hbar)
@@ -1244,23 +1222,23 @@ subroutine ODE_solver(A_matrix,times,nstates,ntsteps)
     use m_rkf45_matrix, only: rkfs_matrix_c
     implicit none
     integer,intent(in)::nstates,ntsteps
-    complex(kind=wp),intent(out),dimension(nstates,nstates,ntsteps)::A_matrix
-    real(kind=wp),dimension(:,:,:),allocatable::H_matrix
-    complex(kind=wp),allocatable,dimension(:,:)::y_value
-    complex(kind=wp),allocatable,dimension(:,:)::yp_value
-    real(kind=wp),dimension(ntsteps)::times
-    real(kind=wp) ::abserr
+    complex(wp),intent(out),dimension(nstates,nstates,ntsteps)::A_matrix
+    real(wp),dimension(:,:,:),allocatable::H_matrix
+    complex(wp),allocatable,dimension(:,:)::y_value
+    complex(wp),allocatable,dimension(:,:)::yp_value
+    real(wp),dimension(ntsteps)::times
+    real(wp) ::abserr
     !external f_04
     integer:: i_step
     integer:: iflag
     integer:: iwork(5)
-    real(kind=wp):: relerr
-    real(kind=wp):: t
-    real(kind=wp) :: t_out
-    complex(kind=wp),allocatable::  f1(:,:), f2(:,:), f3(:,:),f4(:,:), f5(:,:)
-    real(kind=wp)::  savre, savae
+    real(wp):: relerr
+    real(wp):: t
+    real(wp) :: t_out
+    complex(wp),allocatable::  f1(:,:), f2(:,:), f3(:,:),f4(:,:), f5(:,:)
+    real(wp)::  savre, savae
     integer:: i,j
-    real(kind=wp):: h,t_start,t_end
+    real(wp):: h,t_start,t_end
     ! set initial conditions for A matrix at t=0
     A_matrix(:,:,1)=0.0
     do i=1,ntsteps
@@ -1294,12 +1272,12 @@ end subroutine ODE_solver
     use m_precision,only:wp     
     use m_constants, only: const
     
-    real(kind=wp), intent(in):: E_f(:), E_n(:), time(:), E_nf_mean
-    complex(kind=wp), intent(out):: efactor(:)
+    real(wp), intent(in):: E_f(:), E_n(:), time(:), E_nf_mean
+    complex(wp), intent(out):: efactor(:)
     logical:: negative
     
-    real(kind=wp):: delta_t, factor
-    real(kind=wp), allocatable:: int_W_I(:)
+    real(wp):: delta_t, factor
+    real(wp), allocatable:: int_W_I(:)
     integer:: i, ntsteps
     
     ntsteps = size(time,1)
