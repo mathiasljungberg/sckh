@@ -804,10 +804,11 @@ contains
   end subroutine compute_F_if_omp_sum_n
 
 
-  subroutine compute_F_if_om_omp(F_if_t_omp, E_f, E_fi_mean, time, E_i, F_if_om_omp)
+  subroutine compute_F_if_om_omp(F_if_t_omp, E_f, E_fi_mean, time, &
+       E_i, gamma_inc, omega_out, E_nf_mean,F_if_om_omp)
     use m_precision, only: wp
     use m_constants, only: const
-    use m_fftw3, only: fft_c2c_1d_backward
+    use m_fftw3, only: fft_c2c_1d_forward
     use m_fftw3, only: reorder_sigma_fftw_z
     
     complex(wp), intent(in) ::  F_if_t_omp(:,:,:,:,:)
@@ -815,6 +816,9 @@ contains
     real(wp), intent(in):: E_fi_mean
     real(wp), intent(in):: time(:)
     real(wp), intent(in):: E_i(:)
+    real(wp), intent(in):: gamma_inc
+    real(wp), intent(in):: omega_out(:)
+    real(wp), intent(in):: E_nf_mean
     complex(wp), intent(out) ::  F_if_om_omp(:,:,:,:,:)
 
     integer:: nfinal, n_omega_in, n_omega_out, f_e, om_out, m1, m2
@@ -828,14 +832,17 @@ contains
     
     do f_e= 1, nfinal
       
-      call compute_efactor(E_f(f_e,:), E_i, E_fi_mean, time, e_factor1(:), .true.)
+      call compute_efactor(E_f(f_e,:), E_i, E_fi_mean, time, e_factor1(:), .false.)
       
       do om_out= 1, n_omega_out
         do m1 =1, 3
           do m2 =1, 3
             
-            call fft_c2c_1d_backward( e_factor1(:) * F_if_t_omp(f_e, :,om_out, m1,m2), &
-                 F_if_om_omp(f_e, om_out, :,m1,m2))
+            call fft_c2c_1d_forward( e_factor1(:) * &
+                 exp(-gamma_inc * const % eV * time(:) / const % hbar) * &
+                 exp(dcmplx(0.0_wp,  (omega_out(om_out) - E_nf_mean)* const % eV * time(:) / const % hbar )) * &
+                 F_if_t_omp(f_e, :,om_out, m1,m2), &
+                 F_if_om_omp(f_e, :,om_out, m1,m2))
             call reorder_sigma_fftw_z(F_if_om_omp(f_e,:, om_out, m1,m2))
             
           end do

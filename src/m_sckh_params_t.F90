@@ -220,10 +220,6 @@ contains
     ! flag to use an additional dynamics file (pes_file_dyn)
     call init_parameter('use_dynamics_file',inp, .false., p % use_dynamics_file,iv)
     
-    !call init_parameter('nproj',inp, 3, p % nproj,iv)
-
-    
-    
   end subroutine init_sckh_params_t
   
 end module m_sckh_params_t

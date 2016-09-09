@@ -50,7 +50,8 @@ contains
     real(wp), allocatable:: c_i(:,:)
     real(wp), allocatable:: eig_i(:)
     
-    real(kind=wp):: gamma, time_l, delta_t, norm, mu_SI, dx
+    real(wp):: gamma, gamma_inc
+    real(wp):: time_l, delta_t, norm, mu_SI, dx
     
     !type(hist), dimension(:), allocatable:: time_h
     !type(hist):: time_h_0, time_h_0_mom
@@ -82,7 +83,8 @@ contains
     delta_t = p % delta_t
 
     ! use HWHM internally
-    gamma = p % gamma_FWHM / 2 
+    gamma = p % gamma_FWHM / 2
+    gamma_inc = p % gamma_inc_FWHM / 2 
 
     ! projections
     call  get_projections(p)
@@ -96,7 +98,7 @@ contains
          D_fn_inp(nfinal, ninter, npoints_in,3), &
          time(ntsteps),&
          E_i1(ntsteps), &
-         !E_n1(ninter, ntsteps), &
+         E_n1(ninter, ntsteps), &
          E_n2(ninter, ntsteps), &
          E_f1(nfinal,ntsteps), &
          E_f2(nfinal,ntsteps), &
@@ -175,6 +177,7 @@ contains
     E_i_inp = E_i_inp  / const % eV
     E_n_inp = E_n_inp  / const % eV
     E_dyn_inp = E_dyn_inp  / const % eV
+    E_dyn2_inp = E_dyn2_inp  / const % eV
     E_f_inp = E_f_inp / const % eV
 
     ifile = get_free_handle()
@@ -234,17 +237,23 @@ contains
 
     do traj=1, npoints_x_mom_sampl
 
+      write(6,*) "Computing trajectory ", traj, "out of", npoints_x_mom_sampl
+      
       call verlet_trajectory_xva(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, X_r, &
            E_dyn_inp * const % eV, delta_t, mu_SI, x_new, v_new, a_new )
       
       call spline_easy(X_r, E_i_inp, npoints_in, x_new, E_i1, ntsteps)
+      
+      do i=1,ninter
+        call spline_easy(X_r, E_n_inp(i,:), npoints_in, x_new, E_n1(i,:), ntsteps)  
+      end do
 
       do i=1,ninter
         do m=1,3
-          call spline_easy(X_r, D_ni_inp(i,:,m) , npoints_in, x_new2, D_ni1(i,:,m) , ntsteps)  
+          call spline_easy(X_r, D_ni_inp(i,:,m) , npoints_in, x_new, D_ni1(i,:,m) , ntsteps)  
         end do
       end do
-      
+
       do i=1,nfinal
         call spline_easy(X_r, E_f_inp(i,:), npoints_in, x_new, E_f1(i,:), ntsteps)  
       end do
@@ -255,8 +264,15 @@ contains
         E_fi_mean =  E_f1(nfinal, ind(1)) - E_i1(ind(1))
         write(6,*) "E_fi_mean", E_fi_mean
         
+        E_nf_mean =  E_n1(ninter, ind(1)) - E_f1(nfinal,ind(1))
+        write(6,*) "E_nf_mean", E_nf_mean
+        
         call get_omega_reordered_fftw(time_l * const % eV /  const % hbar, omega_in)
-        omega_in = omega_in + E_fi_mean
+        omega_in = omega_in + E_nf_mean + E_fi_mean
+        
+        call get_omega_reordered_fftw(time_l * const % eV /  const % hbar, omega_out)
+        omega_out = omega_out + E_nf_mean
+        
       end if
 
       ! loop over each starting point of first trajectory
@@ -277,36 +293,37 @@ contains
           end do
         end do
         
-        ! first time, compute the mean transition energy, and frequency
-        if (traj .eq. 1 .and. traj2 .eq. 1) then
-          ind = minloc(E_i_inp)
-          E_nf_mean =  E_n2(ninter, ind(1)) - E_f2(nfinal,ind(1))
-          write(6,*) "E_nf_mean", E_nf_mean
-          
-          call get_omega_reordered_fftw(time_l * const % eV /  const % hbar, omega_out)
-          omega_out = omega_out + E_nf_mean
-
-          write(6,*) "here 1"
-        end if
+!        ! first time, compute the mean transition energy, and frequency
+!        if (traj .eq. 1 .and. traj2 .eq. 1) then
+!          ind = minloc(E_i_inp)
+!          E_nf_mean =  E_n2(ninter, ind(1)) - E_f2(nfinal,ind(1))
+!          write(6,*) "E_nf_mean", E_nf_mean
+!          
+!          call get_omega_reordered_fftw(time_l * const % eV /  const % hbar, omega_out)
+!          omega_out = omega_out + E_nf_mean
+!
+!          write(6,*) "here 1"
+!        end if
         
         call compute_F_if_omp_many_n(E_n2(:,:), E_f2(:,:), E_nf_mean, D_fn2(:,:,:,:), &
              D_ni1(:, traj2, :), time,  F_if_t_omp(:,traj2,:,:,:), gamma)
 
-        write(6,*) "here 2", traj2
+        !write(6,*) "here 2", traj2
         
       end do ! do traj2 =1, ntsteps2
 
-      call compute_F_if_om_omp(F_if_t_omp, E_f1(:,:), E_fi_mean, time, E_i1, F_if_om_omp)
-
+      call compute_F_if_om_omp(F_if_t_omp, E_f1(:,:), E_fi_mean, time, &
+           E_i1, gamma_inc, omega_out, E_nf_mean, F_if_om_omp)
+      
       ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
       do m1=1,3
         do m2=1,3
-          lambda_F(:, :, :) = lambda_F(:, :, :) +  real(F_if_om_omp(:,:,:,m1,m1) * conjg(F_if_om_omp(:,:,:,m2,m2)))
-          lambda_G(:, :, :) = lambda_G(:, :, :) +  real(F_if_om_omp(:,:,:,m1,m2) * conjg(F_if_om_omp(:,:,:,m1,m2)))
-          lambda_H(:, :, :) = lambda_H(:, :, :) +  real(F_if_om_omp(:,:,:,m1,m2) * conjg(F_if_om_omp(:,:,:,m2,m1)))
+          lambda_F(:, :, :) = lambda_F(:, :, :) +  real(conjg(F_if_om_omp(:,:,:,m1,m1)) * F_if_om_omp(:,:,:,m2,m2))
+          lambda_G(:, :, :) = lambda_G(:, :, :) +  real(conjg(F_if_om_omp(:,:,:,m1,m2)) * F_if_om_omp(:,:,:,m1,m2))
+          lambda_H(:, :, :) = lambda_H(:, :, :) +  real(conjg(F_if_om_omp(:,:,:,m1,m2)) * F_if_om_omp(:,:,:,m2,m1))
         end do
       end do
-      
+
     end do ! end traj
 
     ! averages according to J. Phys. B. 27, 4169 (1994) 
@@ -326,13 +343,14 @@ contains
       ifile = get_free_handle()
       open(ifile,file=file,status='unknown')
       
-      do i=1, n_omega_out 
-        write(ifile,'(4F18.10)') omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+      do i=1, n_omega_out
+        
+        write(ifile,'(4ES18.10)') omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
       end do
       
       close(ifile) 
       
-    end do
+   end do
 
   end subroutine calculate_SCKH_res_PES
   
