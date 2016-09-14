@@ -1403,6 +1403,8 @@ end subroutine ODE_solver
       E_f_inp(j,:) = E_f_inp(j,:) * const % hartree / const % eV 
     end do
 
+    close(ifile)
+    
   end subroutine read_one_sckh_traj
 
   subroutine ODE_solver_offdiagonal(A_matrix,times,nstates,ntsteps, ntsteps_inp)

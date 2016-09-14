@@ -508,6 +508,7 @@ contains
       file="_sigma_final_"
       write(string,*) j
       file = trim(adjustl(p%outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+      ifile = get_free_handle()
       open(ifile,file=file,status='unknown')
 
       do i=nfreq/2, 1, -1
@@ -527,6 +528,7 @@ contains
       file="_sigma_proj_"
       write(string,*) j
       file = trim(adjustl(p%outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+      ifile = get_free_handle()
       open(ifile,file=file,status='unknown')
 
       do i=nfreq/2, 1, -1
