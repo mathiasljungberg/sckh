@@ -209,4 +209,34 @@ subroutine spline_easy(x,y,n,x2,y2,n2)
   
 end subroutine spline_easy
 
+
+subroutine splint_array2_d(xa,ya,y2a,x,y)
+    real(8), intent(in):: x, xa(:),y2a(:,:),ya(:,:)
+    real(8), intent(out):: y(:) 
+    integer:: k
+    integer:: khi,klo
+    real(8):: a,b,h
+    klo=1
+    khi= size(xa)
+    !write(*,*) 'Inside splint array 3d routine '
+    do while (khi-klo.gt.1)
+      k=(khi+klo)/2
+      if(xa(k).gt.x)then
+        khi=k
+      else
+        klo=k
+      endif
+    end do
+
+    h=xa(khi)-xa(klo)
+
+    a=(xa(khi)-x)/h
+    b=(x-xa(klo))/h
+    !write(*,*) 'splint_array3_d defore array multiplication '
+    y(:)=a*ya(:,klo)+b*ya(:,khi)+((a**3-a)*y2a(:,klo)+(b**3-b)*y2a(:,khi))*(h**2)/6.d0
+    !write(*,*) 'After array multiplication '
+
+end subroutine splint_array2_d
+
+
 end module m_splines

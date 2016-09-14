@@ -263,17 +263,17 @@ contains
 
 
 
-  subroutine compute_sckh_offdiagonal(p)
-
+ subroutine compute_sckh_offdiagonal(p)
     use m_precision,only:wp
-    use m_func,only:read_overlap,get_hamiltonian_offdiagonal,funct_complex,&
-         transform_dipole_operator
+    use m_func,only:read_overlap,get_hamiltonian,funct_complex,&
+        transform_dipole_operator,get_H_neighboring,&
+        ReorderStates,clean_variable
     use m_splines,only: spline_easy,linspace
     use m_constants, only: const
     use m_FFT, only:  next_power_of_2
     use m_sckh_params_t, only: sckh_params_t
     use m_io, only: get_free_handle
-    use m_SCKH_utils, only: ODE_solver
+    use m_SCKH_utils, only: ODE_solver_offdiagonal
     use m_SCKH_utils, only: read_projections ! move this?
     use m_SCKH_utils, only: read_one_sckh_traj
     
@@ -321,7 +321,7 @@ contains
 
     ! projections
     call read_projections(p)
-
+    nproj=p%nproj
     allocate(traj_files(ntraj), traj_weights(ntraj),overlap_files(ntraj))
 
     ! read names of trajectory files
@@ -361,6 +361,7 @@ contains
 
 
     ! some output
+    write(6,*) 'START OFFDIAGONAL CASE'
     write(6,*) "gamma_FWHM (fwhm of lorentzian broadening)", p % gamma_FWHM
     write(6,*) "gamma (hwhm of lorentzian broadening)", gamma
     write(6,*) "gamma (hwhm of lorentzian broadening)", gamma2
@@ -398,6 +399,7 @@ contains
 
       !  Read ovrlap matrix
       call read_overlap(nfinal+1,ntsteps,overlap_files(traj))
+      call ReorderStates(D_fn_inp,E_f_inp,nfinal,ntsteps_inp)
 
       ! Transform energy back to the atomic unit
       E_f_inp=E_f_inp/const%Hartree2eV
@@ -429,9 +431,9 @@ contains
       end if
 
       ! Solve coupling matrix equation
-      call  get_hamiltonian_offdiagonal(E_f_inp,E_n_inp,nfinal,ntsteps_inp,&
-           (time_inp(2)-time_inp(1))/const%autime,E_fn_mean)
-      call ODE_solver(A_mat,time/const%autime,nfinal,ntsteps)
+      call  get_H_neighboring(E_f_inp,E_n_inp,nfinal,ntsteps_inp,(time_inp(2)-time_inp(1))/const%autime,E_fn_mean)
+       call ODE_solver_offdiagonal(A_mat,time/const%autime,nfinal,ntsteps,ntsteps_inp)
+      !call ODE_solver(A_mat,time/const%autime,nfinal,ntsteps)
 
       ! Write the solution to the file
 
@@ -440,7 +442,7 @@ contains
 
       ! Spline A matrix
 
-      call transform_dipole_operator(D_fn,E_f,E_n,nfinal,ntsteps) 
+      !call transform_dipole_operator(D_fn,E_f,E_n,nfinal,ntsteps) 
       sigma_m = 0
 
       !do a FFT
@@ -448,7 +450,10 @@ contains
         do m=1,3 ! polarization
           ! compute Final_state_sum=\sum{f_\prime}A_{ff_\prime}*D_{f_\primen}
           do j=1,nfinal
-            Final_state_sum(k,:,m)=Final_state_sum(k,:,m)+A_mat(k,j,:)*cmplx(D_fn(nfinal+1-j,:,m))
+            do i=1,ntsteps
+             Final_state_sum(k,i,m)=Final_state_sum(k,i,m)+A_mat(k,j,i)*D_fn(j,i,m)*(-E_n(i)+E_f(j,i))
+            !Final_state_sum(k,:,m)=Final_state_sum(k,:,m)+A_mat(k,j,:)*cmplx(D_fn(nfinal+1-j,:,m))
+            enddo
           enddo
           funct=Final_state_sum(k,:,m)*exp(-gamma*const%Ev*time(:)/const%hbar)
           funct_real = 0
@@ -535,6 +540,5 @@ contains
       close(ifile)
     end do !j
   end subroutine compute_sckh_offdiagonal
-
 
 end module m_SCKH_nonadiabatic
