@@ -6,7 +6,7 @@ contains
 
   subroutine compute_sckh_diagonal_nonresonant(p)
     use m_precision,only:wp
-    use m_func,only:read_overlap,get_diagonal_hamiltonian,funct_complex
+    use m_func, only:read_overlap,get_diagonal_hamiltonian,funct_complex
     use m_splines,only: spline_easy,linspace
     use m_constants, only: const
     use m_FFT, only:  next_power_of_2
@@ -18,9 +18,7 @@ contains
 
     type(sckh_params_t),intent(inout)::p
 
-    ! input/output
     character(80):: dummy
-    ! overlap_files - array which contains the names of overlap t12 files
     character(80), dimension(:),allocatable:: traj_files
     integer:: ntraj, ntsteps_inp, nfinal, ntsteps , n_omega, ntsteps_pad
     integer:: ntsteps_pad_pow, nfreq_inp,nproj
@@ -28,10 +26,8 @@ contains
     real(kind=wp),dimension(:,:),allocatable:: E_f_inp, E_f, E_trans, projvec
     real(kind=wp),dimension(:,:,:),allocatable:: D_fn_inp, D_fn
     real(kind=wp):: freq_min,  freq_max
-    !loop variables
     integer::i,j,k,l,m,traj
 
-    ! other variables
     character(80)::  string, file
     real(kind=wp),dimension(:),allocatable:: sigma_tot, time_inp, freq, funct_real, funct_imag
     real(kind=wp),dimension(:,:),allocatable:: sigma, sigma_proj
@@ -46,8 +42,8 @@ contains
     complex(kind=wp),dimension(:,:,:),allocatable::A_mat
     complex(kind=wp),dimension(:,:,:),allocatable::Final_state_sum
     integer::ifile
-    !functions
     real(kind=wp):: dnrm2
+
     ! set up local variables
     ntraj=p%ntraj
     ntsteps_inp=p%ntsteps
@@ -75,7 +71,6 @@ contains
 
     call next_power_of_2(ntsteps, ntsteps_pad, ntsteps_pad_pow)! next_power_of_2
 
-    ! allocate const%Everything (changed dimension of E_n_inp etc)
     allocate(time_inp(ntsteps_inp),time_inp2(ntsteps_inp), E_gs(ntsteps_inp),E_n_inp(ntsteps_inp), &
          E_f_inp(nfinal,ntsteps_inp), D_fn_inp(nfinal,ntsteps_inp,3), time(ntsteps),&
          E_n(ntsteps), E_f(nfinal,ntsteps), D_fn(nfinal,ntsteps,3), &
@@ -95,7 +90,6 @@ contains
     delta_t = time(2)-time(1)
     time_l2 = (ntsteps_pad-1) * delta_t
 
-
     ! some output
     write(6,*) "gamma_FWHM (fwhm of lorentzian broadening)", p % gamma_FWHM
     write(6,*) "gamma (hwhm of lorentzian broadening)", gamma
@@ -111,12 +105,10 @@ contains
     write(6,*) "new delta t", delta_t
     write(6,*) "max freq",  const % pi * const % hbar /( delta_t  * const % eV)
 
-
     nfreq=ntsteps_pad
     n_omega = ntsteps_pad ! n_omeg=n_freq
     allocate(sigma_m(nfinal,n_omega,3), sigma(nfinal,n_omega), sigma_tot(n_omega), &
          sigma_proj(p % nproj,n_omega), sigma_tmp(nfinal,n_omega))
-
 
     sigma=0.0_wp
     sigma_tot=0.0_wp
@@ -211,9 +203,11 @@ contains
     sigma = sigma / norm
     sigma_proj = sigma_proj / norm
     E_fn_mean=E_fn_mean*const%Hartree2eV
+
     ! write sigma to file
     file="_sigma"
     file = trim(adjustl(p%outfile)) // trim(adjustl(file)) // ".dat"
+    ifile = get_free_handle()
     open(ifile,file=file,status='unknown')
 
     do i=nfreq/2, 1, -1 
@@ -232,6 +226,7 @@ contains
       file="_sigma_final_"
       write(string,*) j
       file = trim(adjustl(p%outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+      ifile = get_free_handle()
       open(ifile,file=file,status='unknown')
 
       do i=nfreq/2, 1, -1
@@ -244,13 +239,14 @@ contains
 
       close(ifile)
     end do ! j
-
+    
     ! write spectrum from projections  
-    do j=1, nproj
+    do j=1, p % nproj
 
       file="_sigma_proj_"
       write(string,*) j
       file = trim(adjustl(p%outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+      ifile = get_free_handle()
       open(ifile,file=file,status='unknown')
 
       do i=nfreq/2, 1, -1

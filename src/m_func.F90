@@ -205,23 +205,22 @@ subroutine get_diagonal_hamiltonian(E_f,E_int,nstates,ntsteps,delta_t, E_fn_mean
    real(kind=wp),intent(in):: E_fn_mean
 
 
-   if(.not. allocated(H_in)) then
-       allocate(H_in(nstates,nstates,ntsteps))
-   else
-       write(*,*) 'Error in m_func module'
-       write(*,*) 'H_in has been already allocated'
-       stop
-   endif
+   if(allocated(H_in)) deallocate(H_in)
+   allocate(H_in(nstates,nstates,ntsteps))
+     
    H_in=0.0_wp
-     do i=1,nstates
-         H_in(i,i,:)=E_f(i,:)-E_int(:)-E_fn_mean
-     enddo ! i
-
-   allocate(time(ntsteps))
-   do i=1,ntsteps
-     time(i)=(i-1)*delta_t
-   enddo
-
+   do i=1,nstates
+     H_in(i,i,:)=E_f(i,:)-E_int(:)-E_fn_mean
+   enddo ! i
+   
+   ! first time, allocate module variable time(:)
+   if(.not. allocated(time)) then
+     allocate(time(ntsteps))
+     do i=1,ntsteps
+       time(i)=(i-1)*delta_t
+     enddo
+   end if
+   
 end subroutine get_diagonal_hamiltonian
 
 

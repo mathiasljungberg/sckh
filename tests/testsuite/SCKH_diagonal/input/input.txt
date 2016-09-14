@@ -1,0 +1,17 @@
+
+runmode SCKH
+runmode_sckh NONRESONANT_DIAGONAL
+
+! files
+outfile pentamer_XES
+traj_file_list trajectories.dat
+
+gamma_FWHM 0.18
+delta_t 0.25
+ntsteps 161 
+ntsteps2 256 
+use_proj .true.
+proj_file proj_file.txt
+ntraj 3
+nfinal 20
+
