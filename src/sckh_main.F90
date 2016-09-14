@@ -7,8 +7,9 @@ program sckh_main
   use m_KH, only: calculate_KH_res_el
   use m_log, only : init_logs, ilog, log_timing_note
   use m_SCKH_PES, only : calculate_SCKH_PES
-  use m_SCKH, only : calculate_SCKH,compute_sckh_diagonal_nonresonant,&
-       compute_sckh_offdiagonal
+  use m_SCKH, only : calculate_SCKH
+  use m_SCKH_nonadiabatic, only : compute_sckh_diagonal_nonresonant
+  use m_SCKH_nonadiabatic, only : compute_sckh_offdiagonal
   use m_XAS_eigenstates, only: calculate_XAS
   use m_SCKH_resonant_PES, only: calculate_SCKH_res_PES
   

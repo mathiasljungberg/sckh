@@ -1311,7 +1311,102 @@ end subroutine ODE_solver
   end subroutine compute_efactor
 
 
+  subroutine read_projections(p)
+    use m_precision, only: wp
+    use m_io, only: get_free_handle
+    use m_sckh_params_t, only: sckh_params_t
+
+    type(sckh_params_t), intent(inout):: p   
+
+    integer:: ifile, i
+    real(kind=wp):: dnrm2
+
+    if(p % use_proj) then
+      ifile = get_free_handle()
+      open(ifile, file= p % proj_file, action='read')    
+      read(ifile,*) p % nproj
+
+      allocate(p % projvec(p % nproj,3))
+
+      do i=1, p % nproj                                         
+        read(ifile,*) p % projvec(i,1), p % projvec(i,2), p % projvec(i,3) 
+
+        !normalize projvec                               
+        p % projvec(i,:) = p % projvec(i,:) / dnrm2(3,p % projvec(i,:),1)
+        write(6,*) "projvector", i,  p % projvec(i,:)            
+      end do
+
+      close(ifile)
+    else
+      ! the three cartesian directions
+      p % nproj =3 
+      allocate(p % projvec(p % nproj,3))
+
+      p % projvec =0.0_wp
+      p % projvec(1,1) =1.0_wp
+      p % projvec(2,2) =1.0_wp
+      p % projvec(3,3) =1.0_wp
+
+    end if
+
+  end subroutine read_projections
+
+  subroutine read_one_sckh_traj(ntsteps_inp, nfinal, traj_file, time_inp, &
+       time_inp2, E_gs_inp, E_n_inp, E_IP1s, E_trans, E_f_inp, D_fn_inp)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_io, only: get_free_handle
+
+    integer, intent(in):: ntsteps_inp, nfinal
+    character(*), intent(in):: traj_file
+    real(kind=wp), intent(in):: time_inp(:)
+    real(kind=wp), intent(out)::  time_inp2(:), E_gs_inp(:),  E_n_inp(:),&
+         E_IP1s(:), E_trans(:,:), E_f_inp(:,:), D_fn_inp(:,:,:)
+
+    integer:: ifile, i, j, ntrans
+    character(80):: dummy
+
+    ifile = get_free_handle()
+    open(ifile,file=traj_file,status='old')  
+
+    do i=1,ntsteps_inp
+
+      read(ifile,*) time_inp2(i)
+      read(ifile,*) E_gs_inp(i)
+      read(ifile,*) E_n_inp(i)
+      read(ifile,*) E_IP1s(i)  
+
+      read(ifile,*) dummy, ntrans
+
+      ! check that
+      if ( ntrans .ne. nfinal ) then
+        write(6,*) "Error, ntrans != nfinal", ntrans, nfinal
+      end if
+
+      do j =1,nfinal
+        read(ifile,*) E_trans(j,i), D_fn_inp(j,i,1), D_fn_inp(j,i,2), D_fn_inp(j,i,3)
+      end do
+
+      !compute E_f_inp
+      E_f_inp(:,i) = E_gs_inp(i) - E_trans(:,i) + E_IP1s(i) * (const % eV / const % Hartree)
+
+      !check that time_inp(i) = time_inp2(i) 
+      if ( abs(time_inp(i) - time_inp2(i)*1.d-15 ) .gt. 1.d-30) then
+        !write(6,*) "Error in time too big", i, abs(time_inp(i) - time_inp2(i)*1.d-15 )
+      end if
+
+    end do !i
+
+    ! convert to eV units
+    E_n_inp = E_n_inp * const % hartree / const % eV
+    do j=1,nfinal 
+      E_f_inp(j,:) = E_f_inp(j,:) * const % hartree / const % eV 
+    end do
+
+  end subroutine read_one_sckh_traj
 
 
+
+  
 end module m_SCKH_utils
 
