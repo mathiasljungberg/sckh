@@ -533,16 +533,16 @@ subroutine compute_XES_res(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
     do m1=1,3
       do m2=1,3
         sigma_tmp = sigma_final(:,:,m1,m2)
-        call convolute_intrumental(sigma_tmp, omega_in, omega_out, gamma_instr, sigma_final(:,:,m1,m2))
+        call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, sigma_final(:,:,m1,m2))
       end do
     end do
 
     sigma_tmp = lambda_F
-    call convolute_intrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_F)
+    call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_F)
     sigma_tmp = lambda_G
-    call convolute_intrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_G)
+    call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_G)
     sigma_tmp = lambda_H
-    call convolute_intrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_H)
+    call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_H)
 
     
   end subroutine compute_XES_res
@@ -797,7 +797,7 @@ end subroutine compute_amplitude_F_nonres
 
 ! sigma(om_in, om_out)
 ! convolute with respect to omega_out
-subroutine convolute_intrumental(sigma, omega_in, omega_out, gamma_instr, sigma_out)
+subroutine convolute_instrumental(sigma, omega_in, omega_out, gamma_instr, sigma_out)
   use m_precision, only: wp
   use m_KH_functions, only: gaussian
   
@@ -823,7 +823,7 @@ subroutine convolute_intrumental(sigma, omega_in, omega_out, gamma_instr, sigma_
   
   sigma_out = sigma_out * (omega_out(2)- omega_out(1))
   
-end subroutine convolute_intrumental
+end subroutine convolute_instrumental
 
 ! sigma(om_in, om_out)
 ! convolute with respect to omega_out

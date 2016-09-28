@@ -491,7 +491,7 @@ contains
 
     ! velocity verlet
     ! 1) a(t) = F/m  
-    ! 2) calcualte x(t+dt) 
+    ! 2) calculate x(t+dt) 
     !    x(t+dt)  = x(t) + v(t)*dt + 0.5*a(t)*dt**2  
     ! 3) again evaluate force, now at time t+dt
     ! 4) calcualte v(t+dt)
@@ -837,9 +837,11 @@ contains
       do om_out= 1, n_omega_out
         do m1 =1, 3
           do m2 =1, 3
-            
+
+            ! no broadening here
             call fft_c2c_1d_forward( e_factor1(:) * &
-                 exp(-gamma_inc * const % eV * time(:) / const % hbar) * &
+                 !exp(-gamma_inc * const % eV * time(:) / const % hbar) * &
+                 !exp(-(gamma_inc * const % eV) ** 2 / (4.0_wp * log(2.0_wp)) * (time(:) / const % hbar)**2) * &
                  exp(dcmplx(0.0_wp,  (omega_out(om_out) - E_nf_mean)* const % eV * time(:) / const % hbar )) * &
                  F_if_t_omp(f_e, :,om_out, m1,m2), &
                  F_if_om_omp(f_e, :,om_out, m1,m2))
@@ -851,7 +853,203 @@ contains
     end do
     
   end subroutine compute_F_if_om_omp
+
+  ! here use factorization
+  subroutine compute_F_if_om_omp_no_F(E_f, E_fi_mean, time, &
+       E_i, gamma_inc, omega_out, E_nf_mean, R_if_om_omp)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_forward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    !complex(wp), intent(in) ::  F_if_t_omp(:,:,:,:,:)
+    real(wp), intent(in):: E_f(:,:)
+    real(wp), intent(in):: E_fi_mean
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_i(:)
+    real(wp), intent(in):: gamma_inc
+    real(wp), intent(in):: omega_out(:)
+    real(wp), intent(in):: E_nf_mean
+    complex(wp), intent(out) ::  R_if_om_omp(:,:,:)
+
+    integer:: nfinal, n_omega_in, n_omega_out, f_e, om_out
+    complex(wp), allocatable ::  e_factor1(:)
+    
+    nfinal = size(E_f,1)
+    n_omega_in = size(E_f,2)
+    n_omega_out = size(omega_out)
+    
+    allocate(e_factor1(n_omega_in))
+    
+    do f_e= 1, nfinal
+      
+      call compute_efactor(E_f(f_e,:), E_i, E_fi_mean, time, e_factor1(:), .false.)
+      
+      do om_out= 1, n_omega_out
+        !do m1 =1, 3
+        !  do m2 =1, 3
+            
+        call fft_c2c_1d_forward( e_factor1(:) * &
+             !exp(-2*gamma_inc * const % eV * time(:) / const % hbar) * &
+             !exp(-(gamma_inc * const % eV) ** 2 / (4.0_wp * log(2.0_wp)) * (time(:) / const % hbar)**2) * &
+             exp(dcmplx(0.0_wp,  (omega_out(om_out) - E_nf_mean)* const % eV * time(:) / const % hbar )), &
+             !* &
+             !F_if_t_omp(f_e, :,om_out, m1,m2), &
+             R_if_om_omp(f_e, :,om_out))
+        call reorder_sigma_fftw_z(R_if_om_omp(f_e,:, om_out))
+        
+        ! end do
+        !end do
+      end do
+    end do
+    
+  end subroutine compute_F_if_om_omp_no_F
+
+
   
+  !
+  ! using F(omega) instead of F(omega') 
+  !
+  
+  ! several intermediate states
+  subroutine compute_F_if_om_many_n(E_n, E_i, E_ni_mean, D_fn, D_ni, time, F_if_om, gamma)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_backward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    real(wp), intent(in):: E_n(:,:)
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_i(:)
+    real(wp), intent(in):: D_fn(:,:,:) 
+    real(wp), intent(in):: D_ni(:,:,:) 
+    complex(wp), dimension(:,:,:,:),intent(out) ::  F_if_om
+    real(wp), intent(in):: E_ni_mean, gamma
+    
+    integer:: nfinal, f_e, n_e, ntsteps
+    complex(wp), allocatable:: F_tmp(:,:,:)
+
+    nfinal = size(D_fn,1)
+
+    F_if_om = 0.0_wp
+
+    ! version with internal sum over n
+    do f_e =1,nfinal
+      !call compute_F_if_om_sum_n(E_n, E_f(f_e,:), E_nf_mean, D_fn(f_e,:,:,:), D_ni, time, F_if_om(f_e,:,:,:), gamma)
+      call compute_F_if_om_sum_n(E_n(:,:), E_i(:), E_ni_mean, D_fn(f_e,:,:), D_ni(:,:,:), time, F_if_om(f_e,:,:,:), gamma)
+    end do 
+
+    ! other version (not implemented yet), compute each n separately and add
+    
+  end subroutine compute_F_if_om_many_n
+
+  
+  ! summing internally over several intermediate states to avoid fft:s, only savings for ninter > 3
+  subroutine compute_F_if_om_sum_n(E_n, E_i, E_ni_mean, D_fn, D_ni, time, F_if_om, gamma)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_backward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    real(wp), intent(in):: E_n(:,:)
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_i(:)
+    real(wp), intent(in):: D_fn(:,:)
+    real(wp), intent(in):: D_ni(:,:,:) 
+    complex(wp), intent(out) ::  F_if_om(:,:,:)
+    real(wp), intent(in):: E_ni_mean, gamma
+
+    integer:: ntsteps, ninter
+    complex(wp), allocatable:: funct(:,:,:)
+    complex(wp), allocatable::  e_factor1(:)
+    integer:: m1, m2, n_e 
+
+    ntsteps = size(time) 
+    ninter = size(E_n, 1)
+    
+    allocate(funct(ntsteps,3,3), &
+         e_factor1(ntsteps))
+
+    funct = 0.0_wp
+    
+    do n_e =1, ninter
+      call compute_efactor(E_n(ninter,:), E_i(:), E_ni_mean, time, e_factor1, .true.) ! .false. ? back in time
+      
+      do m1=1,3 
+        do m2=1,3 
+          funct(:,m1, m2) = funct(:,m1,m2) + D_fn(n_e, m1) * D_ni (n_e, :, m2) * &
+               e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar)
+        end do
+      end do
+    end do
+    
+    F_if_om = 0.0_wp
+    
+    do m1=1,3 
+      do m2= 1,3 
+        
+        call fft_c2c_1d_backward(funct(:,m1, m2), F_if_om(:,m1,m2))
+        call reorder_sigma_fftw_z(F_if_om(:,m1,m2))
+        
+      end do ! m2 
+    end do ! m1
+    
+  end subroutine compute_F_if_om_sum_n
+  
+  subroutine compute_F_if_om_omp_ingoing(F_if_t_om, E_f, E_fi_mean, time, &
+       E_i, gamma_instr, omega_in, E_ni_mean, F_if_om_omp)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_forward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    complex(wp), intent(in) ::  F_if_t_om(:,:,:,:,:)
+    real(wp), intent(in):: E_f(:,:)
+    real(wp), intent(in):: E_fi_mean
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_i(:)
+    real(wp), intent(in):: gamma_instr
+    real(wp), intent(in):: omega_in(:)
+    real(wp), intent(in):: E_ni_mean
+    complex(wp), intent(out) ::  F_if_om_omp(:,:,:,:,:)
+
+    integer:: nfinal, n_omega_in, n_omega_out, f_e, om_in, m1, m2
+    complex(wp), allocatable ::  e_factor1(:)
+    
+    nfinal = size(F_if_t_om,1)
+    n_omega_in = size(F_if_t_om,2)
+    n_omega_out = size(F_if_t_om,3)
+    
+    allocate(e_factor1(n_omega_out))
+    
+    do f_e= 1, nfinal
+      
+      call compute_efactor(E_f(f_e,:), E_i, E_fi_mean, time, e_factor1(:), .true.) ! before: false
+      
+      do om_in= 1, n_omega_in
+        do m1 =1, 3
+          do m2 =1, 3
+            
+            call fft_c2c_1d_forward( e_factor1(:) * &
+                 exp(-gamma_instr * const % eV * time(:) / const % hbar) * &
+                 exp(dcmplx(0.0_wp,  (omega_in(om_in) - E_ni_mean)* const % eV * time(:) / const % hbar )) * &
+                 F_if_t_om(f_e, :, om_in, m1,m2), &
+                 F_if_om_omp(f_e, om_in,:, m1,m2)) ! switch places of indices
+            call reorder_sigma_fftw_z(F_if_om_omp(f_e, om_in,:, m1,m2))
+            
+          end do
+        end do
+      end do
+    end do
+    
+  end subroutine compute_F_if_om_omp_ingoing
+
+
+  !
+  !
+  !
+
+
   
   subroutine compute_SCXAS(E_i, E_f, E_fi_mean, D_fi, time, sigma_m, gamma)
     use m_precision, only: wp
@@ -1222,59 +1420,6 @@ contains
  
   end subroutine sinc_filter
 
-
-subroutine ODE_solver(A_matrix,times,nstates,ntsteps)
-    use m_precision,only:wp 
-    use m_func, only: funct_complex
-    use m_rkf45_matrix, only: rkfs_matrix_c
-    implicit none
-    integer,intent(in)::nstates,ntsteps
-    complex(wp),intent(out),dimension(nstates,nstates,ntsteps)::A_matrix
-    real(wp),dimension(:,:,:),allocatable::H_matrix
-    complex(wp),allocatable,dimension(:,:)::y_value
-    complex(wp),allocatable,dimension(:,:)::yp_value
-    real(wp),dimension(ntsteps)::times
-    real(wp) ::abserr
-    !external f_04
-    integer:: i_step
-    integer:: iflag
-    integer:: iwork(5)
-    real(wp):: relerr
-    real(wp):: t
-    real(wp) :: t_out
-    complex(wp),allocatable::  f1(:,:), f2(:,:), f3(:,:),f4(:,:), f5(:,:)
-    real(wp)::  savre, savae
-    integer:: i,j
-    real(wp):: h,t_start,t_end
-    ! set initial conditions for A matrix at t=0
-    A_matrix(:,:,1)=0.0
-    do i=1,ntsteps
-       A_matrix(i,i,1)=(1.0_wp,0.0_wp)
-    enddo
-    allocate(H_matrix(nstates,nstates,ntsteps),y_value(nstates,nstates),yp_value(nstates,nstates))
-    allocate(f1(nstates,nstates),f2(nstates,nstates),f3(nstates,nstates))
-    allocate(f4(nstates,nstates),f5(nstates,nstates))
-      abserr = 0.000000001e+00_wp
-      relerr = 0.000000001e+00_wp
-      iflag = 1
-      y_value=A_matrix(:,:,1)
-      h=times(2)-times(1)
-      t_start=times(1)
-      t_end=times(ntsteps)
-      write(*,*) 'ODE_solver ', ntsteps 
-      do i=1,ntsteps-1
-        t = ( ( ntsteps - i + 1 ) * t_start+ ( i - 1 ) * t_end ) / dble( ntsteps )
-        t_out = (( ntsteps - i ) * t_start+ ( i) * t_end ) / dble ( ntsteps )
-        write(*,*) 't ',times(i),' t_out ',times(i+1),'step ',i
-        call rkfs_matrix_c(nstates,nstates,funct_complex,y_value,times(i),times(i+1),relerr,abserr,&
-             iflag,yp_value,h,f1,f2,f3,f4,f5,savre,savae,iwork(1),iwork(2),iwork(3),iwork(4), iwork(5))
-         A_matrix(:,:,i+1)=y_value
-      enddo
-    deallocate(H_matrix,y_value,yp_value)
-    deallocate(f1,f2,f3,f4,f5)
-end subroutine ODE_solver
-
-
   subroutine compute_efactor(E_n, E_f, E_nf_mean, time, efactor, negative)
     use m_precision,only:wp     
     use m_constants, only: const
@@ -1407,128 +1552,5 @@ end subroutine ODE_solver
     
   end subroutine read_one_sckh_traj
 
-  subroutine ODE_solver_offdiagonal(A_matrix,times,nstates,ntsteps, ntsteps_inp)
-    use m_precision, only: wp
-    use m_func, only: funct_complex
-    use m_rkf45_matrix, only: rkfs_matrix_c
-    implicit none
-    integer,intent(in)::nstates,ntsteps,ntsteps_inp
-    complex(kind=wp),intent(out),dimension(nstates,nstates,ntsteps)::A_matrix
-    complex(kind=wp),allocatable,dimension(:,:)::y_value
-    complex(kind=wp),allocatable,dimension(:,:)::yp_value
-    real(kind=wp),dimension(ntsteps)::times
-    real(kind=wp) ::abserr
-    !external f_04
-    integer:: i_step
-    integer:: iflag
-    integer:: iwork(5)
-    real(kind=wp):: relerr
-    real(kind=wp):: t
-    real(kind=wp) :: t_out
-    complex(kind=wp),allocatable::  f1(:,:), f2(:,:), f3(:,:),f4(:,:), f5(:,:)
-    real(kind=wp)::  savre, savae
-    integer:: i,j
-    real(kind=wp):: h,t_start,t_end
-    ! set initial conditions for A matrix at t=0
-    write(*,*) 'Time step is ',times(2)-times(1)
-    A_matrix(:,:,1)=(0.0_wp,0.0_wp)
-    do i=1,ntsteps
-       A_matrix(i,i,1)=(1.0_wp,0.0_wp)
-    enddo
-    allocate(y_value(nstates,nstates),yp_value(nstates,nstates))
-    allocate(f1(nstates,nstates),f2(nstates,nstates),f3(nstates,nstates))
-    allocate(f4(nstates,nstates),f5(nstates,nstates))
-      abserr = 0.000000001e+00_wp
-      relerr = 0.000000001e+00_wp
-      iflag = 1
-      y_value=A_matrix(:,:,1)
-      h=times(2)-times(1)
-      t_start=times(1)
-      t_end=times(ntsteps)
-      !write(*,*) 'ODE_solver ', ntsteps
-	 ! write(*,*) ' f1 ',shape(f1) 
-	  !write(*,*) ' f2 ',shape(f2) 
-	  !write(*,*) ' f3 ',shape(f3) 
-	  !write(*,*) ' f4 ',shape(f4) 
-	  !write(*,*) ' f5 ',shape(f5) 
-	  !write(*,*) ' yp_value ',shape(yp_value)
-	  !write(*,*) ' y_value ',shape(y_value)	  
-	  !write(*,*) ' h ',shape(h)
-      do i=1,ntsteps-1
-        write(*,*) 't ',times(i),' t_out ',times(i+1),'step ',i,' nstates ',nstates
-        call rkfs_matrix_c(nstates,nstates,funct_complex,y_value,times(i),times(i+1),relerr,abserr,&
-          iflag,yp_value,h,f1,f2,f3,f4,f5,savre,savae,iwork(1),iwork(2),iwork(3),iwork(4), iwork(5))
-		!write(*,*) 'Initialization A_matrix '
-         A_matrix(:,:,i+1)=y_value
-     !    write(*,*) abs(y_value)
-      enddo
-    deallocate(y_value,yp_value)
-    deallocate(f1,f2,f3,f4,f5)
-end subroutine ODE_solver_offdiagonal
-
- subroutine ODE_solver_diagonal(A_matrix,times,nstates,ntsteps, ntsteps_inp)
-    use m_precision, only: wp
-    use m_func, only: funct_complex_diagonal
-    use m_rkf45_matrix, only: rkfs_matrix_c_diagonal
-    implicit none
-    integer,intent(in)::nstates,ntsteps,ntsteps_inp
-    complex(kind=wp),intent(out),dimension(nstates,nstates,ntsteps)::A_matrix
-    complex(kind=wp),allocatable,dimension(:)::y_value,yp_value
-    real(kind=wp),dimension(ntsteps)::times
-    real(kind=wp) ::abserr
-    !external f_04
-    integer:: i_step
-    integer:: iflag
-    integer:: iwork(5)
-    real(kind=wp):: relerr
-    real(kind=wp):: t
-    real(kind=wp) :: t_out
-    complex(kind=wp),allocatable,dimension(:)::  f1, f2, f3,f4,f5
-    real(kind=wp)::  savre, savae
-    integer:: i,j
-    real(kind=wp):: h,t_start,t_end
-    ! set initial conditions for A matrix at t=0
-    allocate(f1(nstates),f2(nstates),f3(nstates))
-    allocate(f4(nstates),f5(nstates))
-    allocate(y_value(nstates),yp_value(nstates))
-    write(*,*) 'Time step is ',times(2)-times(1)
-    A_matrix=(0.0_wp,0.0_wp)
-    do i=1,ntsteps
-       A_matrix(i,i,1)=(1.0_wp,0.0_wp)
-    enddo
-      abserr = 0.000000001e+00_wp
-      relerr = 0.000000001e+00_wp
-      iflag = 1
-      y_value=(1.0_wp,0.0_wp) ! put the initial conditions to the diagonal case
-      h=times(2)-times(1)
-      t_start=times(1)
-      t_end=times(ntsteps)
-      !write(*,*) 'ODE_solver ', ntsteps
-	 ! write(*,*) ' f1 ',shape(f1) 
-	  !write(*,*) ' f2 ',shape(f2) 
-	  !write(*,*) ' f3 ',shape(f3) 
-	  !write(*,*) ' f4 ',shape(f4) 
-	  !write(*,*) ' f5 ',shape(f5) 
-	  !write(*,*) ' yp_value ',shape(yp_value)
-	  !write(*,*) ' y_value ',shape(y_value)	  
-	  !write(*,*) ' h ',shape(h)
-      do i=1,ntsteps-1
-        !write(*,*) 't ',times(i),' t_out ',times(i+1),'step ',i,' nstates ',nstates
-        call rkfs_matrix_c_diagonal(nstates,funct_complex_diagonal,y_value,times(i),times(i+1),relerr,abserr,&
-          iflag,yp_value,h,f1,f2,f3,f4,f5,savre,savae,iwork(1),iwork(2),iwork(3),iwork(4), iwork(5))
-		!write(*,*) 'Initialization A_matrix '
-        !write(*,*) 'Time step is ', i,' ',abs(y_value)
-        do j=1,nstates
-         A_matrix(j,j,i+1)=y_value(j)
-        enddo
-     !    write(*,*) abs(y_value)
-      enddo
-    deallocate(y_value,yp_value)
-    deallocate(f1,f2,f3,f4,f5)
-end subroutine ODE_solver_diagonal
-
-
-
-  
 end module m_SCKH_utils
 

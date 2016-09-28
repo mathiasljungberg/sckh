@@ -12,6 +12,7 @@ program sckh_main
   use m_SCKH_nonadiabatic, only : compute_sckh_offdiagonal
   use m_XAS_eigenstates, only: calculate_XAS
   use m_SCKH_resonant_PES, only: calculate_SCKH_res_PES
+  use m_SCKH_resonant_PES, only: calculate_SCKH_res_PES_factor
   
   implicit none
 
@@ -27,43 +28,47 @@ program sckh_main
 
   call init_sckh_params_t(p)
 
+  select case(upper(p % runmode))
+    
   ! routines working in the eigestate basis, 1d vibrational PES
-  if(upper(p % runmode) .eq. "XAS") then
+  case("XAS")
     call calculate_XAS(p)
-    
-  else if(upper(p % runmode) .eq. "KH") then
+  case("KH")
     call calculate_KH_nonres(p)
-
-  else  if(upper(p % runmode) .eq. "KH_RESONANT") then
+  case( "KH_RESONANT")
     call calculate_KH_res(p)
-    
-  else  if(upper(p % runmode) .eq. "KH_RESONANT_EL") then
+  case("KH_RESONANT_EL")
     call calculate_KH_res_el(p)
-
+    
   ! routines working with 1d  PES, but use classical trajectories on that
-  else if (upper(p % runmode) .eq. "SCKH_PES") then
+  case("SCKH_PES")
     call calculate_SCKH_PES(p)
-
-  else if (upper(p % runmode) .eq. "SCKH_RESONANT_PES") then
+  case("SCKH_RESONANT_PES")
     call calculate_SCKH_res_PES(p)
+  case("SCKH_RESONANT_PES_FACTOR")
+    call calculate_SCKH_res_PES_factor(p)
     
-  ! rotines working with general used-supplied trajectories
-  else if (upper(p % runmode) .eq. "SCKH") then
-    if  (upper(p%runmode_sckh) .eq. "NONRESONANT") then
+ ! rotines working with general used-supplied trajectories
+  case("SCKH")
+
+    select case(upper(p%runmode_sckh))
+
+    case( "NONRESONANT")
       call calculate_SCKH(p)
-    endif
-    if (upper(p%runmode_sckh) .eq. "NONRESONANT_DIAGONAL") then
+    case("NONRESONANT_DIAGONAL")
+      write(6,*) "NONRESONANT_DIAGONAL"
       call compute_sckh_diagonal_nonresonant(p)
-    endif
-    if (upper(p%runmode_sckh) .eq. "NONRESONANT_OFFDIAGONAL") then
+    case("NONRESONANT_OFFDIAGONAL")
       call compute_sckh_offdiagonal(p)
-    endif
+      
+    end select
     
-  else 
+  case default
     write(6,*) "runmode must be one of 'XAS', 'KH', 'KH_RESONANT', 'KH_RESONANT_EL',&
          'SCKH_PES', 'SCKH' ", upper(p % runmode)
     stop
-  end if
+    
+  end select
   
 end program sckh_main
 

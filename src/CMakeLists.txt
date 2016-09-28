@@ -92,6 +92,7 @@ m_XAS_eigenstates.F90
 m_XAS_functions.F90
 m_SCKH_resonant_PES.F90
 m_SCKH_nonadiabatic.F90
+m_ode_solvers.F90
 )
 
 SET(ALL_MODULES_F 

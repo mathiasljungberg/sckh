@@ -12,7 +12,7 @@ contains
     use m_FFT, only:  next_power_of_2
     use m_sckh_params_t, only: sckh_params_t
     use m_io, only: get_free_handle
-    use m_SCKH_utils, only: ODE_solver
+    use m_ode_solvers, only: ODE_solver
     use m_SCKH_utils, only: read_projections ! move this?
     use m_SCKH_utils, only: read_one_sckh_traj
 
@@ -273,7 +273,7 @@ contains
     use m_FFT, only:  next_power_of_2
     use m_sckh_params_t, only: sckh_params_t
     use m_io, only: get_free_handle
-    use m_SCKH_utils, only: ODE_solver_offdiagonal
+     use m_ode_solvers, only: ODE_solver_offdiagonal
     use m_SCKH_utils, only: read_projections ! move this?
     use m_SCKH_utils, only: read_one_sckh_traj
     
