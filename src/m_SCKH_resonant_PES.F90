@@ -463,7 +463,9 @@ contains
     use m_fftw3, only: get_omega_reordered_fftw
     use m_upper, only : upper
     use m_KH_utils, only: convolute_incoming
+    !use m_KH_utils, only: convolute_incoming_fft
     use m_KH_utils, only: convolute_instrumental
+    use m_spectrum_utils, only: convolution_lorentzian_grid_fft_many_freq
     
     type(sckh_params_t), intent(inout):: p 
 
@@ -873,11 +875,17 @@ contains
       
       if(gamma_inc .gt. 1d-5) then
         sigma_tmp = lambda_lp
-        call convolute_incoming(sigma_tmp, omega_in, omega_out, gamma_inc, lambda_lp)
+        !call convolute_incoming(sigma_tmp, omega_in, omega_out, gamma_inc, lambda_lp)
+        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+             2.0_wp * gamma_inc, omega_out, lambda_lp, 1, "GAUSSIAN")
         sigma_tmp = lambda_ln
-        call convolute_incoming(sigma_tmp, omega_in, omega_out, gamma_inc, lambda_ln)
+        !call convolute_incoming(sigma_tmp, omega_in, omega_out, gamma_inc, lambda_ln)
+        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+             2.0_wp * gamma_inc, omega_out, lambda_ln, 1,"GAUSSIAN")
         sigma_tmp = lambda_cp
-        call convolute_incoming(sigma_tmp, omega_in, omega_out, gamma_inc, lambda_cp)
+        !call convolute_incoming(sigma_tmp, omega_in, omega_out, gamma_inc, lambda_cp)
+        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+             2.0_wp * gamma_inc, omega_out, lambda_cp, 1,"GAUSSIAN")
       end if
 
       write(6,*) "Done"
@@ -885,11 +893,17 @@ contains
       
       if(gamma_instr .gt. 1d-5) then
         sigma_tmp = lambda_lp
-        call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_lp)
+        !call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_lp)
+        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+             2.0_wp * gamma_instr, omega_out, lambda_lp, 2,"GAUSSIAN")
         sigma_tmp = lambda_ln
-        call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_ln)
+        !call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_ln)
+        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+             2.0_wp * gamma_instr, omega_out, lambda_ln, 2,"GAUSSIAN")
         sigma_tmp = lambda_cp
-        call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_cp)
+        !call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_cp)
+        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+             2.0_wp * gamma_instr, omega_out, lambda_cp, 2,"GAUSSIAN")
       end if
 
       write(6,*) "Done"

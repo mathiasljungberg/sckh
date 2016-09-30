@@ -93,6 +93,8 @@ m_XAS_functions.F90
 m_SCKH_resonant_PES.F90
 m_SCKH_nonadiabatic.F90
 m_ode_solvers.F90
+m_spectrum_utils.F90
+m_convolution.F90
 )
 
 SET(ALL_MODULES_F 

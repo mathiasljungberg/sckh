@@ -826,7 +826,7 @@ subroutine convolute_instrumental(sigma, omega_in, omega_out, gamma_instr, sigma
 end subroutine convolute_instrumental
 
 ! sigma(om_in, om_out)
-! convolute with respect to omega_out
+! convolute with respect to omega_in
 subroutine convolute_incoming(sigma, omega_in, omega_out, gamma_inc, sigma_out)
   use m_precision, only: wp
   use m_KH_functions, only: gaussian
@@ -854,6 +854,33 @@ subroutine convolute_incoming(sigma, omega_in, omega_out, gamma_inc, sigma_out)
   sigma_out = sigma_out * (omega_in(2)- omega_in(1))
   
 end subroutine convolute_incoming
+
+!subroutine convolute_incoming_fft(sigma, omega_in, omega_out, gamma_inc, sigma_out)
+!  use m_precision, only: wp
+!  use m_KH_functions, only: gaussian
+!  !use m_spectrum_utils, only: convolution_lorentzian_grid_fft
+!  use m_spectrum_utils, only: convolution_lorentzian_grid_fft_many_freq
+!  
+!  real(wp), intent(in):: sigma(:,:)
+!  real(wp), intent(in):: omega_in(:)
+!  real(wp), intent(in):: omega_out(:)
+!  real(wp), intent(in):: gamma_inc
+!  real(wp), intent(out):: sigma_out(:,:)
+!
+!  integer:: om_in1, om_in2, om_out1
+!  
+!  sigma_out =0.0_wp
+!  
+! ! do om_out1 = 1, size(omega_out)
+! !   write(6,*) "ome_out1", om_out1
+! !   call convolution_lorentzian_grid_fft( omega_in, sigma(:, om_out1), 2.0_wp * gamma_inc, omega_out, sigma_out(:,om_out1) )
+! ! end do
+!
+!  call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma, 2.0_wp * gamma_inc, omega_out, sigma_out, 1)
+!  
+!end subroutine convolute_incoming_fft
+
+
 
   
 end module m_KH_utils

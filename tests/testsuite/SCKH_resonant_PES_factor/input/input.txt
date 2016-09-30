@@ -1,0 +1,56 @@
+
+runmode SCKH_resonant_PES_factor
+
+!
+! test_energy_tot.dat
+! pesfile_9.dat 
+
+! files
+pes_file_i    test_energy_tot.dat
+
+use_dynamics_file    .true.
+pes_file_dyn        test_energy_tot_exc.dat
+pes_file_dyn2        test_energy_tot_exc.dat
+
+!pes_file_lp_corr   test_lp_lp_energy.dat
+!shift_PES 1
+
+npesfile_f 6
+pes_file_list_f    pes_file_list_f.txt
+dipole_file_list_f dipole_file_list_f.txt
+
+npesfile_n 1
+pes_file_list_n    pes_file_list_n.txt
+dipole_file_list_n dipole_file_list_n.txt
+
+outfile spectrum_resonant
+
+!for vib solver 
+vib_solver FOURIER_REAL
+npoints_in 77
+nstates 77
+mu 1.0078825
+dvr_start_in 0.5
+dx_in 0.025 
+
+kh_amplitude_mode outgoing
+
+! frequencies
+!omega_start 517
+!omega_end  528
+!n_omega 100
+
+gamma_FWHM 0.18
+gamma_inc_FWHM   0.3
+gamma_instr_FWHM 0.3
+
+samplemode 1 
+npoints_x_sampl 2
+npoints_mom_sampl 2
+delta_t 0.05
+ntsteps 1024
+
+!use_proj .true.
+!proj_file proj_file.txt
+
+
