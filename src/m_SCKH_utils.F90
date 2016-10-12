@@ -856,7 +856,7 @@ contains
 
   ! here use factorization
   subroutine compute_F_if_om_omp_no_F(E_f, E_fi_mean, time, &
-       E_i, gamma_inc, omega_out, E_nf_mean, R_if_om_omp)
+       E_i, gamma_R, omega_out, E_nf_mean, R_if_om_omp)
     use m_precision, only: wp
     use m_constants, only: const
     use m_fftw3, only: fft_c2c_1d_forward
@@ -867,7 +867,7 @@ contains
     real(wp), intent(in):: E_fi_mean
     real(wp), intent(in):: time(:)
     real(wp), intent(in):: E_i(:)
-    real(wp), intent(in):: gamma_inc
+    real(wp), intent(in):: gamma_R
     real(wp), intent(in):: omega_out(:)
     real(wp), intent(in):: E_nf_mean
     complex(wp), intent(out) ::  R_if_om_omp(:,:,:)
@@ -890,7 +890,7 @@ contains
         !  do m2 =1, 3
             
         call fft_c2c_1d_forward( e_factor1(:) * &
-             !exp(-2*gamma_inc * const % eV * time(:) / const % hbar) * &
+             !exp(-gamma_R * const % eV * time(:) / const % hbar) * &
              !exp(-(gamma_inc * const % eV) ** 2 / (4.0_wp * log(2.0_wp)) * (time(:) / const % hbar)**2) * &
              exp(dcmplx(0.0_wp,  (omega_out(om_out) - E_nf_mean)* const % eV * time(:) / const % hbar )), &
              !* &
@@ -1044,6 +1044,57 @@ contains
     
   end subroutine compute_F_if_om_omp_ingoing
 
+  subroutine compute_F_if_om_omp_ingoing_no_F(E_f, E_fi_mean, time, &
+       E_i, gamma_instr, omega_in, E_ni_mean, R_if_om_omp)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_forward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    !complex(wp), intent(in) ::  F_if_t_om(:,:,:,:,:)
+    real(wp), intent(in):: E_f(:,:)
+    real(wp), intent(in):: E_fi_mean
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_i(:)
+    real(wp), intent(in):: gamma_instr
+    real(wp), intent(in):: omega_in(:)
+    real(wp), intent(in):: E_ni_mean
+    complex(wp), intent(out) ::  R_if_om_omp(:,:,:)
+
+    integer:: nfinal, n_omega_in, n_omega_out, f_e, om_in, m1, m2
+    complex(wp), allocatable ::  e_factor1(:)
+    
+    !nfinal = size(F_if_t_om,1)
+    !n_omega_in = size(F_if_t_om,2)
+    !n_omega_out = size(F_if_t_om,3)
+    nfinal = size(E_f,1)
+    n_omega_in = size(omega_in)
+    n_omega_out = size(E_f,2)
+    
+    allocate(e_factor1(n_omega_out))
+    
+    do f_e= 1, nfinal
+      
+      call compute_efactor(E_f(f_e,:), E_i, E_fi_mean, time, e_factor1(:), .true.) ! before: false
+      
+      do om_in= 1, n_omega_in
+        !do m1 =1, 3
+        !  do m2 =1, 3
+        
+        call fft_c2c_1d_forward( e_factor1(:) * &
+             !exp(-gamma_instr * const % eV * time(:) / const % hbar) * &
+             exp(dcmplx(0.0_wp,  (omega_in(om_in) - E_ni_mean)* const % eV * time(:) / const % hbar )), &
+             !F_if_t_om(f_e, :, om_in, m1,m2), &
+             R_if_om_omp(f_e, om_in,:)) ! switch places of indices
+        call reorder_sigma_fftw_z(R_if_om_omp(f_e, om_in,:))
+        
+        !          end do
+        !        end do
+      end do
+    end do
+    
+  end subroutine compute_F_if_om_omp_ingoing_no_F
+  
 
   !
   !

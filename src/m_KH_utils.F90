@@ -458,9 +458,10 @@ end subroutine spectrum_XES
 
 subroutine compute_XES_res(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
      gamma, gamma_inc, gamma_instr, flag_res, flag_nonres,&
-     sigma_final, lambda_F, lambda_G, lambda_H)
+     sigma_final, lambda_F, lambda_G, lambda_H, funct_type_in)
   use m_precision, only: wp
   use m_KH_functions, only: gaussian
+  use m_spectrum_utils, only: convolution_lorentzian_grid_fft_many_freq
   
   real(kind=wp), intent(in):: E_i, E_n(:), E_f(:)
   !integer, intent(in):: n_el_f   
@@ -475,11 +476,19 @@ subroutine compute_XES_res(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
   real(kind=wp), intent(out):: lambda_F(:,:)
   real(kind=wp), intent(out):: lambda_G(:,:)
   real(kind=wp), intent(out):: lambda_H(:,:)
-
+  character(*), intent(in), optional:: funct_type_in
+  
   integer:: om_in, om_out, i_f, m1, m2 !, i_vib_f, i_el_f, n_vib_f
   complex(wp):: F(3,3)
   real(wp):: prefac, broadening
   real(wp), allocatable:: sigma_tmp(:,:)
+  character(80):: funct_type
+
+  if(present(funct_type_in)) then
+    funct_type = funct_type_in
+  else
+    funct_type = "GAUSSIAN"
+  end if
   
   write(6,*) "compute_XES_res 0"
 
@@ -507,7 +516,14 @@ subroutine compute_XES_res(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
           ! prefac = omega_out(om_iout) / omega_in(om_in)
           prefac = omega_out(om_out) / (omega_out(om_out) + (E_f(i_f)- E_i))
           
-          broadening = prefac * gaussian(omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i), 0.0_wp, 2.0_wp *  gamma_inc)
+          if(funct_type .eq. "GAUSSIAN") then
+            broadening = prefac * gaussian(omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i), 0.0_wp, 2.0_wp *  gamma_inc)
+          else if(funct_type .eq. "LORENTZIAN") then
+            broadening = prefac * gamma_inc / ((omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i))**2 + gamma_inc ** 2 )
+          else
+            write(6,*) "compute_XES_res: funct_type must be either 'GAUSSIAN' or 'LORENTZIAN' "
+          end if
+          
           !gamma_instr / ((omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i))**2 + gamma_instr ** 2 )
           
           sigma_final(om_in, om_out,:,:) =  sigma_final(om_in, om_out,:,:) + &
@@ -533,20 +549,196 @@ subroutine compute_XES_res(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
     do m1=1,3
       do m2=1,3
         sigma_tmp = sigma_final(:,:,m1,m2)
-        call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, sigma_final(:,:,m1,m2))
+        !call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, sigma_final(:,:,m1,m2))
+        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+             2.0_wp * gamma_instr, omega_out, sigma_final(:,:,m1,m2), 2, "GAUSSIAN")
       end do
     end do
 
     sigma_tmp = lambda_F
-    call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_F)
+    !call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_F)
+    call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+         2.0_wp * gamma_instr, omega_out, lambda_F, 2, "GAUSSIAN")
     sigma_tmp = lambda_G
-    call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_G)
+    !call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_G)
+    call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+         2.0_wp * gamma_instr, omega_out, lambda_G, 2, "GAUSSIAN")
     sigma_tmp = lambda_H
-    call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_H)
-
+    !call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_H)
+    call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+         2.0_wp * gamma_instr, omega_out, lambda_H, 2, "GAUSSIAN")
     
   end subroutine compute_XES_res
 
+  ! this routine factorized the KH cross section into the non-resonant spectrum and a resonance part
+  subroutine compute_XES_res_factor(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
+       gamma, gamma_inc, gamma_instr, flag_res, flag_nonres,&
+       sigma_final, lambda_F, lambda_G, lambda_H, funct_type_in)
+    use m_precision, only: wp
+    use m_KH_functions, only: gaussian
+    use m_spectrum_utils, only: convolution_lorentzian_grid_fft_many_freq
+    
+    real(kind=wp), intent(in):: E_i, E_n(:), E_f(:)
+    !integer, intent(in):: n_el_f   
+    real(kind=wp), intent(in):: D_ni(:,:), D_fn(:,:,:)
+    real(kind=wp), intent(in):: omega_in(:)
+    real(kind=wp), intent(in):: omega_out(:)
+    real(kind=wp), intent(in):: gamma
+    real(kind=wp), intent(in):: gamma_inc
+    real(kind=wp), intent(in):: gamma_instr
+    logical,intent(in):: flag_res, flag_nonres
+    real(kind=wp), intent(out):: sigma_final(:,:,:,:)
+    real(kind=wp), intent(out):: lambda_F(:,:)
+    real(kind=wp), intent(out):: lambda_G(:,:)
+    real(kind=wp), intent(out):: lambda_H(:,:)
+    character(*), intent(in), optional:: funct_type_in
+    
+    integer:: om_in, om_out, i_f, m1, m2 !, i_vib_f, i_el_f, n_vib_f
+    complex(wp):: F(3,3)
+    complex(wp):: F_tmp(3,3)
+    real(wp):: prefac, broadening
+    real(wp), allocatable:: sigma_tmp(:,:)
+    real(wp), allocatable:: sigma_final_tmp(:,:,:)
+    real(wp), allocatable:: lambda_F_tmp(:)
+    real(wp), allocatable:: lambda_G_tmp(:)
+    real(wp), allocatable:: lambda_H_tmp(:)
+    character(80):: funct_type
+
+    if(present(funct_type_in)) then
+      funct_type = funct_type_in
+    else
+      funct_type = "GAUSSIAN"
+    end if
+    
+    write(6,*) "compute_XES_res 0"
+
+    allocate(sigma_final_tmp(size(omega_out),3,3))
+    allocate(lambda_F_tmp(size(omega_out)))
+    allocate(lambda_G_tmp(size(omega_out)))
+    allocate(lambda_H_tmp(size(omega_out)))
+    
+    sigma_final_tmp = 0.0_wp
+    lambda_F_tmp =0 
+    lambda_G_tmp =0
+    lambda_H_tmp =0
+
+    do om_out = 1, size(omega_out)
+      write(6,*) "om_out", om_out
+      
+ !     F = 0.0_wp
+      do i_f = 1, size(E_f)
+        call compute_amplitude_F(E_i, E_n, E_f(i_f), &
+             D_ni(:,:), D_fn(i_f,:,:), omega_out(om_out), gamma, F(:,:), &
+             flag_res, flag_nonres)
+!        F = F + F_tmp
+!      end do
+      
+ !     do i_f = 1, size(E_f)
+      
+!        do om_in = 1, size(omega_in)
+          
+          ! broadening, intitial distribution, including prefactor
+          ! broadening = (omega_in(om_in) / omega_out(om_out)) *  &
+          ! gamma_instr / ((omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i))**2 + gamma_instr ** 2 )
+
+          ! alt broadening, instrumental, including prefactor
+          ! prefac = omega_out(om_iout) / omega_in(om_in)
+          prefac = omega_out(om_out) / (omega_out(om_out) + (E_f(i_f)- E_i))
+          broadening = prefac
+          
+!          if(funct_type .eq. "GAUSSIAN") then
+!            broadening = prefac * gaussian(omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i), 0.0_wp, 2.0_wp *  gamma_inc)
+!          else if(funct_type .eq. "LORENTZIAN") then
+!            broadening = prefac * gamma_inc / ((omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i))**2 + gamma_inc ** 2 )
+!          else
+!            write(6,*) "compute_XES_res: funct_type must be either 'GAUSSIAN' or 'LORENTZIAN' "
+!          end if
+!          
+          !gamma_instr / ((omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i))**2 + gamma_instr ** 2 )
+          
+          sigma_final_tmp(om_out,:,:) =  sigma_final_tmp(om_out,:,:) + &
+               abs(F)**2 * broadening
+          
+          ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+          do m1=1,3
+            do m2=1,3
+              lambda_F_tmp(om_out) = lambda_F_tmp(om_out) +  real(F(m1,m1) * conjg(F(m2,m2)) ) * broadening
+              lambda_G_tmp(om_out) = lambda_G_tmp(om_out) +  real(F(m1,m2) * conjg(F(m1,m2)) ) * broadening
+              lambda_H_tmp(om_out) = lambda_H_tmp(om_out) +  real(F(m1,m2) * conjg(F(m2,m1)) ) * broadening
+            end do
+          end do
+          
+!        end do
+        
+        end do !do i_f = 1, size(E_f)
+      end do !do om_out = 1, size(omega_out)
+
+    sigma_final = 0.0_wp
+    lambda_F =0 
+    lambda_G =0
+    lambda_H =0
+      
+    ! convolute after the fact
+    do om_out = 1, size(omega_out)
+      do om_in = 1, size(omega_in)
+        do i_f = 1, 1 !size(E_f)
+          
+          if(funct_type .eq. "GAUSSIAN") then
+            broadening = prefac * gaussian(omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i), 0.0_wp, 2.0_wp *  gamma_inc)
+          else if(funct_type .eq. "LORENTZIAN") then
+            broadening = prefac * gamma_inc / ((omega_in(om_in) - omega_out(om_out) - (E_f(i_f)- E_i))**2 + gamma_inc ** 2 )
+          else
+            write(6,*) "compute_XES_res: funct_type must be either 'GAUSSIAN' or 'LORENTZIAN' "
+          end if
+            
+          sigma_final(om_in, om_out,:,:) =  sigma_final(om_in, om_out,:,:) + &
+               sigma_final_tmp(om_out,:,:) * broadening
+          
+          ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+          do m1=1,3
+            do m2=1,3
+              lambda_F(om_in, om_out) = lambda_F(om_in, om_out) +  lambda_F_tmp(om_out) * broadening
+              lambda_G(om_in, om_out) = lambda_G(om_in, om_out) +  lambda_G_tmp(om_out) * broadening
+              lambda_H(om_in, om_out) = lambda_H(om_in, om_out) +  lambda_H_tmp(om_out) * broadening
+            end do
+          end do
+          
+        end do
+        
+      end do
+    end do
+
+
+    ! convolute with instrumental broadening
+    allocate(sigma_tmp(size(omega_in), size(omega_out)))
+    
+    do m1=1,3
+      do m2=1,3
+        sigma_tmp = sigma_final(:,:,m1,m2)
+        !call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, sigma_final(:,:,m1,m2))
+        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+             2.0_wp * gamma_instr, omega_out, sigma_final(:,:,m1,m2), 2, "GAUSSIAN")
+      end do
+    end do
+
+    sigma_tmp = lambda_F
+    !call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_F)
+    call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+         2.0_wp * gamma_instr, omega_out, lambda_F, 2, "GAUSSIAN")
+    sigma_tmp = lambda_G
+    !call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_G)
+    call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+         2.0_wp * gamma_instr, omega_out, lambda_G, 2, "GAUSSIAN")
+    sigma_tmp = lambda_H
+    !call convolute_instrumental(sigma_tmp, omega_in, omega_out, gamma_instr, lambda_H)
+    call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+         2.0_wp * gamma_instr, omega_out, lambda_H, 2, "GAUSSIAN")
+    
+  end subroutine compute_XES_res_factor
+
+
+
+  
   ! here use F(\omega) instead of F(\omega'). Should be exactly the same, but we can save time if N_{\omega} < N_{\omega'}
   subroutine compute_XES_res_alt(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
        gamma, gamma_inc, gamma_instr, flag_res, flag_nonres,&

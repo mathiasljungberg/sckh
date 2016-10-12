@@ -196,7 +196,7 @@ contains
  ! this subroutine takes a spectrum on a grid and convolutes it with a Lorentzian
  ! if dim =1, then the first dimension will be convoluted, if dim=2 the second dimension will be
  subroutine convolution_lorentzian_grid_fft_many_freq(energies_in, intensities_in, fwhm, &
-      energies_out, intensities_out, dim, funct_type_in)
+      energies_out, intensities_out, dim, funct_type_in, asym_in)
 
    use m_precision, only: wp
    use m_constants, only: const
@@ -210,6 +210,7 @@ contains
    real(wp), intent(out):: intensities_out(:,:)
    integer, intent(in):: dim
    character(*), intent(in), optional:: funct_type_in
+   real(wp), intent(in), optional:: asym_in
    
    complex(wp), allocatable:: intensities_in_cmplx(:,:)
    complex(wp), allocatable:: intensities_out_cmplx(:,:)
@@ -217,13 +218,19 @@ contains
 
    integer:: i,s1,s2,s3,f1,f2,f3
    integer:: dim2
-   real(wp):: dx 
+   real(wp):: dx, asym, gamma_FWHM, integral 
    character(80):: funct_type
    
    if(present(funct_type_in)) then
      funct_type = funct_type_in
    else
      funct_type = "LORENTZIAN"
+   end if
+
+   if(present(asym_in)) then
+     asym = asym_in
+   else
+     asym = 1.0_wp
    end if
    
    if(dim .eq. 1) then
@@ -242,8 +249,12 @@ contains
    f3 = ubound(intensities_out,dim)
    
    ! assume same dx in input and output (for fft)!
-   dx = energies_in(s1+1)-energies_in(s1)
- 
+   if(dim .eq. 1) then
+     dx = energies_in(s1+1)-energies_in(s1)
+   else if(dim .eq. 2) then
+     dx = energies_out(s1+1)-energies_out(s1)
+   end if
+     
    s2 = min(s1-s3, s1-f3, f1-s3, f1-f3)
    f2 = max(s1-s3, s1-f3, f1-s3, f1-f3)
    
@@ -263,19 +274,52 @@ contains
      do i=s2,f2 
        !conv_func(i) = 1.0d0 / cmplx(i*dx, 0.5d0*fwhm, 8 )
        conv_func(i) = (0.5_wp *  fwhm / const % pi)  / ((i*dx)**2+ (0.5_wp * fwhm)**2)
+       !conv_func(i) = (0.5_wp *  fwhm )  / ((i*dx)**2+ (0.5_wp * fwhm)**2)
+     end do
+   elseif(upper(funct_type) .eq. "ASYM_LORENTZIAN") then 
+     do i=s2,f2 
+       !conv_func(i) = 1.0d0 / cmplx(i*dx, 0.5d0*fwhm, 8 )
+       gamma_FWHM = (2.0_wp * fwhm) / (1 + exp(asym * i * dx)) 
+       conv_func(i) = (0.5_wp *  gamma_FWHM / const % pi)  / ((i*dx)**2+ (0.5_wp * gamma_FWHM)**2)
+       !conv_func(i) = (0.5_wp *  gamma_FWHM )  / ((i*dx)**2+ (0.5_wp * gamma_FWHM)**2)
      end do
    else if(upper(funct_type) .eq. "GAUSSIAN") then 
      do i=s2,f2 
        conv_func(i) = gaussian(i*dx, 0.0_wp, fwhm)
      end do
+   else if(upper(funct_type) .eq. "ASYM_GAUSSIAN") then 
+     do i=s2,f2 
+       gamma_FWHM = (2.0_wp * fwhm) / (1 + exp(asym * i * dx)) 
+       if(gamma_FWHM .lt. 1d-10) then
+         conv_func(i) =0.0_wp
+       else
+         conv_func(i) = gaussian(i*dx, 0.0_wp, gamma_FWHM)
+         write(6,*) gamma_FWHM, conv_func(i)
+       end if
+     end do
+
+   else if(upper(funct_type) .eq. "ASYM_GAUSSIAN") then 
+     do i=s2,f2 
+       gamma_FWHM = (2.0_wp * fwhm) / (1 + exp(asym * i * dx)) 
+       if(gamma_FWHM .lt. 1d-10) then
+         conv_func(i) =0.0_wp
+       else
+         conv_func(i) = gaussian(i*dx, 0.0_wp, gamma_FWHM)
+         write(6,*) gamma_FWHM, conv_func(i)
+       end if
+     end do
    else
      write(6,*) "convolution_lorentzian_grid_fft_many_freq: mode must be either 'LORENTZIAN' or 'GAUSSIAN''"
    end if
+
+   ! normalize conv_func
+   integral = real(sum(conv_func),8)*dx
+   conv_func = conv_func / integral
    
    call convolution_a_fft_zzz(conv_func, intensities_in_cmplx, intensities_out_cmplx)
    
    if (dim .eq. 1) then
-     intensities_out = dx * transpose(intensities_out_cmplx) 
+     intensities_out = dx * transpose(intensities_out_cmplx)
    else if(dim .eq. 2) then
      intensities_out = dx * intensities_out_cmplx
    end if

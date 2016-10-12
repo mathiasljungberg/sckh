@@ -60,8 +60,12 @@ module m_sckh_params_t
      real(wp):: dx_in
      real(wp):: gamma_FWHM
      real(wp):: gamma_instr_FWHM
-     real(wp):: gamma_inc_FWHM 
+     real(wp):: gamma_inc_FWHM
+     real(wp):: gamma_R_FWHM 
 
+     character(80):: broadening_func_inc
+     character(80):: broadening_func_instr
+     
      character(80):: vib_solver
      character(80):: KH_amplitude_mode
     
@@ -187,6 +191,12 @@ contains
     call init_parameter('gamma_instr_FWHM',inp, 0.1_wp, p % gamma_instr_FWHM ,iv)
     ! gamma_inc_FWHM: incoming distribution broadening [eV]
     call init_parameter('gamma_inc_FWHM',inp, 0.1_wp, p % gamma_inc_FWHM ,iv)
+    ! gamma_R_FWHM: broadening for resonance factor [eV]
+    call init_parameter('gamma_R_FWHM',inp, 0.1_wp, p % gamma_R_FWHM ,iv)
+    ! broadening function incoming  [eV]
+    call init_parameter('broadening_func_inc',inp, "GAUSSIAN", p % broadening_func_inc ,iv)
+    ! broadening function incoming  [eV]
+    call init_parameter('broadening_func_instr',inp, "GAUSSIAN", p % broadening_func_instr ,iv)
 
     ! vib_solver: 1d vibrational solver, SINC_DVR or FOURIER_REAL
     call init_parameter('vib_solver',inp, "SINC_DVR", p % vib_solver ,iv)

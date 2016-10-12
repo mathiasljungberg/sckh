@@ -448,6 +448,7 @@ contains
     use m_sckh_params_t, only: sckh_params_t 
     use m_KH_utils, only: calculate_dipoles_KH_res
     use m_KH_utils, only: compute_XES_res
+    use m_KH_utils, only: compute_XES_res_factor
     use m_KH_utils, only: compute_XES_res_alt
     use m_io, only: get_free_handle
     use m_KH_functions, only: solve_vib_problem
@@ -620,7 +621,14 @@ contains
                D_ni_cmp(:,:), D_fn_cmp(f_e,:,:,:), &
                omega_in, omega_out, gamma, gamma_inc, gamma_instr, .true., .true., &
                sigma_final(f_e,:,:,:,:), &
-               lambda_F(f_e,:,:), lambda_G(f_e,:,:), lambda_H(f_e,:,:))
+               lambda_F(f_e,:,:), lambda_G(f_e,:,:), lambda_H(f_e,:,:), &
+               upper(p % broadening_func_inc)) 
+
+          !call compute_XES_res_factor(eig_i(1), eig_n_cmp(:), eig_f(f_e,:), &
+          !     D_ni_cmp(:,:), D_fn_cmp(f_e,:,:,:), &
+          !     omega_in, omega_out, gamma, gamma_inc, gamma_instr, .true., .true., &
+          !     sigma_final(f_e,:,:,:,:), &
+          !     lambda_F(f_e,:,:), lambda_G(f_e,:,:), lambda_H(f_e,:,:), "LORENTZIAN")
         end do
 
       else if (upper(p % KH_amplitude_mode) .eq. "INGOING") then
