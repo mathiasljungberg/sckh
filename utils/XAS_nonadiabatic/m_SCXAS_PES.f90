@@ -123,6 +123,11 @@ subroutine calculate_SCXAS_PES(inp)
      call read_dipole_file(inp % dipolefile_f(j), inp % npoints_in, inp % npoints_in, X_dvr, D_fi_inp(j,:,:))
   end do
 
+  ! hack to change PES
+  !E_n_inp = (E_i_inp +  E_f_inp(3,:)) / 2.0_wp
+  !E_n_inp = (E_i_inp + sum(E_f_inp(:,:),1) / inp % npesfile_f) / 2.0_wp
+  !E_n_inp = sum(E_f_inp(:,:),1) / inp % npesfile_f
+  
   if (inp % nonadiabatic .eq. 1) then
      call read_nac_file(inp % nac_file, inp % npoints_in, inp %npoints_in, X_dvr, inp % npesfile_f, nac)
   end if
@@ -214,7 +219,12 @@ subroutine calculate_SCXAS_PES(inp)
 
 
   n_omega = ntsteps_pad 
-  allocate(sigma_m(nfinal,n_omega,3), sigma(nfinal,n_omega), sigma_tot(n_omega),  sigma_proj(inp % nproj,n_omega), sigma_tmp(nfinal,n_omega), omega(n_omega))
+  allocate(sigma_m(nfinal,n_omega,3), &
+       sigma(nfinal,n_omega), &
+       sigma_tot(n_omega), &
+       sigma_proj(inp % nproj,n_omega), &
+       sigma_tmp(nfinal,n_omega), &
+       omega(n_omega))
 
 
   !
@@ -244,6 +254,10 @@ subroutine calculate_SCXAS_PES(inp)
      
      ! run on PES n (for XAS arbitrary PES, no intermediate state)
      call verlet_trajectory(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/my_SI, X_dvr, E_n_inp * eV, delta_t_2, my_SI, x_new )
+
+     ! hack to disable dynamics with large mass
+     !call verlet_trajectory(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/(1000*my_SI), &
+     !     X_dvr, E_n_inp * eV, delta_t_2, 1000*my_SI, x_new )
      !call verlet_trajectory(0.8e-10_wp, 0.0_wp, X_dvr, E_n_inp * eV, delta_t_2, my_SI, x_new )
 
     !do i=1, size(x_new2)
@@ -276,6 +290,9 @@ subroutine calculate_SCXAS_PES(inp)
 
      ! look up energies as a function of distance (which in turn is a function of time)
      call spline_easy(X_dvr, E_i_inp, npoints_in, x_new, E_i, ntsteps)
+
+     ! hack to set initial state energies always to the zero-point energy
+     !E_i = eig_i(1) / eV
      
      do i=1,nfinal
         call spline_easy(X_dvr, E_f_inp(i,:), npoints_in, x_new, E_f(i,:), ntsteps)  

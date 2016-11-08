@@ -6,6 +6,7 @@ program sckh_main
   use m_KH, only: calculate_KH_res
   use m_KH, only: calculate_KH_res_el
   use m_log, only : init_logs, ilog, log_timing_note
+  use m_SCXAS_PES, only : calculate_SCXAS_PES
   use m_SCKH_PES, only : calculate_SCKH_PES
   use m_SCKH, only : calculate_SCKH
   use m_SCKH_nonadiabatic, only : compute_sckh_diagonal_nonresonant
@@ -13,6 +14,7 @@ program sckh_main
   use m_XAS_eigenstates, only: calculate_XAS
   use m_SCKH_resonant_PES, only: calculate_SCKH_res_PES
   use m_SCKH_resonant_PES, only: calculate_SCKH_res_PES_factor
+  use m_SCKH_resonant_PES, only: calculate_SCKH_res_PES_factor_each_traj
   
   implicit none
 
@@ -41,14 +43,17 @@ program sckh_main
     call calculate_KH_res_el(p)
     
   ! routines working with 1d  PES, but use classical trajectories on that
+  case("SCXAS_PES")
+    call calculate_SCXAS_PES(p)
   case("SCKH_PES")
     call calculate_SCKH_PES(p)
   case("SCKH_RESONANT_PES")
     call calculate_SCKH_res_PES(p)
   case("SCKH_RESONANT_PES_FACTOR")
     call calculate_SCKH_res_PES_factor(p)
-    
- ! rotines working with general used-supplied trajectories
+    !call calculate_SCKH_res_PES_factor_each_traj(p)
+
+  ! rotines working with general used-supplied trajectories
   case("SCKH")
 
     select case(upper(p%runmode_sckh))

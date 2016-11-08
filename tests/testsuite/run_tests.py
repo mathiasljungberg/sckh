@@ -19,7 +19,9 @@ else:
            'SCKH',
            'KH',
            'KH_resonant',
-           'KH_resonant_el']
+           'KH_resonant_el',
+           'XAS',
+           'SCXAS_PES']
 
 print(dirs)
     

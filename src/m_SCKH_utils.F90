@@ -1094,10 +1094,69 @@ contains
     end do
     
   end subroutine compute_F_if_om_omp_ingoing_no_F
+
+  !
+  ! New SCXAS routines, as similar as possible to SCKH
+  !
+
+  subroutine compute_SCXAS_sigma_f_om_mm(E_i, E_f, E_fi_mean, D_fi, time, sigma_f_om_mm, gamma)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_backward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    real(wp), dimension(:), intent(in):: E_i, time
+    real(wp), dimension(:,:), intent(in):: E_f
+    real(wp),dimension(:,:,:),intent(in):: D_fi 
+    real(wp), dimension(:,:,:,:),intent(out) ::  sigma_f_om_mm
+    real(wp), intent(in):: E_fi_mean, gamma
+    
+    integer:: nfinal, ntsteps, f_e
+    complex(wp), allocatable:: funct(:)
+    complex(wp), allocatable:: funct_fft(:)
+    complex(wp), allocatable:: F_m(:,:)
+    complex(wp), allocatable::  e_factor1(:)
+    integer:: m1, m2 
+    
+    nfinal = size(E_f,1) 
+    ntsteps = size(time) 
+    
+    allocate(funct(ntsteps), &
+         funct_fft(ntsteps), &
+         e_factor1(ntsteps), &
+         F_m(ntsteps,3))
+    
+    do f_e =1,nfinal! final state 
+
+      call compute_efactor(E_f(f_e,:), E_i, E_fi_mean, time, e_factor1, .true.)
+      
+      do m1=1,3 ! polarization
+
+        funct = D_fi(f_e, :,m1) * e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar)
+        
+        call fft_c2c_1d_backward(funct, funct_fft)
+        call reorder_sigma_fftw_z(funct_fft)
+
+        F_m(:,m1) = funct_fft(:)
+
+      end do ! m1
+      
+      ! compute full sigma tensor
+      do m1=1,3
+        do m2=1,3
+          sigma_f_om_mm(f_e,:,m1,m2) = real(conjg(F_m(:,m1))* F_m(:,m2))
+        end do
+      end do
+      
+    end do ! f_e
+    
+  end subroutine compute_SCXAS_sigma_f_om_mm
+
+
   
 
   !
-  !
+  ! Old SCXAS routines
   !
 
 

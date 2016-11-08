@@ -79,6 +79,8 @@ module m_sckh_params_t
      real(kind=wp):: delta_t
      real(kind=wp):: delta_t2
      logical:: use_dynamics_file
+     character(80):: runmode_sckh_res
+          
      
      ! for SCKH
      integer:: ntraj
@@ -223,6 +225,8 @@ contains
     call init_parameter('nfinal',inp, 1, p % nfinal, iv)
 
     call init_parameter('runmode_sckh',inp,'nonresonant',p%runmode_sckh,iv)
+
+    call init_parameter('runmode_sckh_res',inp,'FULL',p%runmode_sckh_res,iv)
 
     ! projections
     call init_parameter('use_proj',inp, .false., p % use_proj,iv)

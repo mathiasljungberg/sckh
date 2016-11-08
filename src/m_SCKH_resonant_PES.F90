@@ -44,6 +44,7 @@ contains
     real(wp), allocatable:: D_fn_inp(:,:,:,:), D_fn1(:,:,:,:), D_fn2(:,:,:,:)
     real(wp), allocatable:: D_ni_inp(:,:,:), D_ni1(:,:,:), D_ni2(:,:,:) 
     real(wp):: E_nf_mean, E_fi_mean, E_ni_mean
+    real(wp), allocatable:: E_i_mean(:)
     
     character(80)::  string, file
     real(wp), allocatable:: x_sampl(:), mom_sampl(:), x_mom_sampl(:,:)
@@ -118,6 +119,7 @@ contains
          D_fn2(nfinal, ninter, ntsteps,3), &
          D_fn1(nfinal, ninter, ntsteps,3), &
          E_lp_corr(npoints_in),&
+         E_i_mean(ntsteps), &
          shift(npoints_in), &
          c_i(npoints_in,npoints_in), &
          eig_i(npoints_in), &
@@ -170,7 +172,10 @@ contains
 
     ! XXX dangerous hack!
     !E_dyn_inp = (E_i_inp + E_f_inp(1,:)) /2.0_wp
-
+    !E_dyn_inp = (E_f_inp(1,:) + E_n_inp(1,:) + E_i_inp) /3.0_wp
+    !E_dyn_inp = (E_n_inp(1,:) + E_f_inp(1,:)) /2.0_wp
+    !E_dyn_inp = (E_i_inp + E_f_inp(1,:)) /2.0_wp
+    !E_dyn2_inp = (E_n_inp(1,:) + E_f_inp(1,:)) /2.0_wp
     
     ! Shift orbital energies so that E_f(1,:) have energies E_lp_corr
     ! and the spacing between the intermediate and final states are preserved
@@ -300,9 +305,12 @@ contains
         
         E_fi_mean =  E_f1(nfinal, ind(1)) - E_i1(ind(1))
         write(6,*) "E_fi_mean", E_fi_mean
-        
+
         E_nf_mean =  E_n1(ninter, ind(1)) - E_f1(nfinal,ind(1))
         write(6,*) "E_nf_mean", E_nf_mean
+
+        ! this is to take away the initial state vib effects
+        E_i_mean =  E_i1(ind(1))
         
         call get_omega_reordered_fftw(time_l * const % eV /  const % hbar, omega_in)
         omega_in = omega_in + E_ni_mean !E_nf_mean + E_fi_mean
@@ -315,14 +323,26 @@ contains
       ! loop over each starting point of first trajectory
       do traj2 =1, ntsteps ! possibly with a stride
         
-        call verlet_trajectory_xva(x_new(traj2), v_new(traj2), X_r, &
-             E_dyn2_inp * const % eV, fac_t * delta_t, mu_SI, x_new2, v_new2, a_new2 )
+        if(upper(p % runmode_sckh_res) .eq. "FULL") then
+          call verlet_trajectory_xva(x_new(traj2), v_new(traj2), X_r, &
+               E_dyn2_inp * const % eV, fac_t * delta_t, mu_SI, x_new2, v_new2, a_new2 )
+        else if(upper(p % runmode_sckh_res) .eq. "APPROX") then
+          ! run from same starting point, then add the energies of the runs on intermediate and initial states
+          call verlet_trajectory_xva(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, X_r, &
+               E_dyn2_inp * const % eV, fac_t * delta_t, mu_SI, x_new2, v_new2, a_new2 )
+        else
+          write(6,*) "upper(p % sckh_res_runmode) must be either 'FULL' or 'APPROX' "
+        end if
 
+        
         !call verlet_trajectory_xva(x_new(1), v_new(1), X_r, &
         !     E_dyn2_inp * const % eV, fac_t * delta_t, mu_SI, x_new2, v_new2, a_new2 )
         
-        call spline_easy(X_r, E_n_inp, npoints_in, x_new2, E_n2, ntsteps)
         call spline_easy(X_r, E_i_inp, npoints_in, x_new2, E_i2, ntsteps)
+
+        do i=1,ninter
+          call spline_easy(X_r, E_n_inp(i,:), npoints_in, x_new2, E_n2(i,:), ntsteps)
+        end do
         
         do i=1,nfinal
           call spline_easy(X_r, E_f_inp(i,:), npoints_in, x_new2, E_f2(i,:), ntsteps)  
@@ -340,6 +360,19 @@ contains
           end do
         end do
 
+        if(upper(p % runmode_sckh_res) .eq. "APPROX") then
+          E_i2 =  E_i2 +  (E_i1(traj2) - E_i1(1))
+
+          do i=1,ninter
+            E_n2(i,:) =  E_n2(i,:) +  (E_n1(i,traj2) - E_n1(i,1))
+          end do
+
+          do i=1,nfinal
+            E_f2(i,:) =  E_f2(i,:) +  (E_f1(i,traj2) - E_f1(i,1))
+          end do
+          
+        end if
+        
         
         if (upper(p % KH_amplitude_mode) .eq. "OUTGOING") then
 
@@ -364,6 +397,10 @@ contains
         call compute_F_if_om_omp(F_if_t_omp, E_f1(:,:), E_fi_mean, time, &
              E_i1, gamma_inc, omega_out, E_nf_mean, F_if_om_omp)
 
+        !! below to remove dependence on E_i1, so to quantize that energy
+        !call compute_F_if_om_omp(F_if_t_omp, E_f1(:,:), E_fi_mean, time, &
+        !     E_i_mean, gamma_inc, omega_out, E_nf_mean, F_if_om_omp)
+        
       else if (upper(p % KH_amplitude_mode) .eq. "INGOING") then
         call compute_F_if_om_omp_ingoing(F_if_t_omp, E_f1(:,:), E_fi_mean, time, &
              E_i1, gamma_instr, omega_in, E_ni_mean, F_if_om_omp)
@@ -464,7 +501,7 @@ contains
       
     !  end if
     
-    ! write spectra to file
+    ! write spectra to individual files
     do j=1, n_omega_in
       
       file="_sigma_"
@@ -483,6 +520,44 @@ contains
       
    end do
 
+    ! write spectra to file
+   file="_sigma_all"
+   !write(string,'(F6.2)') omega_in(j)   
+   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+   
+   ifile = get_free_handle()
+   open(ifile,file=file,status='unknown')
+
+   do j=1, n_omega_in
+     do i=1, n_omega_out
+       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+     end do
+     write(ifile, *) 
+   end do
+   
+   close(ifile) 
+
+
+   ! write spectra to file
+   file="_sigma_all_nogrid"
+   !write(string,'(F6.2)') omega_in(j)   
+   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+   
+   ifile = get_free_handle()
+   open(ifile,file=file,status='unknown')
+
+   do j=1, n_omega_in
+     do i=1, n_omega_out
+       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+     end do
+     write(ifile, *) 
+     write(ifile, *) 
+   end do
+   
+   close(ifile) 
+
+   
+   
   end subroutine calculate_SCKH_res_PES
 
   subroutine calculate_SCKH_res_PES_factor_each_traj(p)

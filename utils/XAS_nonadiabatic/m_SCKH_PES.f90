@@ -192,7 +192,12 @@ subroutine calculate_SCKH_PES(inp)
 
 
   n_omega = ntsteps_pad 
-  allocate(sigma_m(nfinal,n_omega,3), sigma(nfinal,n_omega), sigma_tot(n_omega),  sigma_proj(inp % nproj,n_omega), sigma_tmp(nfinal,n_omega), omega(n_omega))
+  allocate(sigma_m(nfinal,n_omega,3),&
+       sigma(nfinal,n_omega), &
+       sigma_tot(n_omega),  &
+       sigma_proj(inp % nproj,n_omega), &
+       sigma_tmp(nfinal,n_omega), &
+       omega(n_omega))
 
 
   !

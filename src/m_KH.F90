@@ -604,7 +604,7 @@ contains
     !
     ! calculate spectrum
     !
-      ! use composite indexing for intermediate states
+    ! use composite indexing for intermediate states
       do n_e = 1, p % npesfile_n    
         do n_v = 1, p % nstates
           n_ev = (n_e -1)* p % nstates + n_v
