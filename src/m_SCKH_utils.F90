@@ -662,16 +662,272 @@ contains
     complex(wp), dimension(:,:,:,:),intent(out) ::  F_if_omp
     real(wp), intent(in):: E_nf_mean, gamma
     
-    integer:: nfinal, f_e
+    complex(wp), allocatable::  e_factor(:)
+    integer:: nfinal, f_e, ntsteps
+
+    ntsteps = size(time)     
+    
+    allocate(e_factor(ntsteps))
 
     nfinal = size(E_f,1) 
     
     do f_e =1,nfinal! final state 
-      call compute_F_ifn_omp(E_n, E_f(f_e,:), E_nf_mean, D_fn(f_e,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
+      !call compute_F_ifn_omp(E_n, E_f(f_e,:), E_nf_mean, D_fn(f_e,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
+      call compute_efactor(E_n, E_f(f_e,:), E_nf_mean, time, e_factor, .true.)
+      call compute_F_ifn_omp(e_factor, D_fn(f_e,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
     end do ! f_e
     
   end subroutine compute_F_if_omp
 
+  ! with matrix solution
+  subroutine compute_F_if_omp_matrix(E_n_inp, E_n, E_f_inp, E_n_mean, E_f_mean, D_fn, D_ni, &
+       time_A, time, F_if_omp, gamma)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_backward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    use m_crank_nicolson, only: solve_crank_nicolson_matrix_z
+    use m_crank_nicolson, only: solve_crank_nicolson_matrix_z_spline
+
+    real(wp), intent(in):: E_n_inp(:)
+    real(wp), intent(in):: E_n(:)
+    real(wp),  intent(in):: E_f_inp(:,:)
+    real(wp), intent(in):: E_n_mean
+    real(wp), intent(in):: E_f_mean
+    real(wp), intent(in):: D_fn(:,:,:) 
+    real(wp), intent(in):: D_ni(:)
+    real(wp), intent(in):: time_A(:)
+    real(wp), intent(in):: time(:) 
+    complex(wp), intent(out) ::  F_if_omp(:,:,:,:)
+    real(wp), intent(in):: gamma
+    
+    complex(wp), allocatable::  e_factor(:)
+    complex(wp), allocatable::  A(:,:,:)
+    complex(wp), allocatable::  y(:,:,:), y_0(:,:)
+    complex(wp), allocatable::  D_fn_new(:,:,:)
+    integer:: nfinal, f_e, ntsteps, ntsteps_A, m1
+
+    ntsteps_A = size(time_A)
+    ntsteps = size(time)     
+    
+    allocate(e_factor(ntsteps))
+
+    nfinal = size(E_f_inp,1) 
+
+    allocate(A(nfinal,nfinal,ntsteps_A))
+    allocate(y(nfinal,nfinal,ntsteps))
+    allocate(D_fn_new(nfinal,ntsteps,3))
+    allocate(y_0(nfinal,nfinal))
+        
+    ! set up diagonal A matrix for final states only
+    y_0 = 0.0_wp
+    A = 0.0_wp
+    do f_e=1, nfinal
+      y_0(f_e,f_e) = 1.0_wp
+      !A(f_e,f_e,:) = (0.0_wp, -1.0_wp) * (const % eV  / const % hbar) *((E_n(:) - E_f(f_e,:)) &
+      !     - (E_n_mean - E_f_mean))
+      A(f_e,f_e,:) = (0.0_wp, -1.0_wp) * (const % eV  / const % hbar) *( E_f_inp(f_e,:) - E_f_mean)
+    end do
+
+    ! put some stuff into the martix
+
+    !do f_e=1, nfinal
+    !  A(f_e,2,:) = A(f_e,2,:) + (0.0_wp, -1.0_wp)*(const % eV  / const % hbar) * 5.e-2*f_e
+    !  A(2,f_e,:) = A(2,f_e,:) + (0.0_wp, 1.0_wp)*(const % eV  / const % hbar) * 5.e-2*f_e
+    !
+    !  A(f_e,4,:) = A(f_e,4,:) + (const % eV  / const % hbar) * 0.95e-2*f_e
+    !  A(4,f_e,:) = A(4,f_e,:) + (const % eV  / const % hbar) * 0.95e-2*f_e
+    !end do
+    
+    !write(6,*) "solving matrix"
+    !call solve_crank_nicolson_matrix_z(y_0,  time, A, y)
+
+    write(6,*) "solving matrix with splining"
+    call solve_crank_nicolson_matrix_z_spline(y_0,  time, time_A, A, y)
+
+    ! compute efactor for E_n
+    call compute_efactor_one(E_n, E_n_mean, time, e_factor, .true.)
+    
+    ! compute \sum_{f'} U^{\dagger}_{ff'}(t) D_{f'n}(t) = \sum_{f'} U^*_{f'f}(t) D_{f'n}(t)
+    do f_e =1,nfinal
+      do m1=1,3
+        D_fn_new(f_e,:,m1) = sum( D_fn(:,:,m1) * conjg(y(:,f_e,:)),1) * e_factor(:)
+      end do
+    end do
+    
+    do f_e =1,nfinal! final state 
+      !call compute_F_ifn_omp(E_n, E_f(f_e,:), E_nf_mean, D_fn(f_e,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
+      !call compute_efactor(E_n, E_f(f_e,:), E_nf_mean, time, e_factor, .true.)
+      !e_factor = y(f_e,f_e, :)
+      !call compute_F_ifn_omp(e_factor*conjg(y(f_e,f_e, :)), D_fn(f_e,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
+      call compute_F_ifn_omp_new(D_fn_new(f_e,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
+    end do ! f_e
+    
+  end subroutine compute_F_if_omp_matrix
+
+!  ! with matrix solution
+!  subroutine compute_F_if_omp_matrix(E_n, E_f, E_nf_mean, D_fn, D_ni, &
+!       time_A, time, F_if_omp, gamma)
+!    use m_precision, only: wp
+!    use m_constants, only: const
+!    use m_fftw3, only: fft_c2c_1d_backward
+!    use m_fftw3, only: reorder_sigma_fftw_z
+!    use m_crank_nicolson, only: solve_crank_nicolson_matrix_z
+!    use m_crank_nicolson, only: solve_crank_nicolson_matrix_z_spline
+!
+!    real(wp), intent(in):: E_n(:)
+!    real(wp),  intent(in):: E_f(:,:)
+!    real(wp), intent(in):: E_nf_mean
+!    real(wp), intent(in):: D_fn(:,:,:) 
+!    real(wp), intent(in):: D_ni(:)
+!    real(wp), intent(in):: time_A(:)
+!    real(wp), intent(in):: time(:) 
+!    complex(wp), intent(out) ::  F_if_omp(:,:,:,:)
+!    real(wp), intent(in):: gamma
+!    
+!    complex(wp), allocatable::  e_factor(:)
+!    complex(wp), allocatable::  A(:,:,:)
+!    complex(wp), allocatable::  y(:,:,:), y_0(:,:)
+!    integer:: nfinal, f_e, ntsteps, ntsteps_A
+!
+!    ntsteps_A = size(time_A)
+!    ntsteps = size(time)     
+!    
+!    allocate(e_factor(ntsteps))
+!
+!    nfinal = size(E_f,1) 
+!
+!    allocate(A(nfinal,nfinal,ntsteps_A))
+!    allocate(y(nfinal,nfinal,ntsteps))
+!    allocate(y_0(nfinal,nfinal))
+!        
+!    ! set up diagonal A matrix for final states only
+!    y_0 = 0.0_wp
+!    A = 0.0_wp
+!    do f_e=1, nfinal
+!      y_0(f_e,f_e) = 1.0_wp
+!      !A(f_e,f_e,:) = (0.0_wp, -1.0_wp) * (const % eV  / const % hbar) *((E_n(:) - E_f(f_e,:))  - E_nf_mean)
+!      A(f_e,f_e,:) = (0.0_wp, -1.0_wp) * (const % eV  / const % hbar) *((E_n(:) - E_f(f_e,:))  - E_nf_mean)
+!    end do
+!
+!    !call compute_efactor(E_n, E_f(f_e,:), E_nf_mean, time, e_factor, .true.)
+!    
+!    !write(6,*) "solving matrix"
+!    !call solve_crank_nicolson_matrix_z(y_0,  time, A, y)
+!
+!    write(6,*) "solving matrix with splining"
+!    call solve_crank_nicolson_matrix_z_spline(y_0,  time, time_A, A, y)
+!    
+!    do f_e =1,nfinal! final state 
+!      !call compute_F_ifn_omp(E_n, E_f(f_e,:), E_nf_mean, D_fn(f_e,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
+!      !call compute_efactor(E_n, E_f(f_e,:), E_nf_mean, time, e_factor, .true.)
+!      e_factor = y(f_e,f_e, :)
+!      call compute_F_ifn_omp(e_factor, D_fn(f_e,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
+!    end do ! f_e
+!    
+!  end subroutine compute_F_if_omp_matrix
+
+
+
+  
+  ! for a single combination of i,f,n, now including the D_ni matrix
+  subroutine compute_F_ifn_omp(e_factor, D_fn, D_ni, time, F_ifn_omp, gamma)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_backward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    !real(wp), intent(in):: E_n(:)
+    !real(wp), intent(in):: E_f(:)
+    complex(wp), intent(in)::  e_factor(:)
+    real(wp), intent(in):: D_fn(:,:)
+    real(wp), intent(in):: D_ni(:) 
+    real(wp), intent(in):: time(:)
+    complex(wp), intent(out) ::  F_ifn_omp(:,:,:)
+    !real(wp), intent(in):: E_nf_mean, gamma
+    real(wp), intent(in):: gamma
+
+    integer:: ntsteps, nfinal
+    complex(wp), allocatable:: funct(:)
+    complex(wp), allocatable:: funct_fft(:)
+    !complex(wp), allocatable::  e_factor1(:)
+    integer:: m1, m2 
+
+    ntsteps = size(time) 
+    
+    allocate(funct(ntsteps), &
+         funct_fft(ntsteps))
+        
+    !call compute_efactor(E_n, E_f, E_nf_mean, time, e_factor1, .true.)
+      
+    F_ifn_omp = 0.0_wp
+    
+    do m1=1,3 ! polarization
+      
+      funct = D_fn(:,m1) * e_factor(:) * exp(-gamma * const % eV * time(:) / const % hbar)
+        
+      call fft_c2c_1d_backward(funct, funct_fft)
+      call reorder_sigma_fftw_z(funct_fft)
+
+      do m2=1,3 ! polarization     
+        F_ifn_omp(:,m1,m2) = D_ni(m2) * funct_fft(:)
+      end do ! m2 
+        
+    end do ! m1
+
+      
+  end subroutine compute_F_ifn_omp
+
+
+  ! for a single combination of i,f,n, now including the D_ni matrix and complex D_fn matrix
+  subroutine compute_F_ifn_omp_new(D_fn, D_ni, time, F_ifn_omp, gamma)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_backward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    !real(wp), intent(in):: E_n(:)
+    !real(wp), intent(in):: E_f(:)
+    !complex(wp), intent(in)::  e_factor(:)
+    complex(wp), intent(in):: D_fn(:,:)
+    real(wp), intent(in):: D_ni(:) 
+    real(wp), intent(in):: time(:)
+    complex(wp), intent(out) ::  F_ifn_omp(:,:,:)
+    !real(wp), intent(in):: E_nf_mean, gamma
+    real(wp), intent(in):: gamma
+
+    integer:: ntsteps, nfinal
+    complex(wp), allocatable:: funct(:)
+    complex(wp), allocatable:: funct_fft(:)
+    !complex(wp), allocatable::  e_factor1(:)
+    integer:: m1, m2 
+
+    ntsteps = size(time) 
+    
+    allocate(funct(ntsteps), &
+         funct_fft(ntsteps))
+        
+    F_ifn_omp = 0.0_wp
+    
+    do m1=1,3 ! polarization
+      
+      funct = D_fn(:,m1) * exp(-gamma * const % eV * time(:) / const % hbar)
+        
+      call fft_c2c_1d_backward(funct, funct_fft)
+      call reorder_sigma_fftw_z(funct_fft)
+
+      do m2=1,3 ! polarization     
+        F_ifn_omp(:,m1,m2) = D_ni(m2) * funct_fft(:)
+      end do ! m2 
+        
+    end do ! m1
+
+      
+  end subroutine compute_F_ifn_omp_new
+
+
+
+  
   ! several intermediate states
   subroutine compute_F_if_omp_many_n(E_n, E_f, E_nf_mean, D_fn, D_ni, time, F_if_omp, gamma)
     use m_precision, only: wp
@@ -703,54 +959,57 @@ contains
     
   end subroutine compute_F_if_omp_many_n
 
+
+
+
+  !  ! for a single combination of i,f,n, now including the D_ni matrix
+!  subroutine compute_F_ifn_omp(E_n, E_f, E_nf_mean, D_fn, D_ni, time, F_ifn_omp, gamma)
+!    use m_precision, only: wp
+!    use m_constants, only: const
+!    use m_fftw3, only: fft_c2c_1d_backward
+!    use m_fftw3, only: reorder_sigma_fftw_z
+!    
+!    real(wp), intent(in):: E_n(:)
+!    real(wp), intent(in):: time(:)
+!    real(wp), intent(in):: E_f(:)
+!    real(wp), intent(in):: D_fn(:,:)
+!    real(wp), intent(in):: D_ni(:) 
+!    complex(wp), intent(out) ::  F_ifn_omp(:,:,:)
+!    real(wp), intent(in):: E_nf_mean, gamma
+!
+!    integer:: ntsteps, nfinal
+!    complex(wp), allocatable:: funct(:)
+!    complex(wp), allocatable:: funct_fft(:)
+!    complex(wp), allocatable::  e_factor1(:)
+!    integer:: m1, m2 
+!
+!    ntsteps = size(time) 
+!    
+!    allocate(funct(ntsteps), &
+!         funct_fft(ntsteps), &
+!         e_factor1(ntsteps))
+!    
+!    call compute_efactor(E_n, E_f, E_nf_mean, time, e_factor1, .true.)
+!      
+!    F_ifn_omp = 0.0_wp
+!    
+!    do m1=1,3 ! polarization
+!      
+!      funct = D_fn(:,m1) * e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar)
+!        
+!      call fft_c2c_1d_backward(funct, funct_fft)
+!      call reorder_sigma_fftw_z(funct_fft)
+!
+!      do m2=1,3 ! polarization     
+!        F_ifn_omp(:,m1,m2) = D_ni(m2) * funct_fft(:)
+!      end do ! m2 
+!        
+!    end do ! m1
+!
+!      
+!  end subroutine compute_F_ifn_omp
+
   
-  ! for a single combination of i,f,n, now including the D_ni matrix
-  subroutine compute_F_ifn_omp(E_n, E_f, E_nf_mean, D_fn, D_ni, time, F_ifn_omp, gamma)
-    use m_precision, only: wp
-    use m_constants, only: const
-    use m_fftw3, only: fft_c2c_1d_backward
-    use m_fftw3, only: reorder_sigma_fftw_z
-    
-    real(wp), intent(in):: E_n(:)
-    real(wp), intent(in):: time(:)
-    real(wp), intent(in):: E_f(:)
-    real(wp), intent(in):: D_fn(:,:)
-    real(wp), intent(in):: D_ni(:) 
-    complex(wp), intent(out) ::  F_ifn_omp(:,:,:)
-    real(wp), intent(in):: E_nf_mean, gamma
-
-    integer:: ntsteps, nfinal
-    complex(wp), allocatable:: funct(:)
-    complex(wp), allocatable:: funct_fft(:)
-    complex(wp), allocatable::  e_factor1(:)
-    integer:: m1, m2 
-
-    ntsteps = size(time) 
-    
-    allocate(funct(ntsteps), &
-         funct_fft(ntsteps), &
-         e_factor1(ntsteps))
-    
-    call compute_efactor(E_n, E_f, E_nf_mean, time, e_factor1, .true.)
-      
-    F_ifn_omp = 0.0_wp
-    
-    do m1=1,3 ! polarization
-      
-      funct = D_fn(:,m1) * e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar)
-        
-      call fft_c2c_1d_backward(funct, funct_fft)
-      call reorder_sigma_fftw_z(funct_fft)
-
-      do m2=1,3 ! polarization     
-        F_ifn_omp(:,m1,m2) = D_ni(m2) * funct_fft(:)
-      end do ! m2 
-        
-    end do ! m1
-
-      
-  end subroutine compute_F_ifn_omp
-
   ! summing internally over several intermediate states to avoid fft:s, only savings for ninter > 3
   subroutine compute_F_if_omp_sum_n(E_n, E_f, E_nf_mean, D_fn, D_ni, time, F_if_omp, gamma)
     use m_precision, only: wp
@@ -1530,11 +1789,11 @@ contains
  
   end subroutine sinc_filter
 
-  subroutine compute_efactor(E_n, E_f, E_nf_mean, time, efactor, negative)
+  subroutine compute_efactor_one(E_n, E_n_mean, time, efactor, negative)
     use m_precision,only:wp     
     use m_constants, only: const
     
-    real(wp), intent(in):: E_f(:), E_n(:), time(:), E_nf_mean
+    real(wp), intent(in):: E_n(:), time(:), E_n_mean
     complex(wp), intent(out):: efactor(:)
     logical:: negative
     
@@ -1554,18 +1813,54 @@ contains
     
     delta_t = time(2)-time(1)
     
-    int_W_I(1) = E_n(1) - E_f(1)  - E_nf_mean  
+    int_W_I(1) = E_n(1) - E_n_mean  
     do i = 2, ntsteps
-      int_W_I(i) = int_W_I(i-1) + ( E_n(i) - E_f(i) ) - E_nf_mean  
+      int_W_I(i) = int_W_I(i-1) + ( E_n(i) - E_n_mean)  
     end do
     int_W_I =  int_W_I * delta_t
     efactor = exp(dcmplx(0, factor * (const % eV  / const % hbar) *int_W_I ))    
     
     deallocate(int_W_I)
     
+  end subroutine compute_efactor_one
+
+  subroutine compute_efactor(E_n, E_f, E_nf_mean, time, efactor, negative)
+    use m_precision,only:wp
+    use m_constants, only: const
+    
+    real(wp), intent(in):: E_f(:), E_n(:), time(:), E_nf_mean
+    complex(wp), intent(out):: efactor(:)
+    logical:: negative
+    
+    real(wp):: delta_t, factor
+    real(wp), allocatable:: int_W_I(:)
+    integer:: i, ntsteps
+    
+    ntsteps = size(time,1)
+    
+    allocate(int_W_I(ntsteps) )
+
+    if (negative) then
+      factor = -1.0_wp
+    else
+      factor = 1.0_wp
+    end if
+    
+    delta_t = time(2)-time(1)
+    
+    int_W_I(1) = E_n(1) - E_f(1)  - E_nf_mean
+    do i = 2, ntsteps
+      int_W_I(i) = int_W_I(i-1) + ( E_n(i) - E_f(i) ) - E_nf_mean
+    end do
+    int_W_I =  int_W_I * delta_t
+    efactor = exp(dcmplx(0, factor * (const % eV  / const % hbar) *int_W_I ))
+
+    deallocate(int_W_I)
+    
   end subroutine compute_efactor
 
 
+  
   subroutine read_projections(p)
     use m_precision, only: wp
     use m_io, only: get_free_handle

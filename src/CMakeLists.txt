@@ -96,6 +96,7 @@ m_ode_solvers.F90
 m_spectrum_utils.F90
 m_convolution.F90
 m_SCXAS_PES.f90
+m_crank_nicolson.F90
 )
 
 SET(ALL_MODULES_F 
@@ -108,7 +109,7 @@ sffteu.f
 #add_subdirectory(morsefitting morsefitting)
 
 SET(EXECUTABLES
-vib_finite_diff wpd sckh_main
+vib_finite_diff wpd sckh_main test_crank_nicolson
 )
 
 FOREACH(EXEC ${EXECUTABLES})

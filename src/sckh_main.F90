@@ -10,6 +10,7 @@ program sckh_main
   use m_SCKH_PES, only : calculate_SCKH_PES
   use m_SCKH, only : calculate_SCKH
   use m_SCKH_nonadiabatic, only : compute_sckh_diagonal_nonresonant
+  use m_SCKH_nonadiabatic, only : calculate_sckh_matrix_diagonal
   use m_SCKH_nonadiabatic, only : compute_sckh_offdiagonal
   use m_XAS_eigenstates, only: calculate_XAS
   use m_SCKH_resonant_PES, only: calculate_SCKH_res_PES
@@ -60,6 +61,9 @@ program sckh_main
 
     case( "NONRESONANT")
       call calculate_SCKH(p)
+    case("MATRIX_DIAGONAL")
+      write(6,*) "MATRIX_DIAGONAL"
+      call calculate_sckh_matrix_diagonal(p)
     case("NONRESONANT_DIAGONAL")
       write(6,*) "NONRESONANT_DIAGONAL"
       call compute_sckh_diagonal_nonresonant(p)

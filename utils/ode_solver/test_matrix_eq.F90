@@ -435,8 +435,8 @@ subroutine test_time_ordered_exp
 
 !
 
-  abserr = 0.000000001e+00_wp
-  relerr = 0.000000001e+00_wp
+  abserr = 1.0e-9_wp
+  relerr = 1.0e-9_wp
 
   iflag = 1
 
@@ -464,7 +464,8 @@ subroutine test_time_ordered_exp
   A_l =0.0d0
   omega_l =0.0d0
   phi_l =0.0d0
-
+  h=1.0e-9_wp
+  
   do i=1,2
     A_a(i) = i
     omega_a(i) = 0.3d0 / i * 3.14159265e+00_wp
@@ -478,7 +479,6 @@ subroutine test_time_ordered_exp
   call set_A_omega_phi_l( A_l, omega_l, phi_l)
 
   write ( *, '(a)' ) 'test_time_ordered_exp'
-
 
   write ( *, '(a)' ) ' '
   write ( *, '(a)' ) '       T          Y(1,1)         Y(2,1)       Y(1,2)      Y(2,2)'
@@ -495,6 +495,9 @@ subroutine test_time_ordered_exp
     call rkfs_matrix_c ( func_c, neqn1, neqn2, y, t, t_out, relerr, abserr, iflag, yp, h, &
          f1, f2, f3, f4, f5, savre, savae, iwork(1), iwork(2), iwork(3), iwork(4), iwork(5) )
 
+    !write(6,'(A5,ES18.10)') "h", h
+    !write(6,*) "NFE", iwork(1)
+    
     ! exact solution for t_out
     y_exact = 0.0d0
     do i=1,2

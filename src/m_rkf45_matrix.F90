@@ -848,7 +848,7 @@ subroutine rkfs_matrix_c (  neqn1, neqn2, f, y, t, tout, relerr, abserr, iflag, 
   integer k, k2
   integer kflag
   integer kop
-  integer, parameter :: maxnfe = 3000
+  integer, parameter :: maxnfe = 5000 !3000
   integer mflag
   integer nfe
   logical output

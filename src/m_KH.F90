@@ -68,7 +68,7 @@ contains
     dx = p % dx_in * 1.0d-10
 
     ! set up grid points
-    do i = 1, p % npoints_in
+    do i = 1, p % nstates !p % npoints_in
       X_r(i) = (i-1)*dx + dvr_start
     end do
 
@@ -81,14 +81,14 @@ contains
     call read_file_list(p % dipole_file_list_f, p % npesfile_f, p % dipolefile_f)
 
     do j=1,p % npesfile_f
-      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % npoints_in, X_r, E_f(j,:))
+      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % nstates, X_r, E_f(j,:))
       call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_r, dipole(j,:,:))
     end do
 
     ! Shift orbital energies so that E_f(1,:) have energies E_lp_corr
     ! and the spacing between the intermediate and final states are preserved
     if( p % shift_PES .eq.  1) then
-      call read_PES_file(p % pes_file_lp_corr, p % npoints_in, p % npoints_in, X_r, E_lp_corr)
+      call read_PES_file(p % pes_file_lp_corr, p % npoints_in, p % nstates, X_r, E_lp_corr)
 
       shift = E_lp_corr -E_f(1,:) 
 

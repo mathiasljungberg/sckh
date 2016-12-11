@@ -394,62 +394,66 @@ subroutine funct_complex(t,y,yp)
    real(kind=wp), allocatable::Ht_real(:,:),Ht_im(:,:)
    integer::shape_H(3)
    integer::i,j,k,l ! loop variables
-   !write(*,*) 'Inside routine funct_complex'
+
+   !write(6,*) 'Inside routine funct_complex'
    if(allocated(H_in)) then
      shape_H=shape(H_in)
-    ! write(*,*) 'Shape H_in is ',shape_H(1),shape_H(2),shape_H(3)
-   if(.not. allocated(Ht)) then
-         allocate(Ht(shape_H(1),shape_H(2)))
-         allocate(Ht_real(shape_H(1),shape_H(2)),Ht_im(shape_H(1),shape_H(2)))
-   endif
-    if(allocated(yderr_real) .and. allocated(yderr_im)) then
-		!write(*,*) 'Before splint array'
-      call splint_array3_d(time,real(H_in),yderr_real,t,Ht_real)
-      call splint_array3_d(time,aimag(H_in),yderr_im,t,Ht_im)
-      Ht=cmplx(Ht_real,Ht_im)
+     !end if
+     ! write(*,*) 'Shape H_in is ',shape_H(1),shape_H(2),shape_H(3)
+     if(.not. allocated(Ht)) then
+       allocate(Ht(shape_H(1),shape_H(2)))
+       allocate(Ht_real(shape_H(1),shape_H(2)),Ht_im(shape_H(1),shape_H(2)))
+     endif
+     
+     if(allocated(yderr_real) .and. allocated(yderr_im)) then
+       !write(6,*) 'Before splint array'
+       call splint_array3_d(time,real(H_in),yderr_real,t,Ht_real)
+       call splint_array3_d(time,aimag(H_in),yderr_im,t,Ht_im)
+       !write(6,*) 'After splint array'
+       Ht=cmplx(Ht_real,Ht_im)
      else
- 	   !write(*,*) 'Before allocation y_derr array ',shape_H
+       !write(*,*) 'Before allocation y_derr array ',shape_H
        allocate( yderr_real(shape_H(1),shape_H(2),shape_H(3)) )
        allocate(yderr_im(shape_H(1),shape_H(2),shape_H(3)))
        !write(*,*) 'After allocation y_derr array '
        do i=1,shape_H(1)
          do j=1,shape_H(2)
-		  !write(*,*) 'spline real '
-          call spline(time,real(H_in(i,j,:)),shape_H(3),1.0d30,1.0d30,yderr_real(i,j,:))
-          !write(*,*) 'spline imagine '
-          call spline(time,aimag(H_in(i,j,:)),shape_H(3),1.0d30,1.0d30,yderr_im(i,j,:))
+           !write(*,*) 'spline real '
+           call spline(time,real(H_in(i,j,:)),shape_H(3),1.0d30,1.0d30,yderr_real(i,j,:))
+           !write(*,*) 'spline imagine '
+           call spline(time,aimag(H_in(i,j,:)),shape_H(3),1.0d30,1.0d30,yderr_im(i,j,:))
          enddo
        enddo
        !write(*,*)'time t',t
        !write(*,*) 'time ',shape(time),'yderr_real ',shape(yderr_real), 'Ht_real ',shape(Ht_real)
-	  ! write(*,*) ' splint_array3_d real before calling  ','H_in ',shape(H_in)
-	  !write(*,*) 'Shape time', shape(time)
-      !write(*,*) 'Shape yderr_real',shape(yderr_real)
-      !write(*,*)'Shape H_in', shape(H_in)
-      !write(*,*) 'Shape Ht_real',shape(Ht_real)
-      ! Test allocation for different arrays which are calling from the splint_array3_d routine
-      !write(*,*) 'time',allocated(time)
-      !write(*,*) 'yderr_real',allocated(yderr_real)
-      !write(*,*) 'H_in',allocated(H_in)
-      !write(*,*) 'Ht_real',allocated(Ht_real)
-     !write(*,*) 't ',t
-      call splint_array3_d(time,real(H_in,8),yderr_real,t,Ht_real)
-      !write(*,*) ' splint_array3_d imagine ', shape(H_in)
-      
-      call splint_array3_d(time,aimag(H_in),yderr_im,t,Ht_im)
-      Ht=cmplx(Ht_real,Ht_im)
+       ! write(*,*) ' splint_array3_d real before calling  ','H_in ',shape(H_in)
+       !write(*,*) 'Shape time', shape(time)
+       !write(*,*) 'Shape yderr_real',shape(yderr_real)
+       !write(*,*)'Shape H_in', shape(H_in)
+       !write(*,*) 'Shape Ht_real',shape(Ht_real)
+       ! Test allocation for different arrays which are calling from the splint_array3_d routine
+       !write(*,*) 'time',allocated(time)
+       !write(*,*) 'yderr_real',allocated(yderr_real)
+       !write(*,*) 'H_in',allocated(H_in)
+       !write(*,*) 'Ht_real',allocated(Ht_real)
+       !write(*,*) 't ',t
+       call splint_array3_d(time,real(H_in,8),yderr_real,t,Ht_real)
+       !write(*,*) ' splint_array3_d imagine ', shape(H_in)
+       
+       call splint_array3_d(time,aimag(H_in),yderr_im,t,Ht_im)
+       Ht=cmplx(Ht_real,Ht_im)
      endif
      !write(*,*) 'Before library zgemm routine'
      !call zgemm('N','N',shape_H(1),shape_H(1),shape_H(1),(0.0d0,1.0d0),y,shape_H(1),Ht,shape_H(1),(0.0d0,0.0d0),yp,shape_H(1))
      yp=(0.0_wp,1.0_wp)*yp
      yp=(0.0_wp,1.0_wp)*matmul(y,Ht)
    else
-      write(*,*) 'Error in m_func module'
-      write(*,*) 'H_in is not allocated'
-      stop
+     write(*,*) 'Error in m_func module'
+     write(*,*) 'H_in is not allocated'
+     stop
    endif
-  !write(*,*) 'end routine funct_complex'
-end subroutine funct_complex
+   !write(*,*) 'end routine funct_complex'
+ end subroutine funct_complex
 
 
 

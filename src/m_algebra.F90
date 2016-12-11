@@ -1431,8 +1431,8 @@ subroutine matmul_Ax_z(A, x, y)
   ! SUBROUTINE DGEMV(TRANS, M, N, ALPHA, A, LDA, X,
   ! INCX, BETA, Y, INCY)
   
-  call ZGEMV('N', size(A,1), size(A,2), 1.0d0, A, size(A,1), x, &
-       1, 0.0d0, Y, 1)
+  call ZGEMV('N', size(A,1), size(A,2), (1.0d0, 0.0d0), A, size(A,1), x, &
+       1, (0.0d0,0.0d0), Y, 1)
   
 end subroutine matmul_Ax_z
 
@@ -1466,6 +1466,19 @@ subroutine matmul_AB_d(A, B, D)
   !write(6,*) "in matmul_AB_d"
   
 end subroutine matmul_AB_d
+
+
+subroutine matmul_AB_z(A, B, D)
+  implicit none
+  complex(8), intent(in):: A(:,:), B(:,:)
+  complex(8), intent(inout):: D(:,:)
+  
+  ! SUBROUTINE xGEMM ( TRANSA, TRANSB, M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC )
+  call ZGEMM('N', 'N', size(A,1), size(B,2), size(A,2), (1.0D0, 0.0D0), &
+       A, size(A,1), B, size(B,1), (0.0D0, 0.0d0), D, size(D,1))
+  !write(6,*) "in matmul_AB_d"
+  
+end subroutine matmul_AB_z
 
 
 subroutine matmul_AtB_d(A, B, D)

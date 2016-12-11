@@ -104,7 +104,6 @@ contains
     n_omega = ntsteps !_pad 
     allocate(F_if_omp(nfinal,n_omega,3,3), sigma_f(nfinal,n_omega), sigma_tot(n_omega), &
          sigma_proj(p % nproj,n_omega), sigma_mm(nfinal,n_omega,3,3), omega(n_omega))
-
     !
     ! Loop over trajectories
     !
@@ -145,7 +144,7 @@ contains
       ! first time, compute the mean transition energy
       if (traj .eq. 1) then
         E_nf_mean = sum(E_n(:)-  E_f(nfinal,:)) / max(1,size(E_n(:))) 
-
+        
         call get_omega_reordered_fftw(time_l2 * const % eV /  const % hbar, omega)
         omega =  omega + E_nf_mean !E_nf_mean - omega !omega - E_nf_mean
 

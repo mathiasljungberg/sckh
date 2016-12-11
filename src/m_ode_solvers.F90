@@ -35,18 +35,20 @@ subroutine ODE_solver(A_matrix,times,nstates,ntsteps)
     allocate(H_matrix(nstates,nstates,ntsteps),y_value(nstates,nstates),yp_value(nstates,nstates))
     allocate(f1(nstates,nstates),f2(nstates,nstates),f3(nstates,nstates))
     allocate(f4(nstates,nstates),f5(nstates,nstates))
-      abserr = 0.000000001e+00_wp
-      relerr = 0.000000001e+00_wp
+      abserr = 1.0e-5_wp !0.000000001e+00_wp
+      relerr = 1.0e-5_wp !0.000000001e+00_wp
       iflag = 1
       y_value=A_matrix(:,:,1)
-      h=times(2)-times(1)
-      t_start=times(1)
-      t_end=times(ntsteps)
+      h=(times(2)-times(1))/100
+      !t_start=times(1)
+      !t_end=times(ntsteps)
       write(*,*) 'ODE_solver ', ntsteps 
       do i=1,ntsteps-1
-        t = ( ( ntsteps - i + 1 ) * t_start+ ( i - 1 ) * t_end ) / dble( ntsteps )
-        t_out = (( ntsteps - i ) * t_start+ ( i) * t_end ) / dble ( ntsteps )
-        write(*,*) 't ',times(i),' t_out ',times(i+1),'step ',i
+      !  t = ( ( ntsteps - i + 1 ) * t_start+ ( i - 1 ) * t_end ) / dble( ntsteps )
+      !  t_out = (( ntsteps - i ) * t_start+ ( i) * t_end ) / dble ( ntsteps )
+        write(6,*) 't ',times(i),' t_out ',times(i+1),'step ',i
+        write(6,*) 'NFE', iwork(1)
+        write(6,'(A5,ES18.10)') "h", h
         call rkfs_matrix_c(nstates,nstates,funct_complex,y_value,times(i),times(i+1),relerr,abserr,&
              iflag,yp_value,h,f1,f2,f3,f4,f5,savre,savae,iwork(1),iwork(2),iwork(3),iwork(4), iwork(5))
          A_matrix(:,:,i+1)=y_value

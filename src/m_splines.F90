@@ -238,5 +238,61 @@ subroutine splint_array2_d(xa,ya,y2a,x,y)
 
 end subroutine splint_array2_d
 
+SUBROUTINE spline_z(x,y,n,yp1,ypn,y2)
+  INTEGER, intent(in):: n 
+  real(8), intent(in):: yp1,ypn,x(n)
+  complex(8), intent(in):: y(n)
+  complex(8), intent(out):: y2(n)
+  
+  real(8):: y_real(n), y_imag(n)  
+  real(8):: y2_real(n), y2_imag(n)  
+
+  y_real = real(y,8)
+  y_imag = aimag(y)
+
+  call spline(x,y_real,n,yp1,ypn,y2_real)
+  call spline(x,y_imag,n,yp1,ypn,y2_imag)
+  
+  y2 = cmplx(y2_real, y2_imag, kind=8)
+  
+end SUBROUTINE spline_z
+
+
+! this subroutine splines a whole array, last index time dimension
+subroutine splint_array3_z(xa,ya,y2a,x,y)
+  real(8), intent(in):: x, xa(:)
+  complex(8), intent(in):: y2a(:,:,:),ya(:,:,:)
+  complex(8), intent(out):: y(:,:) 
+
+  real(8), allocatable:: ya_real(:,:,:), ya_imag(:,:,:), &
+       y2a_real(:,:,:), y2a_imag(:,:,:), y_imag(:,:),&
+       y_real(:,:)
+  
+  integer:: n1,n2,n3
+  
+  n1 = size(ya,1)
+  n2 = size(ya,2)
+  n3 = size(ya,2)
+  
+  allocate(ya_real(n1,n2,n3), &
+       ya_imag(n1,n2,n3), &
+       y2a_real(n1,n2,n3), &
+       y2a_imag(n1,n2,n3))
+
+  allocate(y_real(n1,n2), &
+       y_imag(n1,n2))
+  
+  ya_real = real(ya,8)
+  ya_imag = aimag(ya)
+  y2a_real = real(y2a,8)
+  y2a_imag = aimag(y2a)
+  
+  call splint_array3_d(xa,ya_real,y2a_real,x,y_real)
+  call splint_array3_d(xa,ya_imag,y2a_imag,x,y_imag)
+  
+  y = cmplx(y_real, y_imag, kind=8)
+  
+end subroutine splint_array3_z
+
 
 end module m_splines
