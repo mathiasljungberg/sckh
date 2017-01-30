@@ -19,7 +19,7 @@ def run_test():
     err_code = my_bash.my_exec(sckh_path +'/sckh_main', 'test.out', 'test.err')
 
     # check spectrum
-    err_code += mod_tests.my_diff_sum_ref('testout_sigma.dat', '../ref/testout_sigma.dat')
+    err_code += mod_tests.my_diff_sum_ref('testout_sigma.dat', '../ref/testout_sigma.dat', maxdim=4)
         
     # clean up
     os.chdir(old_dir)

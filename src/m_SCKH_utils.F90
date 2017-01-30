@@ -206,7 +206,7 @@ contains
           write(6,*) "function has a negative value in sample_even!", i, funct(i)
           stop
        end if
-    end do
+     end do
     
 
     ! first spline function to npoints_new points, then integrate up to
@@ -1902,7 +1902,7 @@ contains
   end subroutine read_projections
 
   subroutine read_one_sckh_traj(ntsteps_inp, nfinal, traj_file, time_inp, &
-       time_inp2, E_gs_inp, E_n_inp, E_IP1s, E_trans, E_f_inp, D_fn_inp)
+       time_inp2, E_gs_inp, E_n_inp, E_IP1s, E_trans, E_f_inp, D_fn_inp, check_times_in)
     use m_precision, only: wp
     use m_constants, only: const
     use m_io, only: get_free_handle
@@ -1912,10 +1912,18 @@ contains
     real(kind=wp), intent(in):: time_inp(:)
     real(kind=wp), intent(out)::  time_inp2(:), E_gs_inp(:),  E_n_inp(:),&
          E_IP1s(:), E_trans(:,:), E_f_inp(:,:), D_fn_inp(:,:,:)
+    logical, intent(in), optional:: check_times_in
 
     integer:: ifile, i, j, ntrans
     character(80):: dummy
+    logical:: check_times
 
+    if(present(check_times_in)) then
+      check_times =check_times_in
+    else
+      check_times =.true.
+    end if
+    
     ifile = get_free_handle()
     open(ifile,file=traj_file,status='old')  
 
@@ -1941,10 +1949,12 @@ contains
       E_f_inp(:,i) = E_gs_inp(i) - E_trans(:,i) + E_IP1s(i) * (const % eV / const % Hartree)
 
       !check that time_inp(i) = time_inp2(i) 
-      if ( abs(time_inp(i) - time_inp2(i)*1.d-15 ) .gt. 1.d-30) then
-        !write(6,*) "Error in time too big", i, abs(time_inp(i) - time_inp2(i)*1.d-15 )
+      if(check_times) then
+        if ( abs(time_inp(i) - time_inp2(i)*1.d-15 ) .gt. 1.d-30) then
+          !write(6,*) "Error in time too big", i, abs(time_inp(i) - time_inp2(i)*1.d-15 )
+        end if
       end if
-
+      
     end do !i
 
     ! convert to eV units

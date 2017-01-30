@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 class bcolors:
     import os
     T = os.getenv('TERM')
@@ -38,15 +40,15 @@ def my_exec(cmd, fname_out, fname_err, iv=0, stop_if_CalledProcessError=True) :
 
   except CalledProcessError: 
     if stop_if_CalledProcessError :
-      print 'cmd: '+cmd
-      print 'cwd: '+os.getcwd() 
-      print 'fname_out: '+fname_out
-      print 'fname_err: '+fname_err
-      print bcolors.FAIL, 'my_exec: CalledProcessError occured, look into logs, please. EXIT', bcolors.ENDC
+      print('cmd: '+cmd)
+      print('cwd: '+os.getcwd()) 
+      print('fname_out: '+fname_out)
+      print('fname_err: '+fname_err)
+      print(bcolors.FAIL, 'my_exec: CalledProcessError occured, look into logs, please. EXIT', bcolors.ENDC)
       err_code = 1
       sys.exit(1)
     else :
-      print bcolors.FAIL, 'my_exec: CalledProcessError occured, look into logs, please. CONTINUE', bcolors.ENDC
+      print(bcolors.FAIL, 'my_exec: CalledProcessError occured, look into logs, please. CONTINUE', bcolors.ENDC)
       err_code = 1
       return err_code
   
@@ -66,20 +68,20 @@ def my_cd(dir, iv) :
 def my_diff_ref(fname, iv) : 
   import os,filecmp
   if not filecmp.cmp(fname, fname+'-ref') :
-    if iv>0 : print bcolors.WARNING, '! differs '+os.getcwd()+'/'+fname, bcolors.ENDC
+    if iv>0 : print( bcolors.WARNING, '! differs '+os.getcwd()+'/'+fname, bcolors.ENDC)
     return 1
   else :
-    if iv>0 : print bcolors.OKGREEN, 'Ok '+os.getcwd()+'/'+fname, bcolors.ENDC
+    if iv>0 : print(bcolors.OKGREEN, 'Ok '+os.getcwd()+'/'+fname, bcolors.ENDC)
     return 0
 #
 #
 #
 def report_nerr(n, iv) :
   if n>0 : 
-    if iv>0 : print bcolors.FAIL, '! Some errors occured...', bcolors.ENDC
-    if iv>0 : print bcolors.FAIL, '! Number of errors ', n, bcolors.ENDC
+    if iv>0 : print(bcolors.FAIL, '! Some errors occured...', bcolors.ENDC)
+    if iv>0 : print(bcolors.FAIL, '! Number of errors ', n, bcolors.ENDC)
   else :
-    if iv>0 : print bcolors.OKBLUE, 'Everything seems to work fine !', bcolors.ENDC
+    if iv>0 : print(bcolors.OKBLUE, 'Everything seems to work fine !', bcolors.ENDC)
 
 #
 #
@@ -98,18 +100,18 @@ def get_list_from_file(fname, iv) :
   import sys
   try :
     f = open(fname, 'r')
-    list = [];
-    for line in f: list.append( line.strip() )
+    mylist = [];
+    for line in f: mylist.append( line.strip() )
     if iv>0 : 
-      print '  '+fname+' defines: ', list
+      print('  '+fname+' defines: ', mylist)
     f.close()
-    return list
+    return mylist
     
   except IOError :
-    print bcolors.FAIL, '  '+fname+' I/O error with this file.', bcolors.ENDC
-    print '  Please, create this file first.'
-    if fname=='ls_rundirs' : print 'ls|head -n 2 >'+fname; sys.exit(1)
-    if fname=='ls_archs' : print 'echo arch.inc.gfortran.standard >'+fname; sys.exit(1)
+    print(bcolors.FAIL, '  '+fname+' I/O error with this file.', bcolors.ENDC)
+    print('  Please, create this file first.')
+    if fname=='ls_rundirs' : print('ls|head -n 2 >'+fname); sys.exit(1)
+    if fname=='ls_archs' : print('echo arch.inc.gfortran.standard >'+fname); sys.exit(1)
     sys.exit(1)
 
 #
@@ -118,7 +120,7 @@ def get_list_from_file(fname, iv) :
 def get_list_of_progs(rdirs, fname_ls_progs, iv) : 
   set_of_progs = set()
   for rdir in rdirs :
-    if iv>1 : print 'get_list_of_progs: ', rdir+'/'+fname_ls_progs
+    if iv>1 : print('get_list_of_progs: ', rdir+'/'+fname_ls_progs)
     map1 = get_prog2results_map(rdir+'/'+fname_ls_progs, iv-1)
     exe_list = list()
     for entry in map1 :
@@ -136,7 +138,7 @@ def get_prog2results_map(fname_ls_prog2results, iv) :
   for string in prog2results:
     p_tokens = string.split()
     list_prog2results.append(p_tokens) 
-  if iv>0 : print 'list_prog2results from file '+fname_ls_prog2results
-  if iv>0 : print list_prog2results
+  if iv>0 : print('list_prog2results from file '+fname_ls_prog2results)
+  if iv>0 : print(list_prog2results)
   return(list_prog2results)
 

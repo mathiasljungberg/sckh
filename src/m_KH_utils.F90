@@ -278,10 +278,11 @@ subroutine calculate_dipoles_KH_nonres(c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
 
 end subroutine calculate_dipoles_KH_nonres
 
-subroutine calculate_dipoles_KH_res(c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
+subroutine calculate_dipoles_KH_res(c_i, c_n, c_f, dipole_n, dipole_f, D_ni, D_fn, D_fi)
   use m_precision, only: wp
 
-  real(kind=wp), intent(in):: c_i(:,:), c_n(:,:,:), c_f(:,:,:), dipole(:,:,:)
+  real(kind=wp), intent(in):: c_i(:,:), c_n(:,:,:), c_f(:,:,:)
+  real(wp), intent(in):: dipole_n(:,:,:), dipole_f(:,:,:)
   real(kind=wp), intent(out):: D_ni(:,:,:), D_fn(:,:,:,:,:), D_fi(:,:,:)
 
   integer:: nstates, npesfile_f, npesfile_n, f_e, f_v, n_e, n_v, m
@@ -298,7 +299,8 @@ subroutine calculate_dipoles_KH_res(c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
   do n_e =1, npesfile_n
     do n_v =1,nstates 
       do m=1,3
-        D_ni(n_e, n_v, m) = sum(c_n(n_e,:,n_v)*c_i(:,1))
+        !D_ni(n_e, n_v, m) = sum(c_n(n_e,:,n_v)*c_i(:,1))
+        D_ni(n_e, n_v, m) = sum(dipole_n(n_e, :, m) * c_n(n_e,:,n_v) * c_i(:,1))
       end do
     end do
   end do
@@ -311,8 +313,8 @@ subroutine calculate_dipoles_KH_res(c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
         do n_v = 1, nstates ! intermediate
           
           do m=1,3
-            !D_fn(f_e, f_v, n_e, n_v, m) = sum(dipole(f_e, n_e, :, m) * c_f(f_e, :, f_v) * c_n(n_e, :, n_v))   ! true dipole moment
-            D_fn(f_e, f_v, n_e, n_v, m) = sum(c_f(f_e, :, f_v) * c_n(n_e, :, n_v))  ! FC, dipole moment at eq geom
+            D_fn(f_e, f_v, n_e, n_v, m) = sum(dipole_f(f_e, :, m) * c_f(f_e, :, f_v) * c_n(n_e, :, n_v))   ! true dipole moment
+            !D_fn(f_e, f_v, n_e, n_v, m) = sum(c_f(f_e, :, f_v) * c_n(n_e, :, n_v))  ! FC, dipole moment at eq geom
             !D_fn(i,j,k,l) = dipole(i,21,l) * sum(c_f(i,:,j) * c_n(:,k)) ! FC, dipole moment at eq geom
             !D_fn(i,j,k,l) = sum(c_f(i,:,j) * c_n(:,k))                  ! no dipole moment
           end do
@@ -338,6 +340,102 @@ subroutine calculate_dipoles_KH_res(c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
 end subroutine calculate_dipoles_KH_res
 
 
+subroutine calculate_dipoles_one(c_n, c_f, dipole_f, D_fn, mode_in)
+  use m_precision, only: wp
+  use m_upper, only : upper
+  
+  real(kind=wp), intent(in)::  c_n(:,:), c_f(:,:)
+  real(wp), intent(in):: dipole_f(:,:)
+  real(kind=wp), intent(out):: D_fn(:,:,:)
+  character(*), intent(in):: mode_in
+  
+  integer:: nstates,f_v, n_v, m
+  !character(80):: mode
+  
+  nstates = size(c_n,2)
+
+  !if(present(mode_in)) then
+  !  mode = mode_in
+  !else
+  !  mode = "DIPOLE"
+  !end if
+  
+  !
+  ! calculate dipole matrix elements between states 
+  !
+
+  if (upper(mode_in) .eq. "DIPOLE") then
+    
+    do f_v = 1, nstates ! final
+      do n_v = 1, nstates ! intermediate
+        do m=1,3
+          D_fn(f_v, n_v, m) = sum(dipole_f(:, m) * c_f(:, f_v) * c_n(:, n_v))   ! true dipole moment
+        end do
+      end do
+    end  do
+    
+  else if (upper(mode_in) .eq. "FC") then
+
+    do f_v = 1, nstates ! final
+      do n_v = 1, nstates ! intermediate
+        do m=1,3
+          D_fn(f_v, n_v, m) = sum(c_f(:, f_v) * c_n(:, n_v))  ! FC
+        end do
+      end do
+    end  do
+        
+  end if
+  
+end subroutine calculate_dipoles_one
+
+subroutine calculate_dipoles_KH_res_fn(c_n, c_f, dipole_f, D_fn, mode_in)
+  use m_precision, only: wp
+
+  real(kind=wp), intent(in):: c_n(:,:,:), c_f(:,:,:)
+  real(wp), intent(in):: dipole_f(:,:,:)
+  real(kind=wp), intent(out):: D_fn(:,:,:,:,:)
+  character(*), intent(in):: mode_in
+  
+  integer:: nstates, npesfile_f, npesfile_n, f_e, n_e
+
+  npesfile_n = size(c_n,1)
+  npesfile_f = size(c_f,1)
+  
+
+  do f_e = 1, npesfile_f
+    do n_e = 1, npesfile_n ! intermediate
+
+      call calculate_dipoles_one(c_n(n_e,:,:), c_f(f_e,:,:), dipole_f(f_e,:,:), D_fn(f_e,:,n_e,:,:), mode_in)
+      
+    end do
+  end do
+  
+end subroutine calculate_dipoles_KH_res_fn
+
+
+subroutine calculate_dipoles_KH_res_ni(c_i, c_n, dipole_n, D_ni, mode_in)
+  use m_precision, only: wp
+
+  real(kind=wp), intent(in):: c_i(:,:), c_n(:,:,:)
+  real(wp), intent(in):: dipole_n(:,:,:)
+  real(kind=wp), intent(out):: D_ni(:,:,:)
+  character(*), intent(in):: mode_in
+  
+  integer:: nstates, npesfile_n, n_e
+  character(80):: mode
+  real(wp), allocatable:: D_tmp(:,:,:)
+  
+  npesfile_n = size(c_n,1)
+  nstates = size(c_n,2)
+  
+  allocate( D_tmp(nstates, 1,3) )
+  
+  do n_e =1, npesfile_n
+    call calculate_dipoles_one(c_n(n_e,:,:), c_i(:,1:1), dipole_n(n_e,:,:), D_tmp(:,:,:), mode_in)
+    D_ni(n_e,:,:) =  D_tmp(:,1,:)
+  end do
+   
+end subroutine calculate_dipoles_KH_res_ni
 
 
 subroutine spectrum_XES(eig_f, eig_n,  D_ni, D_fn, D_fi, omega, sigma, sigma_states, gamma)
@@ -490,7 +588,7 @@ subroutine compute_XES_res(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
     funct_type = "GAUSSIAN"
   end if
   
-  write(6,*) "compute_XES_res 0"
+  !write(6,*) "compute_XES_res 0"
 
   sigma_final = 0.0_wp
   lambda_F =0 
@@ -498,7 +596,7 @@ subroutine compute_XES_res(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
   lambda_H =0
   
   do om_out = 1, size(omega_out)
-      write(6,*) "om_out", om_out
+      !write(6,*) "om_out", om_out
 
       do i_f = 1, size(E_f)
 

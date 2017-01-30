@@ -86,7 +86,9 @@ module m_sckh_params_t
      integer:: ntraj
      integer:: nfinal
      character(80):: runmode_sckh
-
+     logical:: use_mass_scaling
+     real(wp):: mass_scaling
+     
      ! projections
      logical:: use_proj
      integer:: nproj
@@ -225,6 +227,10 @@ contains
     call init_parameter('nfinal',inp, 1, p % nfinal, iv)
 
     call init_parameter('runmode_sckh',inp,'nonresonant',p%runmode_sckh,iv)
+
+    call init_parameter('use_mass_scaling',inp, .false.,p % use_mass_scaling,iv)
+
+    call init_parameter('mass_scaling',inp, 1.0d0 ,p % mass_scaling,iv)
 
     call init_parameter('runmode_sckh_res',inp,'FULL',p%runmode_sckh_res,iv)
 

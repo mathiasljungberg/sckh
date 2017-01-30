@@ -1,3 +1,4 @@
+from __future__ import print_function
 import inspect
 
 curdir = ''
@@ -14,57 +15,55 @@ def lineno():
 #
 #
 def report_passed(msg, fname='unknown', line=-1) :
-  from my_bash import bcolors as bc
+  from .my_bash import bcolors as bc  
   if(fname=='unknown' and line==-1) :
-    print bc.OKGREEN, msg, bc.ENDC
+    print(bc.OKGREEN, msg, bc.ENDC)
   else :
-    print bc.OKGREEN, msg, ' in ', fname,'(',line,')', bc.ENDC
+    print(bc.OKGREEN, msg, ' in ', fname,'(',line,')', bc.ENDC)
 
 #
 #
 #
 def report_failed(msg, fname='unknown', line=-1) :
-  from my_bash import bcolors as bc
-  import sys
-  print bc.FAIL, msg, ' in ', fname,'(',line,')', bc.ENDC
-  print >>sys.stderr, bc.FAIL, msg, ' in ', fname,'(',line,')', bc.ENDC
+  from .my_bash import bcolors as bc
+  print(bc.FAIL, msg, ' in ', fname,'(',line,')', bc.ENDC)
+  print(bc.FAIL, msg, ' in ', fname,'(',line,')', bc.ENDC, file=sys.stderr)
 
 #
 #
 #
-def run_tests_py(prefix, bindir, rdirs, iv) : 
-  import os,sys,time
-  from my_bash import bcolors as bc, my_cd
-  import my_bash
-
-  global curdir
-  global executable_fullpath
-  curdir = ''
-  executable_fullpath = ''
-  n = 0
-  for subdir in rdirs :
-    if(len(subdir.strip())==0) : continue
-    curdir=prefix+'/'+ subdir
-    os.chdir(curdir)
-    if(iv>0) : print 
-    if(iv>0) : print '  cd '+curdir, time.asctime()
-    t1 = time.time()
-    f = open(curdir+'/tests.py', 'r')
-    exec(f)
-    f.close()
-    t2 = time.time()
-    print ' Finished '+curdir+'.', 'ET: ', bc.WARNING, t2-t1, bc.ENDC, time.asctime()
-  return n
-# END of run_tests
+#def run_tests_py(prefix, bindir, rdirs, iv) : 
+#  import os,sys,time
+#  #from my_bash import bcolors as bc, my_cd
+#  #import my_bash
+#
+#  global curdir
+#  global executable_fullpath
+#  curdir = ''
+#  executable_fullpath = ''
+#  n = 0
+#  for subdir in rdirs :
+#    if(len(subdir.strip())==0) : continue
+#    curdir=prefix+'/'+ subdir
+#    os.chdir(curdir)
+#    if(iv>0) : print() 
+#    if(iv>0) : print('  cd '+curdir, time.asctime())
+#    t1 = time.time()
+#    f = open(curdir+'/tests.py', 'r')
+#    exec(f)
+#    f.close()
+#    t2 = time.time()
+#    print(' Finished '+curdir+'.', 'ET: ', bc.WARNING, t2-t1, bc.ENDC, time.asctime())
+#  return n
+## END of run_tests
 
 #
 #
 #
 def my_diff(fname, iv=1, error_measure='REL', threshold=1e-4) :
-  import sys
-  from mod_numint import numint_trapz
+  from .mod_numint import numint_trapz
   import numpy as np
-  from my_bash import bcolors as bc
+  from .my_bash import bcolors as bc
   import math
   
   try :
@@ -126,9 +125,10 @@ def my_diff(fname, iv=1, error_measure='REL', threshold=1e-4) :
 #
 def my_diff_sum_ref(fname, refname, iv=0, maxdim=None, threshold=1e-5, threshold_max=1e-4) :
   import sys
-  from mod_numint import numint_trapz
+  #sys.path.append('.')
+  #from mod_numint import numint_trapz
   import numpy as np
-  from my_bash import bcolors as bc
+  #from my_bash import bcolors as bc
   try :
     a = np.genfromtxt(fname)
   except IOError :
@@ -163,17 +163,16 @@ def my_diff_sum_ref(fname, refname, iv=0, maxdim=None, threshold=1e-5, threshold
 #
 #
 def my_get_value_file(fname, string, pos_of_value):
-  import sys
   import numpy as np
 
   f = open(fname, 'r')
   
   for line in f:
     if line.find(string):
-      print 'line', line
+      print( 'line', line)
       line2 = line.split()
       value = line2[pos_of_value]
-      print 'value', value
+      print('value', value)
       break
     
   f.close()
@@ -183,9 +182,7 @@ def my_get_value_file(fname, string, pos_of_value):
 
 
 def my_search_value_file(fname, string, pos_of_value, tol=1.0e-6):  
-  import sys
   import numpy as np
-  from my_bash import bcolors as bc
 
   value = my_get_value_file(fname, string, pos_of_value)
   value_ref = my_get_value_file(fname + '-ref', string, pos_of_value)
@@ -201,59 +198,59 @@ def my_search_value_file(fname, string, pos_of_value, tol=1.0e-6):
 #
 #
 #
-def run_test_no_comp(cmd, iv) :
-  import os, my_bash
-  bname = os.path.basename(cmd)
-  n = 0
-  #for fname in fnames_out : 
-  #my_bash.my_exec('rm -f '+fname, 'rm.out', 'rm.err', iv-1)
-  my_bash.my_exec(cmd, bname+'.out', bname+'.err', iv, False)
-  #for fname in fnames_out : n = n + comp_fn(fname, iv)  #my_diff_arithmetic_ref(fname, iv)
-  #return n    
-
+#def run_test_no_comp(cmd, iv) :
+#  import os, my_bash
+#  bname = os.path.basename(cmd)
+#  n = 0
+#  #for fname in fnames_out : 
+#  #my_bash.my_exec('rm -f '+fname, 'rm.out', 'rm.err', iv-1)
+#  my_bash.my_exec(cmd, bname+'.out', bname+'.err', iv, False)
+#  #for fname in fnames_out : n = n + comp_fn(fname, iv)  #my_diff_arithmetic_ref(fname, iv)
+#  #return n    
 #
 #
 #
-def run_tests(prefix, bindir, rdirs, ls_progs_fname, iv) : 
-  import os,sys,my_bash
-  from my_bash import my_cd,my_exec
-  from my_bash import bcolors as bc
-  n = 0
-  for subdir in rdirs :
-    curdir=prefix+'/'+ subdir
-    my_cd(curdir, iv)
-    progs_map = my_bash.get_prog2results_map(ls_progs_fname, iv-1)
-    if iv>1 : print '  progs_map: ', progs_map
-    rules = list()
-    for entry in progs_map :
-      if len(entry)>1 :
-        rules.append(entry)
-      else :
-        print bc.WARNING, 'run_tests: len(entry)<2', entry, bc.ENDC
-    if iv>0 : print '  rules:',rules
-
-    for rule in rules :
-      cmd = bindir+'/'+rule[0]
-      n = n + run_test(cmd, rule, iv)
-  # END for subdir
-  
-  return n
+#
+#def run_tests(prefix, bindir, rdirs, ls_progs_fname, iv) : 
+#  import os,sys,my_bash
+#  #from my_bash import my_cd,my_exec
+#  #from my_bash import bcolors as bc
+#  n = 0
+#  for subdir in rdirs :
+#    curdir=prefix+'/'+ subdir
+#    my_cd(curdir, iv)
+#    progs_map = my_bash.get_prog2results_map(ls_progs_fname, iv-1)
+#    if iv>1 : print('  progs_map: ', progs_map)
+#    rules = list()
+#    for entry in progs_map :
+#      if len(entry)>1 :
+#        rules.append(entry)
+#      else :
+#        print(bc.WARNING, 'run_tests: len(entry)<2', entry, bc.ENDC)
+#    if iv>0 : print('  rules:',rules)
+#
+#    for rule in rules :
+#      cmd = bindir+'/'+rule[0]
+#      n = n + run_test(cmd, rule, iv)
+#  # END for subdir
+#  
+#  return n
 # END of run_tests
 
 #
 #
 #
-def run_test(cmd, fnames_out, iv, comp_fn=my_diff) :
-  import os, my_bash
-  global executable_fullpath
-
-  bname = os.path.basename(cmd)
-  n = 0
-  for fname in fnames_out : my_bash.my_exec('rm -f '+fname, 'rm.out', 'rm.err', iv-1)
-  executable_fullpath = cmd
-  err_code = my_bash.my_exec(cmd, bname+'.out', bname+'.err', iv, False)
-  if(err_code==0) : 
-    for fname in fnames_out : n = n + comp_fn(fname, iv)  #my_diff_arithmetic_ref(fname, iv)
-  else :
-    n = n + 1
-  return n    
+#def run_test(cmd, fnames_out, iv, comp_fn=my_diff) :
+#  import os, my_bash
+#  global executable_fullpath
+#
+#  bname = os.path.basename(cmd)
+#  n = 0
+#  for fname in fnames_out : my_bash.my_exec('rm -f '+fname, 'rm.out', 'rm.err', iv-1)
+#  executable_fullpath = cmd
+#  err_code = my_bash.my_exec(cmd, bname+'.out', bname+'.err', iv, False)
+#  if(err_code==0) : 
+#    for fname in fnames_out : n = n + comp_fn(fname, iv)  #my_diff_arithmetic_ref(fname, iv)
+#  else :
+#    n = n + 1
+#  return n    

@@ -41,7 +41,8 @@ contains
     real(kind=wp),dimension(:),allocatable:: D_ni(:)
     integer:: ifile
     integer::i,j,k,l,m,m1,m2, traj, ll,t
-
+    logical:: check_time
+    
     !functions
     real(kind=wp):: dnrm2
 
@@ -51,6 +52,15 @@ contains
     ntsteps = p % ntsteps2
     nfinal = p % nfinal 
     delta_t = p % delta_t
+
+    ! set optional mass scaling
+    if(p % use_mass_scaling) then
+      check_time = .false.
+      delta_t = delta_t * p % mass_scaling
+      write(6,*) "Using mass scaling with factor", p % mass_scaling
+    else
+      check_time = .true.
+    end if
 
     ! use HWHM internally
     gamma = p % gamma_FWHM / 2 
@@ -117,7 +127,7 @@ contains
       !  
 
       call read_one_sckh_traj(ntsteps_inp, nfinal, traj_files(traj), time_inp, &
-           time_inp2, E_gs_inp, E_n_inp, E_IP1s, E_trans, E_f_inp, D_fn_inp)
+           time_inp2, E_gs_inp, E_n_inp, E_IP1s, E_trans, E_f_inp, D_fn_inp, check_time)
 
       !
       ! Compute all relevant properties
