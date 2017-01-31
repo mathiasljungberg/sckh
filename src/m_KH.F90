@@ -447,6 +447,7 @@ contains
     use m_PES_io, only: read_file_list
     use m_sckh_params_t, only: sckh_params_t 
     use m_KH_utils, only: calculate_dipoles_KH_res
+    use m_KH_utils, only: calculate_dipoles_KH_res_fn
     use m_KH_utils, only: compute_XES_res
     use m_KH_utils, only: compute_XES_res_factor
     use m_KH_utils, only: compute_XES_res_alt
@@ -685,15 +686,18 @@ contains
             D_fn_cmp(:, :, n_v, :) = D_fn(:,:, n_e, n_v, :)
           end do
           
-            ! resolve for the final state eigenfunctions
-            do j=1,p % npesfile_f
-              call solve_vib_problem(dx, E_f(j,:) +(E_n(n_e,:)- E_n(1,:)), eig_f(j,:), c_f(j,:,:), mu_SI, p % vib_solver)
-              !write(6,*) "Final state fundamental",j, (eig_f(j,2) -eig_f(j,1))*const % cm
-            end do
-            eig_f =eig_f / const % eV
-            
+          ! resolve for the final state eigenfunctions
+          do j=1,p % npesfile_f
+            call solve_vib_problem(dx, E_f(j,:) +(E_n(n_e,:)- E_n(1,:)), eig_f(j,:), c_f(j,:,:), mu_SI, p % vib_solver)
+            !write(6,*) "Final state fundamental",j, (eig_f(j,2) -eig_f(j,1))*const % cm
+          end do
+          eig_f =eig_f / const % eV
+          
+          ! recompute dipole matrix elements
+          call calculate_dipoles_KH_res_fn(c_n, c_f, dipole_f, D_fn, "DIPOLE")
+          
           do f_e = 1,p % npesfile_f
-
+            
             write(6,*) "n_e, f_e", n_e, f_e
             
             call compute_XES_res(eig_i(1), eig_n_cmp(:), eig_f(f_e,:), &
@@ -702,14 +706,14 @@ contains
                  sigma_final_tmp(:,:,:,:), &
                  lambda_F_tmp(:,:), lambda_G_tmp(:,:), lambda_H_tmp(:,:), &
                  upper(p % broadening_func_inc)) 
-
+            
             sigma_final(f_e,:,:,:,:) = sigma_final(f_e,:,:,:,:) + sigma_final_tmp(:,:,:,:)
             lambda_F(f_e,:,:) = lambda_F(f_e,:,:) + lambda_F_tmp(:,:)
             lambda_G(f_e,:,:) = lambda_G(f_e,:,:) + lambda_G_tmp(:,:)
             lambda_H(f_e,:,:) = lambda_H(f_e,:,:) + lambda_H_tmp(:,:)
-
+            
           end do
-
+          
         end do
         
       else
@@ -745,12 +749,354 @@ contains
         close(ifile) 
         
       end do
+      
+  end subroutine calculate_KH_res
+
+  ! in this routine we assume that the excited electron is unchanged in the emmission process
+  ! |0> -> |1s c*> -> |v c*>  where star refers to an electron  
+  ! we provide the first |n> state |1s c_0*> and then E_n - E_0 for n=0,1,2,3,... along with D_in
+  ! for the final states we provide all the | v c_0* > D_fn (independent of the n) and the energy differences  E_f - E_0 for the excited electron. 
+  subroutine calculate_KH_res_orb(p)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_splines, only: spline_easy
+    use m_splines, only: linspace
+    use m_PES_io, only: read_PES_file
+    use m_PES_io, only: read_dipole_file
+    !use m_PES_io, only: read_nac_file
+    use m_PES_io, only: read_file_list
+    use m_sckh_params_t, only: sckh_params_t 
+    !use m_KH_utils, only: calculate_dipoles_KH_res
+    use m_KH_utils, only: calculate_dipoles_KH_res_fn
+    use m_KH_utils, only: calculate_dipoles_KH_res_ni
+    use m_KH_utils, only: compute_XES_res
+    use m_KH_utils, only: compute_XES_res_factor
+    use m_KH_utils, only: compute_XES_res_alt
+    use m_io, only: get_free_handle
+    use m_KH_functions, only: solve_vib_problem
+    use m_upper, only : upper
+
+    type(sckh_params_t), intent(inout):: p 
+
+    character(80):: file,string
+    real(kind=wp):: mu_SI, dx,dvr_start, gamma, gamma_instr, gamma_inc, E_n_mean 
+    real(kind=wp), dimension(:),allocatable:: X_r,E_i, E_lp_corr, eig_i, shift
+    real(kind=wp), dimension(:),allocatable::  sigma, omega_out, omega_in
+    real(kind=wp), dimension(:,:),allocatable::  c_i, &
+         eig_f, E_f, sigma_states, E_n, eig_n
+    real(wp), allocatable:: E_n0(:), E_fn_corr(:,:)
+    real(kind=wp), dimension(:,:,:),allocatable:: c_n, c_f, dipole_f, dipole_n, D_fi, D_ni
+    real(kind=wp), allocatable::D_fn(:,:,:,:,:)
+    real(wp), allocatable:: sigma_final(:,:,:,:,:)
+    integer:: ifile
+    real(wp):: norm
+    real(wp), allocatable:: lambda_F(:,:,:), lambda_G(:,:,:), lambda_H(:,:,:)
+    real(wp), allocatable:: lambda_lp(:,:), lambda_ln(:,:), lambda_cp(:,:)
+    real(wp), allocatable:: eig_n_cmp(:), D_ni_cmp(:,:), D_fn_cmp(:,:,:,:)
+    integer:: n_e, n_v, n_ev, f_e
+    integer::i,j,ii,jj,k,l,m,t 
+
+    real(wp), allocatable:: lambda_F_tmp(:,:), lambda_G_tmp(:,:), lambda_H_tmp(:,:)
+    real(wp), allocatable:: sigma_final_tmp(:,:,:,:)
+    
+    !
+    ! This progam calculates the KH emission spectrum using the eigenstate basis
+    !
+
+    gamma = p % gamma_FWHM /  2
+    gamma_instr = p % gamma_instr_FWHM /  2
+    gamma_inc = p % gamma_inc_FWHM /  2 
+
+    allocate( X_r(p % nstates), E_i(p % nstates), E_n(p % npesfile_n, p % nstates), E_lp_corr(p % nstates), &
+         E_f(p % npesfile_f,p % nstates), eig_i(p % nstates),eig_n(p % npesfile_n, p % nstates),&
+         eig_f(p % npesfile_f,p % nstates), &
+         shift(p % nstates))
+    allocate(E_n0(p % nstates), E_fn_corr(p % npesfile_n, p % nstates))
+    allocate( omega_out(p % n_omega_out), sigma(p % n_omega_out), D_ni(p % npesfile_n, p % nstates, 3) )
+    allocate( omega_in(p % n_omega_in))
+    allocate(c_i(p % nstates,p % nstates),c_f(p % npesfile_f,p % nstates,p % nstates), &
+         c_n(p % npesfile_n, p % nstates,p % nstates), &
+         D_fn(p % npesfile_f,p % nstates,p % npesfile_n, p % nstates,3))
+    allocate(dipole_f(p % npesfile_f, p % nstates, 3), sigma_states(p % npesfile_f,p % n_omega_out))
+    allocate(dipole_n(p % npesfile_n, p % nstates, 3))
+    allocate(D_fi(p % npesfile_f,p % nstates,3) )
+    write(6,*) "", p % npesfile_f, p % n_omega_in,  p % n_omega_out 
+
+    allocate(sigma_final(p % npesfile_f, p % n_omega_in, p % n_omega_out,3,3))
+
+    !allocate(eig_n_cmp(p % npesfile_n * p % nstates))
+    !allocate(D_ni_cmp(p % npesfile_n * p % nstates, 3))
+    !allocate(D_fn_cmp(p % npesfile_f,p % nstates, p % npesfile_n * p % nstates, 3))
+
+    allocate(lambda_F(p % npesfile_f, p % n_omega_in, p % n_omega_out))
+    allocate(lambda_G(p % npesfile_f, p % n_omega_in, p % n_omega_out))
+    allocate(lambda_H(p % npesfile_f, p % n_omega_in, p % n_omega_out))
+
+    !if (p % nonadiabatic .eq. 1) then
+    !!  allocate(nac(p % npesfile_f, p % npesfile_f, p % nstates, 2) )
+    !end if
+
+    if (mod(p % nstates,2).ne.1 ) then
+      write(6,*) "nstates must be an odd number"
+      stop
+    end if
+
+    mu_SI = p % mu * const % u
+    dvr_start = p % dvr_start_in * 1.0d-10
+    dx = p % dx_in * 1.0d-10
+
+    ! set up grid points
+    do i = 1, p % npoints_in
+      X_r(i) = (i-1)*dx + dvr_start
+    end do
+
+    
+    !
+    ! read PES files
+    !
+
+    ! iniital state
+    call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_r, E_i)
+
+    ! intermediate state reference energy (lowest state) 
+    call read_PES_file(p % pes_file_n, p % npoints_in, p % nstates, X_r, E_n0)
+    
+    ! read list of intermediate state pes_files (differences to the pes_file_n) and dipole_files
+    call read_file_list(p % pes_file_list_n, p % npesfile_n, p % pes_files_n)
+    call read_file_list(p % dipole_file_list_n, p % npesfile_n, p % dipolefile_n)
+    
+    do j=1,p % npesfile_n
+      call read_PES_file(p % pes_files_n(j), p % npoints_in, &
+           p % nstates, X_r, E_n(j,:))
+      call read_dipole_file(p % dipolefile_n(j), p % npoints_in, p % nstates, X_r, dipole_n(j,:,:))
+    end do
+
+    ! read list of final state pes_files and dipole_files
+    call read_file_list(p % pes_file_list_f, p % npesfile_f, p % pes_files_f)
+    call read_file_list(p % dipole_file_list_f, p % npesfile_f, p % dipolefile_f)
+
+    do j=1,p % npesfile_f
+      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % npoints_in, X_r, E_f(j,:))
+      call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_r, dipole_f(j,:,:))
+    end do
+
+    ! read list of corrections to the final state files coming from the excited electron
+    call read_file_list(p % pes_file_list_fn_corr, p % npesfile_n, p % pes_files_fn_corr)
+
+    do j=1,p % npesfile_n
+      call read_PES_file(p % pes_files_fn_corr(j), p % npoints_in, &
+           p % nstates, X_r, E_fn_corr(j,:))
+    end do
+    
+    
+    
+    !  if (p % nonadiabatic .eq. 1) then
+    !     call read_nac_file(p % nac_file, p % npoints_in, p %nstates, X_r, p % npesfile_f, nac)
+    !  end if
+
+    ! Shift orbital energies so that E_f(1,:) have energies E_lp_corr
+    ! and the spacing between the intermediate and final states are preserved
+    if( p % shift_PES .eq.  1) then
+      call read_PES_file(p % pes_file_lp_corr, p % npoints_in, p % nstates, X_r, E_lp_corr)
+
+      shift = E_lp_corr -E_f(1,:) 
+
+      do j=1,p % npesfile_f
+        E_f(j,:) = E_f(j,:) + shift
+      end do
+      write(6,*) "Shifted PES:s"
+    end if
+
+    
+    ! create omegas
+    call linspace(omega_in, p % omega_in_start,p % omega_in_end, p % n_omega_in )
+    call linspace(omega_out, p % omega_out_start,p % omega_out_end, p % n_omega_out ) 
+
+
+    !
+    ! Solve the vibrational problem for all eigenfunctions
+    !
+
+    ! initial state
+    call solve_vib_problem(dx, E_i, eig_i, c_i, mu_SI, p % vib_solver)
+    
+    write(6,*) "Initial state fundamental", (eig_i(2) -eig_i(1))*const % cm
+
+    ! intermediate states
+    do j=1,p % npesfile_n
+      call solve_vib_problem(dx, E_n0 + E_n(j,:), eig_n(j,:), c_n(j,:,:), mu_SI, p % vib_solver)
+      write(6,*) "Intermediate state fundamental", j, (eig_n(j,2) -eig_n(j,1))*const % cm
+    end do
+
+    ! final states
+    !do j=1,p % npesfile_f
+    !  call solve_vib_problem(dx, E_f(j,:), eig_f(j,:), c_f(j,:,:), mu_SI, p % vib_solver)
+    !  write(6,*) "Final state fundamental",j, (eig_f(j,2) -eig_f(j,1))*const % cm
+    !end do
+
+    ! solve non-adiabatic problem
+    !call solve_non_adiabatic(eig_f, c_f, eig_na, c_na)
+    
+    !write(6,*) "here 1"
+    !call calculate_dipoles_KH_res(c_i, c_n, c_f, dipole_n, dipole_f, D_ni, D_fn, D_fi) 
+    !write(6,*) "here 2"
+    
+    call calculate_dipoles_KH_res_ni(c_i, c_n, dipole_n, D_ni, "DIPOLE") 
+    
+    ! convert eigenvalues to eV units
+    eig_i =eig_i / const % eV
+    eig_n =eig_n / const % eV
+    !eig_f =eig_f / const % eV
+
+    !
+    ! calculate spectrum
+    !
+    !! use composite indexing for intermediate states
+    !  do n_e = 1, p % npesfile_n    
+    !    do n_v = 1, p % nstates
+    !      n_ev = (n_e -1)* p % nstates + n_v
+    !      eig_n_cmp(n_ev) = eig_n(n_e, n_v) 
+    !      D_ni_cmp(n_ev,:) = D_ni(n_e, n_v, :)
+    !      !D_fn_cmp(:, :, n_ev, :) = D_fn(:,:, n_e, n_v, :)
+    !    end do
+    !  end do
+
+     
+      ! option to add the exited electron to the final states. In the case of the same unoccupied orbital energy
+      ! used in both intermediate (included in PES) and final states (not included in PES)
+      ! we must set eig_n_cmp(n_ev) = eig_n(1, n_v) since then differences E_NF will have compensating orbital energies
+      ! however, still
+
+
+      
+      !if (upper(p % KH_amplitude_mode) .eq. "OUTGOING") then
+      !  
+      !  do f_e = 1,p % npesfile_f
+      !    call compute_XES_res(eig_i(1), eig_n_cmp(:), eig_f(f_e,:), &
+      !         D_ni_cmp(:,:), D_fn_cmp(f_e,:,:,:), &
+      !         omega_in, omega_out, gamma, gamma_inc, gamma_instr, .true., .true., &
+      !         sigma_final(f_e,:,:,:,:), &
+      !         lambda_F(f_e,:,:), lambda_G(f_e,:,:), lambda_H(f_e,:,:), &
+      !         upper(p % broadening_func_inc)) 
+      !
+      !    !call compute_XES_res_factor(eig_i(1), eig_n_cmp(:), eig_f(f_e,:), &
+      !    !     D_ni_cmp(:,:), D_fn_cmp(f_e,:,:,:), &
+      !    !     omega_in, omega_out, gamma, gamma_inc, gamma_instr, .true., .true., &
+      !    !     sigma_final(f_e,:,:,:,:), &
+      !    !     lambda_F(f_e,:,:), lambda_G(f_e,:,:), lambda_H(f_e,:,:), "LORENTZIAN")
+      !  end do
+      !
+      !else if (upper(p % KH_amplitude_mode) .eq. "INGOING") then
+      !
+      !  ! alternative formula with F(\omega) and instrumental broadening instead of incoming broadening
+      !  do f_e = 1,p % npesfile_f
+      !    call compute_XES_res_alt(eig_i(1), eig_n_cmp(:), eig_f(f_e,:), &
+      !         D_ni_cmp(:,:), D_fn_cmp(f_e,:,:,:), &
+      !         omega_in, omega_out, gamma, gamma_inc, gamma_instr, .true., .true., &
+      !         sigma_final(f_e,:,:,:,:), &
+      !         lambda_F(f_e,:,:), lambda_G(f_e,:,:), lambda_H(f_e,:,:))
+      !  end do
+      !
+      !else if (upper(p % KH_amplitude_mode) .eq. "OUTGOING_ORBS") then
+        
+      !deallocate(eig_n_cmp)
+      allocate(eig_n_cmp(p % nstates))
+      !deallocate(D_ni_cmp)
+      allocate(D_ni_cmp(p % nstates, 3))
+      !deallocate(D_fn_cmp)
+      allocate(D_fn_cmp(p % npesfile_f, p % nstates, p % nstates, 3))
+      
+      allocate(lambda_F_tmp(p % n_omega_in, p % n_omega_out))
+      allocate(lambda_G_tmp(p % n_omega_in, p % n_omega_out))
+      allocate(lambda_H_tmp(p % n_omega_in, p % n_omega_out))
+      allocate(sigma_final_tmp(p % n_omega_in, p % n_omega_out,3,3))
+      
+      lambda_F = 0.0_wp
+      lambda_G = 0.0_wp
+      lambda_H = 0.0_wp
+      sigma_final = 0.0_wp
+      
+      do n_e = 1,p % npesfile_n
+          
+        do n_v = 1, p % nstates
+          !n_ev = (n_e -1)* p % nstates + n_v
+          eig_n_cmp(n_v) = eig_n(n_e, n_v) 
+          D_ni_cmp(n_v,:) = D_ni(n_e, n_v, :)
+          D_fn_cmp(:, :, n_v, :) = D_fn(:,:, n_e, n_v, :)
+        end do
+        
+        ! resolve for the final state eigenfunctions
+        do j=1,p % npesfile_f
+          !call solve_vib_problem(dx, E_f(j,:) +(E_n(n_e,:)- E_n(1,:)), eig_f(j,:), c_f(j,:,:), mu_SI, p % vib_solver)
+          call solve_vib_problem(dx, E_f(j,:) + E_fn_corr(n_e,:), eig_f(j,:), c_f(j,:,:), mu_SI, p % vib_solver)
+          !write(6,*) "Final state fundamental",j, (eig_f(j,2) -eig_f(j,1))*const % cm
+        end do
+        eig_f =eig_f / const % eV
+        
+        ! recompute dipole matrix elements
+        call calculate_dipoles_KH_res_fn(c_n, c_f, dipole_f, D_fn, "DIPOLE")
+        
+        do f_e = 1,p % npesfile_f
+          
+          write(6,*) "n_e, f_e", n_e, f_e
+          
+          call compute_XES_res(eig_i(1), eig_n_cmp(:), eig_f(f_e,:), &
+               D_ni_cmp(:,:), D_fn_cmp(f_e,:,:,:), &
+               omega_in, omega_out, gamma, gamma_inc, gamma_instr, .true., .true., &
+               sigma_final_tmp(:,:,:,:), &
+               lambda_F_tmp(:,:), lambda_G_tmp(:,:), lambda_H_tmp(:,:), &
+               upper(p % broadening_func_inc)) 
+          
+          sigma_final(f_e,:,:,:,:) = sigma_final(f_e,:,:,:,:) + sigma_final_tmp(:,:,:,:)
+          lambda_F(f_e,:,:) = lambda_F(f_e,:,:) + lambda_F_tmp(:,:)
+          lambda_G(f_e,:,:) = lambda_G(f_e,:,:) + lambda_G_tmp(:,:)
+          lambda_H(f_e,:,:) = lambda_H(f_e,:,:) + lambda_H_tmp(:,:)
+            
+        end do
+        
+      end do
+      
+      !else
+      !  write(6,*) "p % KH_amplitude_mode must be either OUTGOING or INGOING"
+      !  stop
+      !end if
+      
+      ! averages according to J. Phys. B. 27, 4169 (1994) 
+      ! lambda_lp: parallel linear, lambda_ln: perpendicular linear, lambda_cp: circularly polarized
+      lambda_lp = sum(2.0_wp * lambda_F + 2.0_wp * lambda_G  + 2.0_wp * lambda_H, 1)
+      lambda_ln = sum(-1.0_wp * lambda_F + 4.0_wp  * lambda_G -1.0_wp * lambda_H, 1)
+      lambda_cp = sum(-2.0_wp * lambda_F + 3.0_wp * lambda_G + 3.0_wp * lambda_H, 1)
+
+      !
+      ! Write to files
+      ! 
+      
+      ! write spectra to file
+      do j=1, p % n_omega_in
+        
+        file="_sigma_"
+        write(string,'(F6.2)') omega_in(j)   
+        file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+        
+        ifile = get_free_handle()
+        open(ifile,file=file,status='unknown')
+        
+        do i=1, p % n_omega_out 
+          write(ifile,'(13ES18.10)') omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i), &
+               ((sum(sigma_final(:, j, i, k, l)), k=1,3), l=1,3)
+        end do
+
+        close(ifile) 
+        
+      end do
 
 
 
       
-  end subroutine calculate_KH_res
+    end subroutine calculate_KH_res_orb
 
+
+  
   ! only electronic spectrum computed at minimum of the ground state PES
   subroutine calculate_KH_res_el(p)
     use m_precision, only: wp

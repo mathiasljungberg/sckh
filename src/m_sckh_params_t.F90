@@ -19,6 +19,7 @@ module m_sckh_params_t
 
      character(80):: pes_file_list_n
      character(80):: pes_file_list_f
+     character(80):: pes_file_list_fn_corr
      character(80):: dipole_file_list_n
      character(80):: dipole_file_list_f
 
@@ -26,6 +27,7 @@ module m_sckh_params_t
 
      character(80), allocatable:: pes_files_n(:)
      character(80), allocatable:: pes_files_f(:)
+     character(80), allocatable:: pes_files_fn_corr(:)
      character(80), allocatable:: dipolefile_n(:)
      character(80), allocatable:: dipolefile_f(:)
 
@@ -136,6 +138,8 @@ contains
     call init_parameter('pes_file_list_n',inp, "pes_file_list_n.txt", p % pes_file_list_n ,iv)
     ! pes_file_list_n: list of the final PES:es 
     call init_parameter('pes_file_list_f',inp, "pes_file_list_f.txt", p % pes_file_list_f ,iv)
+    ! pes_file_list_fn_corr: correction for final state PESes in the KH_resonant_orb program
+    call init_parameter('pes_file_list_fn_corr',inp, "pes_file_list_fn_corr.txt", p % pes_file_list_fn_corr ,iv)
     ! dipole files for intermediate states
     call init_parameter('dipole_file_list_n',inp, "dipole_file_list_n.txt", p % dipole_file_list_n ,iv)
     ! dipole files for final states

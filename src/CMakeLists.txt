@@ -95,7 +95,7 @@ m_SCKH_nonadiabatic.F90
 m_ode_solvers.F90
 m_spectrum_utils.F90
 m_convolution.F90
-m_SCXAS_PES.f90
+m_SCXAS_PES.F90
 m_crank_nicolson.F90
 )
 
