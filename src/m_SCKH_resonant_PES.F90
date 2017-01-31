@@ -128,7 +128,7 @@ contains
          a_new(ntsteps),&
          x_new2(ntsteps),&
          v_new2(ntsteps),&
-         a_new2(ntsteps),&
+         a_new2(ntsteps) &
          !time_h(ntsteps)&
          )
     allocate(X_r(npoints_in))
