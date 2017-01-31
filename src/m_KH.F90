@@ -509,6 +509,10 @@ contains
     allocate(lambda_G(p % npesfile_f, p % n_omega_in, p % n_omega_out))
     allocate(lambda_H(p % npesfile_f, p % n_omega_in, p % n_omega_out))
 
+    allocate(lambda_lp(p % n_omega_in, p % n_omega_out))
+    allocate(lambda_ln(p % n_omega_in, p % n_omega_out))
+    allocate(lambda_cp(p % n_omega_in, p % n_omega_out))
+
     if (p % nonadiabatic .eq. 1) then
     !  allocate(nac(p % npesfile_f, p % npesfile_f, p % nstates, 2) )
     end if
@@ -832,6 +836,11 @@ contains
     allocate(lambda_G(p % npesfile_f, p % n_omega_in, p % n_omega_out))
     allocate(lambda_H(p % npesfile_f, p % n_omega_in, p % n_omega_out))
 
+    allocate(lambda_lp(p % n_omega_in, p % n_omega_out))
+    allocate(lambda_ln(p % n_omega_in, p % n_omega_out))
+    allocate(lambda_cp(p % n_omega_in, p % n_omega_out))
+
+    
     !if (p % nonadiabatic .eq. 1) then
     !!  allocate(nac(p % npesfile_f, p % npesfile_f, p % nstates, 2) )
     !end if
@@ -1162,9 +1171,14 @@ contains
     allocate(eig_n_cmp(p % npesfile_n * nstates))
     allocate(D_ni_cmp(p % npesfile_n * nstates, 3))
     allocate(D_fn_cmp(p % npesfile_f,nstates, p % npesfile_n * nstates, 3))
+
     allocate(lambda_F(p % npesfile_f, p % n_omega_in, p % n_omega_out))
     allocate(lambda_G(p % npesfile_f, p % n_omega_in, p % n_omega_out))
     allocate(lambda_H(p % npesfile_f, p % n_omega_in, p % n_omega_out))
+
+    allocate(lambda_lp(p % n_omega_in, p % n_omega_out))
+    allocate(lambda_ln(p % n_omega_in, p % n_omega_out))
+    allocate(lambda_cp(p % n_omega_in, p % n_omega_out))
 
     mu_SI = p % mu * const % u
     dvr_start = p % dvr_start_in * 1.0d-10
