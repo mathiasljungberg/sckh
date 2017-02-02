@@ -235,9 +235,12 @@ contains
     allocate(lambda_F(nfinal, n_omega_in, n_omega_out))
     allocate(lambda_G(nfinal, n_omega_in, n_omega_out))
     allocate(lambda_H(nfinal, n_omega_in, n_omega_out))
+
     allocate(lambda_lp(n_omega_in, n_omega_out))
     allocate(lambda_ln(n_omega_in, n_omega_out))
     allocate(lambda_cp(n_omega_in, n_omega_out))
+
+    allocate(sigma_tmp(n_omega_in, n_omega_out))
 
     !
     ! Loop over trajectories
@@ -692,7 +695,7 @@ contains
          a_new(ntsteps),&
          x_new2(ntsteps),&
          v_new2(ntsteps),&
-         a_new2(ntsteps),&
+         a_new2(ntsteps)&
          !time_h(ntsteps)&
          )
     allocate(X_r(npoints_in))
@@ -799,9 +802,12 @@ contains
     allocate(lambda_F(nfinal, 1, n_omega_out))
     allocate(lambda_G(nfinal, 1, n_omega_out))
     allocate(lambda_H(nfinal, 1, n_omega_out))
+
     allocate(lambda_lp(n_omega_in, n_omega_out))
     allocate(lambda_ln(n_omega_in, n_omega_out))
     allocate(lambda_cp(n_omega_in, n_omega_out))
+
+    allocate(sigma_tmp(n_omega_in, n_omega_out))
 
     !
     ! Loop over trajectories
@@ -1274,7 +1280,7 @@ contains
          a_new(ntsteps),&
          x_new2(ntsteps),&
          v_new2(ntsteps),&
-         a_new2(ntsteps),&
+         a_new2(ntsteps)&
          !time_h(ntsteps)&
          )
     allocate(X_r(npoints_in))
@@ -1381,9 +1387,12 @@ contains
     allocate(lambda_F(nfinal, 1, n_omega_out))
     allocate(lambda_G(nfinal, 1, n_omega_out))
     allocate(lambda_H(nfinal, 1, n_omega_out))
+
     allocate(lambda_lp(n_omega_in, n_omega_out))
     allocate(lambda_ln(n_omega_in, n_omega_out))
     allocate(lambda_cp(n_omega_in, n_omega_out))
+
+    allocate(sigma_tmp(n_omega_in, n_omega_out))
 
     !
     ! Loop over trajectories

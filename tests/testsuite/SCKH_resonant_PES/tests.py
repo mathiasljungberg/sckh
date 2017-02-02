@@ -20,7 +20,8 @@ def run_test():
 
     # check spectrum
     err_code += mod_tests.my_diff_sum_ref('spectrum_resonant_sigma_207.02.dat',
-                                          '../ref/spectrum_resonant_sigma_207.02.dat')
+                                          '../ref/spectrum_resonant_sigma_207.02.dat',
+                                          threshold=1e-2, threshold_max=1e-3)
         
     # clean up
     os.chdir(old_dir)
