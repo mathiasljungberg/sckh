@@ -938,7 +938,7 @@ contains
     real(wp), intent(in):: E_n(:,:)
     real(wp), intent(in):: time(:)
     real(wp), intent(in):: E_f(:,:)
-    real(wp), intent(in):: D_fn(:,:,:,:) 
+    real(wp), intent(in):: D_fn(:,:,:) 
     real(wp), intent(in):: D_ni(:,:) 
     complex(wp), dimension(:,:,:,:),intent(out) ::  F_if_omp
     real(wp), intent(in):: E_nf_mean, gamma
@@ -952,7 +952,7 @@ contains
 
     ! version with internal sum over n
     do f_e =1,nfinal
-      call compute_F_if_omp_sum_n(E_n, E_f(f_e,:), E_nf_mean, D_fn(f_e,:,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
+      call compute_F_if_omp_sum_n(E_n, E_f(f_e,:), E_nf_mean, D_fn(f_e,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
     end do 
 
     ! other version (not implemented yet), compute each n separately and add
@@ -1020,7 +1020,7 @@ contains
     real(wp), intent(in):: E_n(:,:)
     real(wp), intent(in):: time(:)
     real(wp), intent(in):: E_f(:)
-    real(wp), intent(in):: D_fn(:,:,:)
+    real(wp), intent(in):: D_fn(:,:)
     real(wp), intent(in):: D_ni(:,:) 
     complex(wp), intent(out) ::  F_if_omp(:,:,:)
     real(wp), intent(in):: E_nf_mean, gamma
@@ -1039,11 +1039,11 @@ contains
     funct = 0.0_wp
     
     do n_e =1, ninter
-      call compute_efactor(E_n(ninter,:), E_f, E_nf_mean, time, e_factor1, .true.)
+      call compute_efactor(E_n(n_e,:), E_f, E_nf_mean, time, e_factor1, .true.)
       
       do m1=1,3 
         do m2=1,3 
-          funct(:,m1, m2) = funct(:,m1,m2) + D_ni (n_e, m2) * D_fn(n_e, :, m1) * &
+          funct(:,m1, m2) = funct(:,m1,m2) + D_ni (n_e, m2) * D_fn(:, m1) * &
                e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar)
         end do
       end do
@@ -1062,6 +1062,111 @@ contains
     
   end subroutine compute_F_if_omp_sum_n
 
+  subroutine compute_F_if_omp_one_n(E_n, E_f, E_nf_mean, D_fn, D_ni, time, F_if_omp, gamma)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_backward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    real(wp), intent(in):: E_n(:)
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_f(:)
+    real(wp), intent(in):: D_fn(:,:)
+    real(wp), intent(in):: D_ni(:) 
+    complex(wp), intent(out) ::  F_if_omp(:,:,:)
+    real(wp), intent(in):: E_nf_mean, gamma
+
+    integer:: ntsteps, ninter
+    complex(wp), allocatable:: funct(:,:,:)
+    complex(wp), allocatable::  e_factor1(:)
+    integer:: m1, m2, n_e 
+
+    ntsteps = size(time) 
+    ninter = size(E_n, 1)
+    
+    allocate(funct(ntsteps,3,3), &
+         e_factor1(ntsteps))
+
+    funct = 0.0_wp
+    
+    call compute_efactor(E_n(:), E_f(:), E_nf_mean, time(:), e_factor1(:), .true.)
+    
+    do m1=1,3 
+      do m2=1,3 
+        funct(:,m1, m2) = funct(:,m1,m2) + D_ni (m2) * D_fn(:, m1) * &
+             e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar)
+      end do
+    end do
+    
+    F_if_omp = 0.0_wp
+    
+    do m1=1,3 
+      do m2= 1,3 
+        
+        call fft_c2c_1d_backward(funct(:,m1, m2), F_if_omp(:,m1,m2))
+        call reorder_sigma_fftw_z(F_if_omp(:,m1,m2))
+        
+      end do ! m2 
+    end do ! m1
+    
+  end subroutine compute_F_if_omp_one_n
+
+
+  
+!  ! summing internally over several intermediate states to avoid fft:s, only savings for ninter > 3
+!  subroutine compute_F_ifc_omp_sum_n(E_n, E_fc, E_nf_mean, D_fn, D_ni, time, F_if_omp, gamma)
+!    use m_precision, only: wp
+!    use m_constants, only: const
+!    use m_fftw3, only: fft_c2c_1d_backward
+!    use m_fftw3, only: reorder_sigma_fftw_z
+!    
+!    real(wp), intent(in):: E_n(:,:)
+!    real(wp), intent(in):: time(:)
+!    real(wp), intent(in):: E_fc(:,:)
+!    real(wp), intent(in):: D_fn(:,:,:)
+!    real(wp), intent(in):: D_ni(:,:) 
+!    complex(wp), intent(out) ::  F_if_omp(:,:,:)
+!    real(wp), intent(in):: E_nf_mean, gamma
+!
+!    integer:: ntsteps, ninter
+!    complex(wp), allocatable:: funct(:,:,:)
+!    complex(wp), allocatable::  e_factor1(:)
+!    integer:: m1, m2, n_e 
+!
+!    ntsteps = size(time) 
+!    ninter = size(E_n, 1)
+!    
+!    allocate(funct(ntsteps,3,3), &
+!         e_factor1(ntsteps))
+!
+!    funct = 0.0_wp
+!    
+!    do n_e =1, ninter
+!      call compute_efactor(E_n(n_e,:), E_fc(n_e,:), E_nf_mean, time, e_factor1, .true.)
+!      
+!      do m1=1,3 
+!        do m2=1,3 
+!          funct(:,m1, m2) = funct(:,m1,m2) + D_ni (n_e, m2) * D_fn(n_e, :, m1) * &
+!               e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar)
+!        end do
+!      end do
+!    end do
+!    
+!    F_if_omp = 0.0_wp
+!    
+!    do m1=1,3 
+!      do m2= 1,3 
+!        
+!        call fft_c2c_1d_backward(funct(:,m1, m2), F_if_omp(:,m1,m2))
+!        call reorder_sigma_fftw_z(F_if_omp(:,m1,m2))
+!        
+!      end do ! m2 
+!    end do ! m1
+!    
+!  end subroutine compute_F_ifc_omp_sum_n
+
+
+  
 
   subroutine compute_F_if_om_omp(F_if_t_omp, E_f, E_fi_mean, time, &
        E_i, gamma_inc, omega_out, E_nf_mean,F_if_om_omp)
@@ -1113,6 +1218,52 @@ contains
     
   end subroutine compute_F_if_om_omp
 
+  subroutine compute_F_if_om_omp_one_f(F_if_t_omp, E_f, E_fi_mean, time, &
+       E_i, gamma_inc, omega_out, E_nf_mean,F_if_om_omp)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_forward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    complex(wp), intent(in) ::  F_if_t_omp(:,:,:,:)
+    real(wp), intent(in):: E_f(:)
+    real(wp), intent(in):: E_fi_mean
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_i(:)
+    real(wp), intent(in):: gamma_inc
+    real(wp), intent(in):: omega_out(:)
+    real(wp), intent(in):: E_nf_mean
+    complex(wp), intent(out) ::  F_if_om_omp(:,:,:,:)
+
+    integer:: n_omega_in, n_omega_out, om_out, m1, m2
+    complex(wp), allocatable ::  e_factor1(:)
+    
+    n_omega_in = size(F_if_t_omp,1)
+    n_omega_out = size(F_if_t_omp,2)
+    
+    allocate(e_factor1(n_omega_in))
+      
+    call compute_efactor(E_f(:), E_i, E_fi_mean, time, e_factor1(:), .false.)
+      
+    do om_out= 1, n_omega_out
+      do m1 =1, 3
+        do m2 =1, 3
+          
+          call fft_c2c_1d_forward( e_factor1(:) * &
+               exp(dcmplx(0.0_wp,  (omega_out(om_out) - E_nf_mean)* const % eV * time(:) / const % hbar )) * &
+               F_if_t_omp(:,om_out, m1,m2), &
+               F_if_om_omp(:,om_out, m1,m2))
+          call reorder_sigma_fftw_z(F_if_om_omp(:, om_out, m1,m2))
+          
+        end do
+      end do
+    end do
+    
+  end subroutine compute_F_if_om_omp_one_f
+
+
+
+  
   ! here use factorization
   subroutine compute_F_if_om_omp_no_F(E_f, E_fi_mean, time, &
        E_i, gamma_R, omega_out, E_nf_mean, R_if_om_omp)

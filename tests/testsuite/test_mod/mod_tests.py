@@ -26,6 +26,7 @@ def report_passed(msg, fname='unknown', line=-1) :
 #
 def report_failed(msg, fname='unknown', line=-1) :
   from .my_bash import bcolors as bc
+  import sys
   print(bc.FAIL, msg, ' in ', fname,'(',line,')', bc.ENDC)
   print(bc.FAIL, msg, ' in ', fname,'(',line,')', bc.ENDC, file=sys.stderr)
 
@@ -119,11 +120,75 @@ def my_diff(fname, iv=1, error_measure='REL', threshold=1e-4) :
     report_passed('Ok '+fname + ' '+str(err_y)+' vs '+str(threshold))
     return 0
 
+#
+#
+#
+def my_diff_ref(fname, refname, error_measure='REL', threshold=1e-4) :
+  from .mod_numint import numint_trapz
+  import numpy as np
+  from .my_bash import bcolors as bc
+  import math
+  
+  try :
+    a = np.genfromtxt(fname, usecols=(0,1) )
+  except :
+    report_failed('! genfromtxt() '+fname+ ' failed.', __file__, lineno())
+    return 1
+  try :
+    b = np.genfromtxt(refname, usecols=(0,1))
+  except :
+    report_failed('! genfromtxt() '+fname+ '-ref failed.', __file__, lineno())
+    return 1
+
+  try :
+    err_x = numint_trapz(abs(a[:,0]-b[:,0]))
+  except :
+    report_failed('shape error?', __file__, lineno())
+    err_x = 999.0
+
+  x_ok = True
+  if err_x>threshold or math.isnan(err_x):
+    x_ok = False
+    report_failed('! '+fname+ ' err_x>'+str(threshold)+ ' ' +str(err_x), __file__, lineno())
+
+  try :
+    area_1 = numint_trapz(a[:,1], a[:,0])
+  except :
+    report_failed('shape error?', __file__, lineno())
+    area_1 = 0.0
+
+  try :
+    area_d = numint_trapz(abs(a[:,1]-b[:,1]), a[:,0])
+  except :
+    report_failed('shape error?', __file__, lineno())
+    area_d = 999.0
+
+  if(error_measure=='ABS') :
+    err_y = abs(area_d)
+  elif (error_measure=='REL') :
+    if (area_1==0):
+      err_y = abs(area_d)
+    else:
+      err_y = abs(area_d/area_1)
+  else :
+    report_failed("error_measure must be 'ABS' or 'REL' ")
+    return 1
+  
+  if err_y>threshold or not x_ok or math.isnan(err_y):
+    report_failed('! '+curdir+'/'+fname+' '+executable_fullpath+ 
+      ' err_y>'+str(threshold)+': '+str(err_y), __file__, lineno())
+    return 1
+  else :
+    report_passed('Ok '+fname + ' '+str(err_y)+' vs '+str(threshold))
+    return 0
+
+
+
 
 #
 #
 #
-def my_diff_sum_ref(fname, refname, iv=0, maxdim=None, threshold=1e-5, threshold_max=1e-4) :
+def my_diff_sum_ref(fname, refname, maxdim=None, threshold=1e-5, threshold_max=1e-4) :
   import sys
   #sys.path.append('.')
   #from mod_numint import numint_trapz

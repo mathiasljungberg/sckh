@@ -1,0 +1,10 @@
+dipole_f_9.txt
+dipole_f_8.txt
+dipole_f_7.txt
+dipole_f_6.txt
+dipole_f_5.txt
+dipole_f_4.txt
+dipole_f_3.txt
+dipole_f_2.txt
+
+

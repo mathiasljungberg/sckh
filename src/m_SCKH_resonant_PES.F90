@@ -10,9 +10,12 @@ contains
     !use m_SCKH_utils, only: verlet_trajectory
     use m_SCKH_utils, only: verlet_trajectory_xva
     use m_SCKH_utils, only: compute_F_if_omp_many_n
-    use m_SCKH_utils, only: compute_F_if_om_many_n
+    use m_SCKH_utils, only: compute_F_if_omp_sum_n
+    use m_SCKH_utils, only: compute_F_if_omp_one_n
+    !use m_SCKH_utils, only: compute_F_if_om_many_n
     use m_SCKH_utils, only: compute_F_if_om_omp
-    use m_SCKH_utils, only: compute_F_if_om_omp_ingoing
+    use m_SCKH_utils, only: compute_F_if_om_omp_one_f
+    !use m_SCKH_utils, only: compute_F_if_om_omp_ingoing
     use m_sckh_params_t, only: sckh_params_t 
     !use hist_class, only: hist, hist_init, hist_add
     !use hist_class, only: hist_broadening, hist_write
@@ -32,14 +35,14 @@ contains
     
     type(sckh_params_t), intent(inout):: p 
 
-    integer:: ninter, nfinal, ntsteps  
-    integer:: npoints_in
-
     real(wp), allocatable::  time(:), E_dyn_inp(:),  E_dyn2_inp(:)  
+    real(wp), allocatable:: E_n0(:), E_fn_corr(:,:)
     real(wp), allocatable::  E_lp_corr(:), shift(:)
     real(wp), allocatable::  E_i_inp(:), E_i1(:), E_i2(:)
     real(wp), allocatable::  E_n_inp(:,:), E_n1(:,:), E_n2(:,:)
-    real(wp), allocatable::  E_f_inp(:,:), E_f1(:,:), E_f2(:,:)
+    real(wp), allocatable::  E_f_inp(:,:)
+    real(wp), allocatable::  E_f1(:,:), E_f2(:,:)
+    real(wp), allocatable::  E_fc1(:,:,:), E_fc2(:,:,:)
 
     real(wp), allocatable:: D_fn_inp(:,:,:,:), D_fn1(:,:,:,:), D_fn2(:,:,:,:)
     real(wp), allocatable:: D_ni_inp(:,:,:), D_ni1(:,:,:), D_ni2(:,:,:) 
@@ -50,7 +53,11 @@ contains
     real(wp), allocatable:: x_sampl(:), mom_sampl(:), x_mom_sampl(:,:)
     real(wp), allocatable:: x_new(:), v_new(:), a_new(:)
     real(wp), allocatable:: x_new2(:), v_new2(:), a_new2(:)
+
     integer:: npoints_x_sampl, npoints_mom_sampl, npoints_x_mom_sampl
+    integer:: ninter, nfinal, ntsteps  
+    integer:: npoints_in
+    integer:: nfinal_tot
 
     real(wp), allocatable:: omega_in(:), omega_out(:)
     integer:: n_omega_in, n_omega_out
@@ -71,7 +78,7 @@ contains
     real(wp) :: dvr_start 
     integer:: npoints, ii
     real(8):: dnrm2
-    integer::i,j,m,m1,m2, traj, traj2
+    integer::i,j,m,m1,m2, traj, traj2, n_e, f_e, fn_e
 
     complex(wp), allocatable::  F_if_t_omp(:,:,:,:,:)    
     complex(wp), allocatable::  F_if_om_omp(:,:,:,:,:)    
@@ -105,6 +112,8 @@ contains
          E_dyn_inp(npoints_in),&
          E_dyn2_inp(npoints_in),&
          E_f_inp(nfinal,npoints_in), &
+         E_n0(npoints_in),&
+         E_lp_corr(npoints_in),&
          D_ni_inp(ninter, npoints_in,3), &
          D_fn_inp(nfinal, ninter, npoints_in,3), &
          time(ntsteps),&
@@ -112,13 +121,12 @@ contains
          E_i2(ntsteps), &
          E_n1(ninter, ntsteps), &
          E_n2(ninter, ntsteps), &
-         E_f1(nfinal,ntsteps), &
-         E_f2(nfinal,ntsteps), &
+         !E_f1(nfinal,ntsteps), &
+         !E_f2(nfinal,ntsteps), &
          D_ni1(ninter, ntsteps,3), &
          D_ni2(ninter, ntsteps,3), &
          D_fn2(nfinal, ninter, ntsteps,3), &
          D_fn1(nfinal, ninter, ntsteps,3), &
-         E_lp_corr(npoints_in),&
          E_i_mean(ntsteps), &
          shift(npoints_in), &
          c_i(npoints_in,npoints_in), &
@@ -128,11 +136,27 @@ contains
          a_new(ntsteps),&
          x_new2(ntsteps),&
          v_new2(ntsteps),&
-         a_new2(ntsteps) &
-         !time_h(ntsteps)&
-         )
-    allocate(X_r(npoints_in))
+         a_new2(ntsteps), &
+         X_r(npoints_in))
+    
+    ! in ORB mode there are nfinal * ninter final states
+    write(6,*) "p % KH_states_mode = ", p % KH_states_mode
+    if (upper(p % KH_states_mode) .eq. "STATES") then
+      nfinal_tot = nfinal
 
+      allocate(E_fc1(nfinal,1, ntsteps), &
+           E_fc2(nfinal,1,ntsteps))
+      
+    else if (upper(p % KH_states_mode) .eq. "ORBS") then
+      nfinal_tot = nfinal * ninter
+
+      allocate(E_fc1(nfinal,ninter, ntsteps), &
+           E_fc2(nfinal,ninter, ntsteps))
+    else
+      write(6,*) "p % KH_states_mode should be either 'STATES' or 'ORBS'"
+    end if
+
+    
     ! set up grid points
     do i = 1, npoints_in
       X_r(i) = (i-1)*dx + dvr_start
@@ -141,6 +165,13 @@ contains
     ! read PES files
     call read_PES_file(p % pes_file_i, p % npoints_in, p % npoints_in, X_r, E_i_inp)
     !call read_PES_file(p % pes_file_n, p % npoints_in, p % npoints_in, X_r, E_n_inp)
+
+    ! intermediate state reference energy (lowest state) 
+    if(p % use_n0_state) then 
+      call read_PES_file(p % pes_file_n, p % npoints_in, p % npoints_in, X_r, E_n0)
+    else
+      E_n0 =0.0d0
+    end if
 
     ! read list of intermediate state pes_files and dipole_files
     call read_file_list(p % pes_file_list_n, p % npesfile_n, p % pes_files_n)
@@ -170,6 +201,21 @@ contains
       call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % npoints_in, X_r, D_fn_inp(j,1,:,:))
     end do
 
+    ! read list of corrections to the final state files coming from the excited electron
+    if (upper(p % KH_states_mode) .eq. "ORBS") then    
+      allocate( E_fn_corr(p % npesfile_n, p % npoints_in))
+
+      call read_file_list(p % pes_file_list_fn_corr, p % npesfile_n, p % pes_files_fn_corr)
+      
+      do j=1,p % npesfile_n
+        call read_PES_file(p % pes_files_fn_corr(j), p % npoints_in, &
+             p % npoints_in, X_r, E_fn_corr(j,:))
+      end do
+    else
+      
+    end if
+
+
     ! XXX dangerous hack!
     !E_dyn_inp = (E_i_inp + E_f_inp(1,:)) /2.0_wp
     !E_dyn_inp = (E_f_inp(1,:) + E_n_inp(1,:) + E_i_inp) /3.0_wp
@@ -198,10 +244,12 @@ contains
     ! convert to eV units
     E_i_inp = E_i_inp  / const % eV
     E_n_inp = E_n_inp  / const % eV
+    E_n0 = E_n0  / const % eV
     E_dyn_inp = E_dyn_inp  / const % eV
     E_dyn2_inp = E_dyn2_inp  / const % eV
     E_f_inp = E_f_inp / const % eV
-
+    if(allocated( E_fn_corr))  E_fn_corr =  E_fn_corr / const % eV
+    
     ifile = get_free_handle()
     open(ifile, file="inital_state_eigvec.txt", action='write')
     do i=1,npoints_in
@@ -230,18 +278,17 @@ contains
     n_omega_out = ntsteps
     allocate(omega_in(n_omega_in))
     allocate(omega_out(n_omega_out))
-    allocate(F_if_t_omp(nfinal, n_omega_in, n_omega_out,3,3))
-    allocate(F_if_om_omp(nfinal, n_omega_in, n_omega_out,3,3))
-    allocate(lambda_F(nfinal, n_omega_in, n_omega_out))
-    allocate(lambda_G(nfinal, n_omega_in, n_omega_out))
-    allocate(lambda_H(nfinal, n_omega_in, n_omega_out))
 
-    allocate(lambda_lp(n_omega_in, n_omega_out))
-    allocate(lambda_ln(n_omega_in, n_omega_out))
-    allocate(lambda_cp(n_omega_in, n_omega_out))
-
-    allocate(sigma_tmp(n_omega_in, n_omega_out))
-
+    allocate(F_if_t_omp(nfinal_tot, n_omega_in, n_omega_out,3,3),&
+         F_if_om_omp(nfinal_tot, n_omega_in, n_omega_out,3,3),&
+         lambda_F(nfinal_tot, n_omega_in, n_omega_out),&
+         lambda_G(nfinal_tot, n_omega_in, n_omega_out),&
+         lambda_H(nfinal_tot, n_omega_in, n_omega_out),&
+         lambda_lp(n_omega_in, n_omega_out),&
+         lambda_ln(n_omega_in, n_omega_out),&
+         lambda_cp(n_omega_in, n_omega_out),&
+         sigma_tmp(n_omega_in, n_omega_out))
+    
     !
     ! Loop over trajectories
     !
@@ -251,14 +298,14 @@ contains
     end do
 
     ! introduce factor for possible time development backwards in time
-    write(6,*) "upper(p % KH_amplitude_mode)", upper(p % KH_amplitude_mode)
-    if(upper(p % KH_amplitude_mode) .eq. "OUTGOING") then
-      fac_t = 1.0_wp
-    else if(upper(p % KH_amplitude_mode) .eq. "INGOING") then
-      fac_t = 1.0_wp
-    else
-      write(6,*) "p % KH_amplitude_mode must be either OUTGOING or INGOING"
-    end if
+    !write(6,*) "upper(p % KH_amplitude_mode)", upper(p % KH_amplitude_mode)
+    !if(upper(p % KH_amplitude_mode) .eq. "OUTGOING") then
+    !  fac_t = 1.0_wp
+    !else if(upper(p % KH_amplitude_mode) .eq. "INGOING") then
+    !  fac_t = 1.0_wp
+    !else
+    !  write(6,*) "p % KH_amplitude_mode must be either OUTGOING or INGOING"
+    !end if
       
     !call hist_init(time_h_0, 1000, X_r(1), X_r(npoints_in) ) 
     !call hist_init(time_h_0_mom, 1000, minval(x_mom_sampl(:,2)), maxval(x_mom_sampl(:,2)) ) 
@@ -275,7 +322,7 @@ contains
       write(6,*) "Computing trajectory ", traj, "out of", npoints_x_mom_sampl
       
       call verlet_trajectory_xva(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, X_r, &
-           E_dyn_inp * const % eV, fac_t * delta_t, mu_SI, x_new, v_new, a_new )
+           E_dyn_inp * const % eV, delta_t, mu_SI, x_new, v_new, a_new )
       
       call spline_easy(X_r, E_i_inp, npoints_in, x_new, E_i1, ntsteps)
       
@@ -295,21 +342,38 @@ contains
         end do
       end do
       
-      do i=1,nfinal
-        call spline_easy(X_r, E_f_inp(i,:), npoints_in, x_new, E_f1(i,:), ntsteps)  
-      end do
+      !do i=1,nfinal
+      !  call spline_easy(X_r, E_f_inp(i,:), npoints_in, x_new, E_f1(i,:), ntsteps)  
+      !end do
 
+      if (upper(p % KH_states_mode) .eq. "STATES") then
+        do i=1,nfinal
+          call spline_easy(X_r, E_f_inp(i,:), npoints_in, x_new, E_fc1(i,1,:), ntsteps)  
+        end do
+            
+      else if (upper(p % KH_states_mode) .eq. "ORBS") then
+        do i=1,nfinal
+          do j=1,ninter
+            call spline_easy(X_r, E_f_inp(i,:) + E_fn_corr(j,:), npoints_in, x_new, E_fc1(i,j,:), ntsteps)  
+          end do
+        end do
+        
+      end if
+      
       ! first time, compute the mean transition energy, and frequency
       if (traj .eq. 1) then
         ind = minloc(E_i_inp)
 
-        E_ni_mean =  E_n1(nfinal, ind(1)) - E_i1(ind(1))
+        !E_ni_mean =  E_n1(nfinal, ind(1)) - E_i1(ind(1))
+        E_ni_mean =  E_n1(1, ind(1)) - E_i1(ind(1))
         write(6,*) "E_ni_mean", E_ni_mean
         
-        E_fi_mean =  E_f1(nfinal, ind(1)) - E_i1(ind(1))
+        !E_fi_mean =  E_f1(nfinal, ind(1)) - E_i1(ind(1))
+        E_fi_mean =  E_fc1(1, ninter, ind(1)) - E_i1(ind(1))
         write(6,*) "E_fi_mean", E_fi_mean
 
-        E_nf_mean =  E_n1(ninter, ind(1)) - E_f1(nfinal,ind(1))
+        !E_nf_mean =  E_n1(ninter, ind(1)) - E_f1(nfinal,ind(1))
+        E_nf_mean =  E_n1(1, ind(1)) - E_fc1(1,1,ind(1))
         write(6,*) "E_nf_mean", E_nf_mean
 
         ! this is to take away the initial state vib effects
@@ -326,16 +390,18 @@ contains
       ! loop over each starting point of first trajectory
       do traj2 =1, ntsteps ! possibly with a stride
         
-        if(upper(p % runmode_sckh_res) .eq. "FULL") then
-          call verlet_trajectory_xva(x_new(traj2), v_new(traj2), X_r, &
-               E_dyn2_inp * const % eV, fac_t * delta_t, mu_SI, x_new2, v_new2, a_new2 )
-        else if(upper(p % runmode_sckh_res) .eq. "APPROX") then
-          ! run from same starting point, then add the energies of the runs on intermediate and initial states
-          call verlet_trajectory_xva(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, X_r, &
-               E_dyn2_inp * const % eV, fac_t * delta_t, mu_SI, x_new2, v_new2, a_new2 )
-        else
-          write(6,*) "upper(p % sckh_res_runmode) must be either 'FULL' or 'APPROX' "
-        end if
+        !if(upper(p % runmode_sckh_res) .eq. "FULL") then
+
+        call verlet_trajectory_xva(x_new(traj2), v_new(traj2), X_r, &
+             E_dyn2_inp * const % eV, delta_t, mu_SI, x_new2, v_new2, a_new2 )
+
+        !else if(upper(p % runmode_sckh_res) .eq. "APPROX") then
+        !  ! run from same starting point, then add the energies of the runs on intermediate and initial states
+        !  call verlet_trajectory_xva(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, X_r, &
+        !       E_dyn2_inp * const % eV, delta_t, mu_SI, x_new2, v_new2, a_new2 )
+        !else
+        !  write(6,*) "upper(p % sckh_res_runmode) must be either 'FULL' or 'APPROX' "
+        !end if
 
         
         !call verlet_trajectory_xva(x_new(1), v_new(1), X_r, &
@@ -347,10 +413,24 @@ contains
           call spline_easy(X_r, E_n_inp(i,:), npoints_in, x_new2, E_n2(i,:), ntsteps)
         end do
         
-        do i=1,nfinal
-          call spline_easy(X_r, E_f_inp(i,:), npoints_in, x_new2, E_f2(i,:), ntsteps)  
-        end do
+        !do i=1,nfinal
+        !  call spline_easy(X_r, E_f_inp(i,:), npoints_in, x_new2, E_f2(i,:), ntsteps)  
+        !end do
         
+        if (upper(p % KH_states_mode) .eq. "STATES") then
+          do i=1,nfinal
+            call spline_easy(X_r, E_f_inp(i,:), npoints_in, x_new2, E_fc2(i,1,:), ntsteps)  
+          end do
+          
+        else if (upper(p % KH_states_mode) .eq. "ORBS") then
+          do i=1,nfinal
+            do j=1,ninter
+              call spline_easy(X_r, E_f_inp(i,:) + E_fn_corr(j,:), npoints_in, x_new2, E_fc2(i,j,:), ntsteps)  
+            end do
+          end do
+
+        end if
+
         do i=1,nfinal
           do m=1,3
             call spline_easy(X_r, D_fn_inp(i,1,:,m) , npoints_in, x_new2, D_fn2(i,1,:,m) , ntsteps)  
@@ -363,52 +443,91 @@ contains
           end do
         end do
 
-        if(upper(p % runmode_sckh_res) .eq. "APPROX") then
-          E_i2 =  E_i2 +  (E_i1(traj2) - E_i1(1))
+        !if(upper(p % runmode_sckh_res) .eq. "APPROX") then
+        !  E_i2 =  E_i2 +  (E_i1(traj2) - E_i1(1))
+        !
+        !  do i=1,ninter
+        !    E_n2(i,:) =  E_n2(i,:) +  (E_n1(i,traj2) - E_n1(i,1))
+        !  end do
+        !
+        !  do i=1,nfinal
+        !    E_f2(i,:) =  E_f2(i,:) +  (E_f1(i,traj2) - E_f1(i,1))
+        !  end do
+        !  
+        !end if
+        
+        
+        !if (upper(p % KH_amplitude_mode) .eq. "OUTGOING") then
+          
+        !call compute_F_if_omp_many_n(E_n2(:,:), E_f2(:,:), E_nf_mean, D_fn2(:,:,:,:), &
+        !     D_ni2(:, 1, :), time,  F_if_t_omp(:,traj2,:,:,:), gamma)
 
-          do i=1,ninter
-            E_n2(i,:) =  E_n2(i,:) +  (E_n1(i,traj2) - E_n1(i,1))
+        if (upper(p % KH_states_mode) .eq. "STATES") then
+          do f_e = 1, nfinal 
+            call compute_F_if_omp_sum_n(E_n2(:,:), E_fc2(f_e,1,:), E_nf_mean, D_fn2(f_e,1,:,:), &
+                 D_ni2(:,1,:), time, F_if_t_omp(f_e,traj2,:,:,:), gamma)
           end do
 
-          do i=1,nfinal
-            E_f2(i,:) =  E_f2(i,:) +  (E_f1(i,traj2) - E_f1(i,1))
+          !call compute_F_if_omp_many_n(E_n2(:,:), E_fc2(:,1,:), E_nf_mean, D_fn2(:,1,:,:), &
+          !     D_ni2(:, 1, :), time,  F_if_t_omp(:,traj2,:,:,:), gamma)
+
+        else if (upper(p % KH_states_mode) .eq. "ORBS") then
+          do f_e = 1, nfinal
+            do n_e = 1, ninter
+              fn_e = ninter * (f_e -1) + n_e  
+              call compute_F_if_omp_one_n(E_n2(n_e,:), E_fc2(f_e,n_e,:), E_nf_mean, D_fn2(f_e,1,:,:), &
+                   D_ni2(n_e,1,:), time, F_if_t_omp(fn_e,traj2,:,:,:), gamma)
+            end do
           end do
           
         end if
         
-        
-        if (upper(p % KH_amplitude_mode) .eq. "OUTGOING") then
-
-          call compute_F_if_omp_many_n(E_n2(:,:), E_f2(:,:), E_nf_mean, D_fn2(:,:,:,:), &
-               D_ni2(:, 1, :), time,  F_if_t_omp(:,traj2,:,:,:), gamma)
-
-        else if (upper(p % KH_amplitude_mode) .eq. "INGOING") then
-          ! F_if_t_omp will now store F_if_t_om temporarily
-          call compute_F_if_om_many_n(E_n2(:,:), E_i2(:), E_ni_mean, D_fn2(:,1,:,:), &
-               D_ni2(:, :, :), time,  F_if_t_omp(:,traj2,:,:,:), gamma)
-          
-        end if
+        !else if (upper(p % KH_amplitude_mode) .eq. "INGOING") then
+        !  ! F_if_t_omp will now store F_if_t_om temporarily
+        !  call compute_F_if_om_many_n(E_n2(:,:), E_i2(:), E_ni_mean, D_fn2(:,1,:,:), &
+        !       D_ni2(:, :, :), time,  F_if_t_omp(:,traj2,:,:,:), gamma)
+        !  
+        !end if
         
       end do ! do traj2 =1, ntsteps2
 
 
-      if (upper(p % KH_amplitude_mode) .eq. "OUTGOING") then
+      !if (upper(p % KH_amplitude_mode) .eq. "OUTGOING") then
 
-        ! for test purposes, write F_if_t_omp to file
-        !call write_F_if_t_omp(p, F_if_t_omp, omega_out, time)
+      ! for test purposes, write F_if_t_omp to file
+      !call write_F_if_t_omp(p, F_if_t_omp, omega_out, time)
+     ! F_if_om_omp = 0.0d0
+      if (upper(p % KH_states_mode) .eq. "STATES") then
+
+        do f_e = 1, nfinal         
+          call compute_F_if_om_omp_one_f(F_if_t_omp(f_e, :,:,:,:), E_fc1(f_e,1,:), E_fi_mean, time, &
+               E_i1, gamma_inc, omega_out, E_nf_mean, F_if_om_omp(f_e,:,:,:,:)) !F_if_om_omp)
+        end do
+
+        !call compute_F_if_om_omp(F_if_t_omp(:, :,:,:,:), E_fc1(:,1,:), E_fi_mean, time, &
+        !     E_i1, gamma_inc, omega_out, E_nf_mean, F_if_om_omp(:,:,:,:,:)) !F_if_om_omp)
         
-        call compute_F_if_om_omp(F_if_t_omp, E_f1(:,:), E_fi_mean, time, &
-             E_i1, gamma_inc, omega_out, E_nf_mean, F_if_om_omp)
+      else if (upper(p % KH_states_mode) .eq. "ORBS") then
 
-        !! below to remove dependence on E_i1, so to quantize that energy
+        do f_e = 1, nfinal
+          do n_e = 1, ninter
+            fn_e = ninter * (f_e -1) + n_e  
+            call compute_F_if_om_omp_one_f(F_if_t_omp(fn_e, :,:,:,:), E_fc1(f_e,n_e,:), E_fi_mean, time, &
+                 E_i1, gamma_inc, omega_out, E_nf_mean, F_if_om_omp(fn_e,:,:,:,:)) !F_if_om_omp)
+          end do
+        end do
+        
+      end if
+
+      !! below to remove dependence on E_i1, so to quantize that energy
         !call compute_F_if_om_omp(F_if_t_omp, E_f1(:,:), E_fi_mean, time, &
         !     E_i_mean, gamma_inc, omega_out, E_nf_mean, F_if_om_omp)
         
-      else if (upper(p % KH_amplitude_mode) .eq. "INGOING") then
-        call compute_F_if_om_omp_ingoing(F_if_t_omp, E_f1(:,:), E_fi_mean, time, &
-             E_i1, gamma_instr, omega_in, E_ni_mean, F_if_om_omp)
-        
-      end if
+      !else if (upper(p % KH_amplitude_mode) .eq. "INGOING") then
+      !  call compute_F_if_om_omp_ingoing(F_if_t_omp, E_f1(:,:), E_fi_mean, time, &
+      !       E_i1, gamma_instr, omega_in, E_ni_mean, F_if_om_omp)
+      !  
+      !end if
         
         
       ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
@@ -558,8 +677,6 @@ contains
    end do
    
    close(ifile) 
-
-   
    
   end subroutine calculate_SCKH_res_PES
 
@@ -961,7 +1078,7 @@ contains
 
         ! non-resonant spectrum, now only one time point needed, hence the one in F_if_t_omp(:,1,:,:,:)
         if (upper(p % KH_amplitude_mode) .eq. "OUTGOING") then
-          call compute_F_if_omp_many_n(E_n2(:,:), E_f2(:,:), E_nf_mean, D_fn2(:,:,:,:), &
+          call compute_F_if_omp_many_n(E_n2(:,:), E_f2(:,:), E_nf_mean, D_fn2(:,1,:,:), &
                D_ni2(:, 1, :), time,  F_if_t_omp(:,1,:,:,:), gamma)
           
         else if (upper(p % KH_amplitude_mode) .eq. "INGOING") then
@@ -1539,7 +1656,7 @@ contains
 
         ! non-resonant spectrum, now only one time point needed, hence the one in F_if_t_omp(:,1,:,:,:)
         if (upper(p % KH_amplitude_mode) .eq. "OUTGOING") then
-          call compute_F_if_omp_many_n(E_n2(:,:), E_f2(:,:), E_nf_mean, D_fn2(:,:,:,:), &
+          call compute_F_if_omp_many_n(E_n2(:,:), E_f2(:,:), E_nf_mean, D_fn2(:,1,:,:), &
                D_ni2(:, 1, :), time,  F_if_t_omp(:,1,:,:,:), gamma)
           
         else if (upper(p % KH_amplitude_mode) .eq. "INGOING") then

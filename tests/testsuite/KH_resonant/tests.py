@@ -19,8 +19,10 @@ def run_test():
     err_code = my_bash.my_exec(sckh_path +'/sckh_main', 'test.out', 'test.err')
 
     # check spectrum
-    err_code += mod_tests.my_diff_sum_ref('spectrum_resonant_sigma_201.10.dat', '../ref/spectrum_resonant_sigma_201.10.dat', maxdim=4)
-    err_code += mod_tests.my_diff_sum_ref('spectrum_resonant_sigma_206.27.dat', '../ref/spectrum_resonant_sigma_206.27.dat', maxdim=4)
+    #err_code += mod_tests.my_diff_sum_ref('spectrum_resonant_sigma_201.10.dat', '../ref/spectrum_resonant_sigma_201.10.dat', maxdim=4)
+    #err_code += mod_tests.my_diff_sum_ref('spectrum_resonant_sigma_206.27.dat', '../ref/spectrum_resonant_sigma_206.27.dat', maxdim=4)
+    err_code += mod_tests.my_diff_ref('spectrum_resonant_sigma_201.10.dat', '../ref/spectrum_resonant_sigma_201.10.dat')
+    err_code += mod_tests.my_diff_ref('spectrum_resonant_sigma_206.27.dat', '../ref/spectrum_resonant_sigma_206.27.dat')
         
     # clean up
     os.chdir(old_dir)

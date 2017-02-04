@@ -349,11 +349,15 @@ subroutine calculate_dipoles_one(c_n, c_f, dipole_f, D_fn, mode_in)
   real(kind=wp), intent(out):: D_fn(:,:,:)
   character(*), intent(in):: mode_in
   
-  integer:: nstates,f_v, n_v, m
+  integer:: nstates_f, nstates_n, f_v, n_v, m
   !character(80):: mode
   
-  nstates = size(c_n,2)
+  nstates_f = size(D_fn,1)
+  nstates_n = size(D_fn,2)
 
+  !write(6,*) "nstates_f", nstates_f
+  !write(6,*) "nstates_n", nstates_n
+  
   !if(present(mode_in)) then
   !  mode = mode_in
   !else
@@ -366,8 +370,8 @@ subroutine calculate_dipoles_one(c_n, c_f, dipole_f, D_fn, mode_in)
 
   if (upper(mode_in) .eq. "DIPOLE") then
     
-    do f_v = 1, nstates ! final
-      do n_v = 1, nstates ! intermediate
+    do f_v = 1, nstates_f ! final
+      do n_v = 1, nstates_n ! intermediate
         do m=1,3
           D_fn(f_v, n_v, m) = sum(dipole_f(:, m) * c_f(:, f_v) * c_n(:, n_v))   ! true dipole moment
         end do
@@ -376,8 +380,8 @@ subroutine calculate_dipoles_one(c_n, c_f, dipole_f, D_fn, mode_in)
     
   else if (upper(mode_in) .eq. "FC") then
 
-    do f_v = 1, nstates ! final
-      do n_v = 1, nstates ! intermediate
+    do f_v = 1, nstates_f ! final
+      do n_v = 1, nstates_n ! intermediate
         do m=1,3
           D_fn(f_v, n_v, m) = sum(c_f(:, f_v) * c_n(:, n_v))  ! FC
         end do
@@ -431,7 +435,7 @@ subroutine calculate_dipoles_KH_res_ni(c_i, c_n, dipole_n, D_ni, mode_in)
   allocate( D_tmp(nstates, 1,3) )
   
   do n_e =1, npesfile_n
-    call calculate_dipoles_one(c_n(n_e,:,:), c_i(:,1:1), dipole_n(n_e,:,:), D_tmp(:,:,:), mode_in)
+    call calculate_dipoles_one( c_i(:,1:1), c_n(n_e,:,:), dipole_n(n_e,:,:), D_tmp(:,:,:), mode_in)
     D_ni(n_e,:,:) =  D_tmp(:,1,:)
   end do
    
