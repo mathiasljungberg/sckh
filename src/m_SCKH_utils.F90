@@ -1316,6 +1316,48 @@ contains
   end subroutine compute_F_if_om_omp_no_F
 
 
+  ! here use factorization
+  subroutine compute_F_if_om_omp_no_F_one(E_f, E_fi_mean, time, &
+       E_i, gamma_R, omega_out, E_nf_mean, R_if_om_omp)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_forward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    real(wp), intent(in):: E_f(:)
+    real(wp), intent(in):: E_fi_mean
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_i(:)
+    real(wp), intent(in):: gamma_R
+    real(wp), intent(in):: omega_out(:)
+    real(wp), intent(in):: E_nf_mean
+    complex(wp), intent(out) ::  R_if_om_omp(:,:)
+
+    integer:: nfinal, n_omega_in, n_omega_out, f_e, om_out
+    complex(wp), allocatable ::  e_factor1(:)
+    
+    n_omega_in = size(E_f,1)
+    n_omega_out = size(omega_out)
+    
+    allocate(e_factor1(n_omega_in))
+    
+    call compute_efactor(E_f(:), E_i, E_fi_mean, time, e_factor1(:), .false.)
+    
+    do om_out= 1, n_omega_out
+      
+      call fft_c2c_1d_forward( e_factor1(:) * &
+           exp(dcmplx(0.0_wp,  (omega_out(om_out) - E_nf_mean)* const % eV * time(:) / const % hbar )), &
+           R_if_om_omp(:,om_out))
+      call reorder_sigma_fftw_z(R_if_om_omp(:, om_out))
+      
+      
+    end do
+    
+      
+  end subroutine compute_F_if_om_omp_no_F_one
+
+  
+
   
   !
   ! using F(omega) instead of F(omega') 

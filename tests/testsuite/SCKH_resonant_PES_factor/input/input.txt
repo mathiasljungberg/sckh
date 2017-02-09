@@ -1,5 +1,7 @@
-
 runmode SCKH_resonant_PES_factor
+
+!runmode SCKH_resonant_PES
+!runmode_sckh_res fac
 
 !
 ! test_energy_tot.dat

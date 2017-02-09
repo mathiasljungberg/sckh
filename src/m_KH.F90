@@ -541,7 +541,7 @@ contains
     dx = p % dx_in * 1.0d-10
 
     ! set up grid points
-    do i = 1, p % npoints_in
+    do i = 1, p % nstates !p % npoints_in
       X_r(i) = (i-1)*dx + dvr_start
     end do
 
@@ -551,11 +551,11 @@ contains
     !
 
     ! iniital state
-    call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_r, E_i)
+    call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_r, E_i, p % PES_units)
 
     ! intermediate state reference energy (lowest state) 
     if(p % use_n0_state) then 
-      call read_PES_file(p % pes_file_n, p % npoints_in, p % nstates, X_r, E_n0)
+      call read_PES_file(p % pes_file_n, p % npoints_in, p % nstates, X_r, E_n0, p % PES_units)
     else
       E_n0 =0.0d0
     end if
@@ -566,8 +566,8 @@ contains
     
     do j=1,p % npesfile_n
       call read_PES_file(p % pes_files_n(j), p % npoints_in, &
-           p % nstates, X_r, E_n(j,:))
-      call read_dipole_file(p % dipolefile_n(j), p % npoints_in, p % nstates, X_r, dipole_n(j,:,:))
+           p % nstates, X_r, E_n(j,:), p % PES_units)
+      call read_dipole_file(p % dipolefile_n(j), p % npoints_in, p % nstates, X_r, dipole_n(j,:,:), p % PES_units)
     end do
 
     ! read list of final state pes_files and dipole_files
@@ -575,8 +575,8 @@ contains
     call read_file_list(p % dipole_file_list_f, p % npesfile_f, p % dipolefile_f)
 
     do j=1,p % npesfile_f
-      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % npoints_in, X_r, E_f(j,:))
-      call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_r, dipole_f(j,:,:))
+      call read_PES_file(p % pes_files_f(j), p % npoints_in, p % nstates, X_r, E_f(j,:), p % PES_units)
+      call read_dipole_file(p % dipolefile_f(j), p % npoints_in, p % nstates, X_r, dipole_f(j,:,:), p % PES_units)
     end do
 
     ! read list of corrections to the final state files coming from the excited electron
@@ -587,7 +587,7 @@ contains
       
       do j=1,p % npesfile_n
         call read_PES_file(p % pes_files_fn_corr(j), p % npoints_in, &
-             p % nstates, X_r, E_fn_corr(j,:))
+             p % nstates, X_r, E_fn_corr(j,:), p % PES_units)
       end do
     else
       
@@ -596,7 +596,7 @@ contains
     ! Shift orbital energies so that E_f(1,:) have energies E_lp_corr
     ! and the spacing between the intermediate and final states are preserved
     if( p % shift_PES .eq.  1) then
-      call read_PES_file(p % pes_file_lp_corr, p % npoints_in, p % nstates, X_r, E_lp_corr)
+      call read_PES_file(p % pes_file_lp_corr, p % npoints_in, p % nstates, X_r, E_lp_corr, p % PES_units)
 
       shift = E_lp_corr -E_f(1,:) 
 
@@ -606,6 +606,30 @@ contains
       write(6,*) "Shifted PES:s"
     end if
 
+
+    ! print PESes for check
+    ifile = get_free_handle()
+    open(ifile,file="PES_i.txt",status='unknown')
+    do i=1, p % nstates
+      write(ifile,*) X_r(i) *1d10, E_i(i)
+    end do
+    close(ifile)
+
+    ifile = get_free_handle()
+    open(ifile,file="PES_n.txt",status='unknown')
+    do i=1, p % nstates
+      write(ifile,*) X_r(i) *1d10, E_n(1,i)
+    end do
+    close(ifile)
+
+    ifile = get_free_handle()
+    open(ifile,file="PES_f.txt",status='unknown')
+    do i=1, p % nstates
+      write(ifile,*) X_r(i) *1d10, E_f(1,i)
+    end do
+    close(ifile)
+    
+    
     
     ! create omegas
     call linspace(omega_in, p % omega_in_start,p % omega_in_end, p % n_omega_in )
@@ -681,6 +705,8 @@ contains
     ! solve for the final state eigenfunctions
     if (upper(p % KH_states_mode) .eq. "ORBS") then    
 
+      write(6,*) "KH_states_mode= ORBS"
+      
       ! they depend on the intermediate state
       allocate(eig_fc(p % npesfile_f, p % npesfile_n, p % nstates),&
            c_fc(p % npesfile_f,p % npesfile_n, p % nstates,p % nstates))
@@ -688,7 +714,7 @@ contains
       do n_e = 1,p % npesfile_n
         do f_e=1,p % npesfile_f
           call solve_vib_problem(dx, E_f(f_e,:) + E_fn_corr(n_e,:), eig_fc(f_e,n_e,:), c_fc(f_e, n_e,:,:), mu_SI, p % vib_solver)
-          write(6,*) "Final state fundamental",j, (eig_fc(f_e,n_e,2) -eig_fc(f_e,n_e,1))*const % cm
+          write(6,*) "Final state fundamental",f_e,n_e, (eig_fc(f_e,n_e,2) -eig_fc(f_e,n_e,1))*const % cm
           
           call calculate_dipoles_one(c_n(n_e,:,:), c_fc(f_e,n_e,:,:), dipole_f(f_e,:,:), D_fn(f_e,:,n_e,:,:), "DIPOLE")
           
@@ -697,13 +723,15 @@ contains
       
     else if (upper(p % KH_states_mode) .eq. "STATES") then
 
+      write(6,*) "KH_states_mode= STATES"
+      
       ! they do not depend on the intermediate state
       allocate(eig_fc(p % npesfile_f, 1, p % nstates),&
            c_fc(p % npesfile_f,1, p % nstates,p % nstates))
       
       do f_e=1,p % npesfile_f
         call solve_vib_problem(dx, E_f(f_e,:), eig_fc(f_e,1,:), c_fc(f_e, 1, :,:), mu_SI, p % vib_solver)
-        write(6,*) "Final state fundamental",j, (eig_fc(f_e,1,2) -eig_fc(f_e,1,1))*const % cm
+        write(6,*) "Final state fundamental",f_e, (eig_fc(f_e,1,2) -eig_fc(f_e,1,1))*const % cm
         
         do n_e = 1,p % npesfile_n
           call calculate_dipoles_one(c_n(n_e,:,:), c_fc(f_e,1,:,:), dipole_f(f_e,:,:), D_fn(f_e,:,n_e,:,:), "DIPOLE")
@@ -785,6 +813,44 @@ contains
       
     end do
     
+    ! write spectra to file
+   file="_sigma_all"
+   !write(string,'(F6.2)') omega_in(j)   
+   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+   
+   ifile = get_free_handle()
+   open(ifile,file=file,status='unknown')
+
+   do j=1, p % n_omega_in
+     do i=1, p % n_omega_out
+       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+     end do
+     write(ifile, *) 
+   end do
+   
+   close(ifile) 
+
+
+   ! write spectra to file
+   file="_sigma_all_nogrid"
+   !write(string,'(F6.2)') omega_in(j)   
+   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+   
+   ifile = get_free_handle()
+   open(ifile,file=file,status='unknown')
+
+   do j=1, p % n_omega_in
+     do i=1, p % n_omega_out
+       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+     end do
+     write(ifile, *) 
+     write(ifile, *) 
+   end do
+   
+   close(ifile) 
+
+
+
     
   end subroutine calculate_KH_res
 
@@ -868,7 +934,7 @@ contains
     dx = p % dx_in * 1.0d-10
     
     ! set up grid points
-    do i = 1, p %npoints_in
+    do i = 1, p % nstates !p %npoints_in
       X_r(i) = (i-1)*dx + dvr_start
     end do
     
@@ -1111,7 +1177,7 @@ contains
     dx = p % dx_in * 1.0d-10
 
     ! set up grid points
-    do i = 1, p % npoints_in
+    do i = 1, p % nstates !p % npoints_in
       X_r(i) = (i-1)*dx + dvr_start
     end do
 

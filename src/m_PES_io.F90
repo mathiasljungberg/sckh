@@ -1,123 +1,32 @@
 module m_PES_io
-  !use m_precision, only: wp
-  !use m_constants, only: const
-  !use KH_functions
-  !use m_splines, only: spline_easy
 
   implicit none
 
-!  type input_params
-!     ! input/output
-!     character(80):: runmode
-!     character(80)::pes_file_i,pes_file_n, pes_file_lp_corr, &
-!          pes_file_ch_corr, outfile, nac_file
-!     character(80), dimension(:),allocatable:: pes_file_f,dipolefile_f
-!     integer:: nstates, n_omega, npesfile_f, shift_PES, nonadiabatic, npoints_in
-!     real(kind=wp):: my, dvr_start_in, dx_in
-!     real(kind=wp):: omega_start, omega_end, gamma_FWHM 
-!
-!     ! for SCKH
-!     integer:: samplemode, npoints_x_sampl, npoints_mom_sampl, ntsteps, ntsteps2
-!     real(kind=wp):: delta_t
-!     
-!     ! projections
-!     integer:: nproj
-!     real(kind=wp), dimension(:,:), allocatable:: projvec
-!     
-!  end type input_params
-
 contains
 
-!subroutine read_input(inp)
-!  type(input_params), intent(out):: inp 
-!  integer:: i
-!  
-!  real(kind=8):: dnrm2
-!
-!  read(5,*) inp % runmode      ! either XAS or XAS
-!
-!  if (inp % runmode .ne. "XAS" .and. & 
-!     inp % runmode .ne. "XES" .and. &
-!     inp % runmode .ne. "SCKH_PES" .and. &
-!     inp % runmode .ne. "SCXAS_PES" .and. &
-!     inp % runmode .ne. "TEST"  ) then
-!     write(6,*) "runmode must be one of: XAS, XES, SCKH_PES, SCXAS_PES, TEST"
-!     stop
-!  end if
-!
-!  read(5,*) inp % npoints_in  
-!  read(5,*) inp % pes_file_i
-!  read(5,*) inp % pes_file_n   ! core ionized state, not used for XAS
-!  read(5,*) inp % shift_PES, inp % pes_file_lp_corr        
-!
-!  read(5,*) inp % npesfile_f
-!  allocate(inp % pes_file_f(inp % npesfile_f), inp % dipolefile_f(inp % npesfile_f))
-!
-!  do i=1,inp % npesfile_f
-!     read(5,*) inp % pes_file_f(i), inp % dipolefile_f(i)
-!  end do
-!
-!  read(5,*) inp % nonadiabatic, inp % nac_file
-!  read(5,*) inp % outfile
-!  read(5,*) inp % my
-!  read(5,*) inp % nstates, inp % dvr_start_in, inp % dx_in
-!  read(5,*) inp % omega_start, inp % omega_end, inp % n_omega
-!  read(5,*) inp % gamma_FWHM
-!  
-!  ! new input for SCKH
-!  read(5,*) inp % samplemode, inp % npoints_x_sampl, inp % npoints_mom_sampl, inp % delta_t, inp %ntsteps, inp % ntsteps2
-!  read(5,*) inp % nproj
-! 
-!  allocate(inp % projvec(inp % nproj,3))
-!
-!  do i=1, inp % nproj
-!     read(5,*) inp % projvec(i,1), inp % projvec(i,2),inp % projvec(i,3)
-!     
-!     !normalize projvec
-!     inp % projvec(i,:) = inp % projvec(i,:) / dnrm2(3,inp % projvec(i,:),1)
-!
-!     !write(6,*) "projvector", i,  projvec(i,:) 
-!  end do
-
-
-  ! runmode: either "XAS" or "XES"
-  ! npoints_in: the number of points in the supplied PES files
-  ! pes_file_i: PES file for the initial state
-  ! pes_file_n: PES file for the intermediate state
-  ! shift_PES: =1, then use pes_file_lp_correct to correct the first final state, =0, do nothing
-  ! pes_file_lp_corr: PES for first final state, computed more accurately
-  ! npesfile_f: the number of final state PES files
-  ! pesfile_f(i): PES files for the final states
-  ! dipolefile_f(i): dipole transition matrix elements between intermediate state and final state i
-  ! nonadiabatic: if 1 yes, if 0 no
-  ! nac_file: the file containing the non-adiabatic couplings
-  ! outfile: the base name of the output files
-  ! nstates: the number of dvr points, equally the number of vibrational eigenstates
-  ! dvr_start_in: x coordinate of the starting point of the dvr points [Angstrom]
-  ! dx_in: spacing between dvr points [Angstroms]
-  ! omega_start: starting emission frequency [eV]
-  ! omega_end: ending emission frequency [eV]
-  ! n_omega: number of emission frequencies
-  ! gamma_FWHM: lifetime broadening [eV]
-  ! samplemode: 
-  ! nproj: number of projection vectors
-
-!end subroutine read_input
-
-subroutine read_PES_file(filename, npoints_in, nstates, X_dvr, E)
+subroutine read_PES_file(filename, npoints_in, nstates, X_dvr, E, units_in)
   use m_precision, only: wp
   use m_constants, only: const
   use m_KH_functions, only: check_dvr_bounds 
   use m_splines, only: spline_easy
-
+  use m_upper, only : upper
+  
   character(80), intent(in):: filename
   integer, intent(in):: npoints_in, nstates
   real(kind=wp), intent(inout):: X_dvr(nstates)
   real(kind=wp), intent(out):: E(nstates)
-
+  character(*), intent(in), optional:: units_in
+  
   real(kind=wp):: x_in(npoints_in), E_in(npoints_in)
   integer:: i
+  character(80):: units
 
+  if(present(units_in)) then
+    units = units_in
+  else
+    units = "ANG"
+  end if
+  
   !
   ! read pes from files (allow for PES:s with arbitrary points)
   !
@@ -130,9 +39,15 @@ subroutine read_PES_file(filename, npoints_in, nstates, X_dvr, E)
 
   close(10) 
 
-  ! use SI units
-  x_in = x_in*1d-10
-  E_in = E_in *const % hartree
+  if(upper(units) .eq. "ANG") then
+    x_in = x_in*1d-10
+  else if(upper(units) .eq. "BOHR") then
+    x_in = x_in * 1d-10 * const % bohr 
+  else
+    write(6,*) "read_PES_file: units = ",units," must be 'ANG' or 'BOHR'"
+  end if
+  
+   E_in = E_in *const % hartree
   
   call check_dvr_bounds(X_dvr, x_in)
   call spline_easy(x_in, E_in, npoints_in, X_dvr, E, nstates)
@@ -140,20 +55,29 @@ subroutine read_PES_file(filename, npoints_in, nstates, X_dvr, E)
 end subroutine read_PES_file
 
 
-subroutine read_dipole_file(filename, npoints_in, nstates, X_dvr, dipole)
+subroutine read_dipole_file(filename, npoints_in, nstates, X_dvr, dipole, units_in)
   use m_precision, only: wp
   use m_constants, only: const
   use m_KH_functions, only: check_dvr_bounds 
   use m_splines, only: spline_easy
-
+  use m_upper, only : upper
+  
   character(80), intent(in):: filename
   integer, intent(in):: npoints_in, nstates
   real(kind=wp), intent(inout):: X_dvr(nstates)
   real(kind=wp), intent(out):: dipole(nstates,3)
+  character(*), intent(in), optional:: units_in
   
   real(kind=wp):: x_in(npoints_in), dipole_in(npoints_in,3)
   integer:: i 
+  character(80):: units
 
+  if(present(units_in)) then
+    units = units_in
+  else
+    units = "ANG"
+  end if
+  
   open(10,file=filename ,status='unknown')
   
   do i=1,npoints_in
@@ -162,9 +86,14 @@ subroutine read_dipole_file(filename, npoints_in, nstates, X_dvr, dipole)
   
   close(10) 
 
-  ! use SI units
-  x_in = x_in*1d-10
-     
+ if(upper(units) .eq. "ANG") then
+    x_in = x_in*1d-10
+  else if(upper(units) .eq. "BOHR") then
+    x_in = x_in * 1d-10 * const % bohr 
+  else
+    write(6,*) "read_dipole_file: units = ",units," must be 'ANG' or 'BOHR'"
+  end if
+  
   call check_dvr_bounds(X_dvr, x_in)
   call spline_easy(x_in, dipole_in(:,1), npoints_in, X_dvr, dipole(:,1), nstates)
   call spline_easy(x_in, dipole_in(:,2), npoints_in, X_dvr, dipole(:,2), nstates)

@@ -32,13 +32,16 @@ module m_sckh_params_t
      character(80), allocatable:: dipolefile_f(:)
 
      !character(80), allocatable:: traj_files(:)
-     
+
      character(80)::outfile
 
      character(80):: nac_file
 
      character(80):: proj_file
 
+     ! 
+     character(80):: PES_units
+     
      ! 
      integer:: nstates
      integer:: npoints_in
@@ -70,7 +73,10 @@ module m_sckh_params_t
      
      character(80):: vib_solver
      character(80):: KH_amplitude_mode
-    
+     character(80):: KH_states_mode
+
+     logical:: use_n0_state
+     
      ! sckh parameters
      ! for SCKH_PES
      integer:: samplemode
@@ -157,7 +163,9 @@ contains
     ! proj_file: the file containing the projections, if used
     call init_parameter('proj_file',inp, "proj_file.txt", p % proj_file ,iv)
     
-
+    ! PES_units, for reading in PES and dipole files. "ANG" or "BOHR"
+    call init_parameter('PES_units',inp, "ANG", p % PES_units ,iv)
+    
     ! nstates: the number of dvr points, equally the number of vibrational eigenstates
     call init_parameter('nstates',inp, 100, p % nstates ,iv)
     ! npoints_in: the number of points in the supplied PES files
@@ -210,6 +218,10 @@ contains
     call init_parameter('vib_solver',inp, "SINC_DVR", p % vib_solver ,iv)
     ! KH_amplitude_mode: OUTGOING or INCOMING
     call init_parameter('KH_amplitude_mode',inp, "OUTGOING", p % KH_amplitude_mode ,iv)
+    ! KH_states_mode: ORBS or STATES
+    call init_parameter('KH_states_mode',inp, "STATES", p % KH_states_mode ,iv)
+    ! use_n0_state: if .true., read reference state for |n>  
+    call init_parameter('use_n0_state',inp, .false.,p % use_n0_state,iv)
     
     ! sckh parameters
     call init_parameter('samplemode',inp, 1, p % samplemode,iv)

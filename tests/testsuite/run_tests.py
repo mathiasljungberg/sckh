@@ -15,6 +15,7 @@ else:
     #dirs = ['XAS', 'SCKH_PES', 'SCKH','vib_finite_diff', 'KH', 'KH_resonant', 'KH_resonant_el']
     dirs= ['SCKH_resonant_PES',
            'SCKH_resonant_PES_factor',
+           'SCKH_resonant_PES_factor_each_traj',
            'SCKH_PES',
            'SCKH',
            'KH',
