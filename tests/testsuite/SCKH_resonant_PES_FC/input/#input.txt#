@@ -1,0 +1,52 @@
+
+runmode SCKH_resonant_PES
+
+! files
+pes_file_i           initial_PES_spline_2001.dat
+use_dynamics_file    .true.
+pes_file_dyn         initial_PES_spline_2001.dat
+pes_file_dyn2        intermediate_PES_spline_2001.dat
+#pes_file_n           test_energy_tot_exc.dat
+#shift_PES            0
+#pes_file_lp_corr    test_lp_lp_energy.dat
+npesfile_n           1
+pes_file_list_n      pes_file_list_n.txt
+dipole_file_list_n   dipole_file_list_n.txt
+npesfile_f           1
+pes_file_list_f      pes_file_list_f.txt
+dipole_file_list_f   dipole_file_list_f.txt
+outfile              spectrum_resonant
+
+
+!for vib solver 
+vib_solver FOURIER_REAL
+npoints_in 401
+nstates 401
+mu 0.972222222222222
+dvr_start_in 0.8
+dx_in 0.0146 
+
+kh_amplitude_mode outgoing
+
+! frequencies
+!omega_in_start 199
+!omega_in_end   207
+!n_omega_in     100
+!omega_start    180
+!omega_end      200
+!n_omega        100
+
+gamma_FWHM 0.045
+gamma_inc_FWHM   0.1
+gamma_instr_FWHM 0.1
+
+samplemode 1 
+npoints_x_sampl 2
+npoints_mom_sampl 2
+delta_t 0.05
+ntsteps 256 !512
+#use_proj .true.
+#proj_file proj_file.txt
+
+
+

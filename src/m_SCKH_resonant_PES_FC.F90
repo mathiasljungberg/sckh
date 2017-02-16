@@ -396,6 +396,7 @@ contains
 
 
       !write(6,*) "Here..."
+      F_if_om_omp = 0.0_wp
       do f_e=1,nfinal
         do n_e=1,ninter
 
@@ -598,12 +599,12 @@ contains
        call reorder_sigma_fftw_z(F_tmp(:))
        
        do m2 =1, 3
-         F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) / dcmplx(omega_in(om_in) - E_ni, gamma)
+         !F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) / dcmplx(omega_in(om_in) - E_ni, gamma)
 
-         !F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) * &
-         !     i_low_weight / dcmplx(omega_in(om_in) - omega_in(i_low), gamma_F)
-         !F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) * &
-         !     (1.0_wp -i_low_weight) / dcmplx(omega_in(om_in) - omega_in(i_low+1), gamma_F) 
+         F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) * &
+              i_low_weight / dcmplx(omega_in(om_in) - omega_in(i_low), gamma_F)
+         F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) * &
+              (1.0_wp -i_low_weight) / dcmplx(omega_in(om_in) - omega_in(i_low+1), gamma_F) 
        end do
        
      end do

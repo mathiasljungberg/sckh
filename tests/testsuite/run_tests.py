@@ -16,6 +16,7 @@ else:
     dirs= ['SCKH_resonant_PES',
            'SCKH_resonant_PES_factor',
            'SCKH_resonant_PES_factor_each_traj',
+           'SCKH_resonant_PES_FC',
            'SCKH_PES',
            'SCKH',
            'KH',
