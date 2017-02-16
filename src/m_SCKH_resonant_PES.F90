@@ -569,12 +569,33 @@ contains
     do traj=1, npoints_x_mom_sampl
       
       write(6,*) "Computing trajectory ", traj, "out of", npoints_x_mom_sampl
+
       
-      call compute_traj_and_spline(p, x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, &
-           X_r, E_dyn_inp, delta_t, mu_SI, &
-           x_new, v_new, a_new, E_i_inp, E_n_inp, E_n0, E_f_inp, E_fn_corr, D_ni_inp, D_fn_inp, &
-           E_i1, E_n1, E_fc1, D_ni1, D_fn1 )
-      
+      ! option to do separate dynamcis of D_nf and D_in
+      if(.true.) then
+        call compute_traj_and_spline(p, x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, &
+             X_r, E_dyn_inp, delta_t, mu_SI, &
+             x_new, v_new, a_new, E_i_inp, E_n_inp, E_n0, E_f_inp, E_fn_corr, D_ni_inp, D_fn_inp, &
+             E_i1, E_n1, E_fc1, D_ni1, D_fn1 )
+        
+      else
+        ! this is dynamics on E_dyn_inp
+        call compute_traj_and_spline(p, x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, &
+             X_r, E_dyn_inp, delta_t, mu_SI, &
+             x_new, v_new, a_new, E_i_inp, E_n_inp, E_n0, E_f_inp, E_fn_corr, D_ni_inp, D_fn_inp, &
+             E_i1, E_n1, E_fc1, D_ni1, D_fn1 )
+
+        ! this is dynamics on E_dyn2_inp
+        call compute_traj_and_spline(p, x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, &
+             X_r, E_dyn2_inp, delta_t, mu_SI, &
+             x_new2, v_new2, a_new2, E_i_inp, E_n_inp, E_n0, E_f_inp, E_fn_corr, D_ni_inp, D_fn_inp, &
+             E_i2, E_n2, E_fc2, D_ni2, D_fn2 )
+
+
+      end if
+
+        
+      ! compute mean energies on E_dyn_inp that will match with the other routines
       if (traj .eq. 1) then
         call compute_E_means_and_omegas(E_i_inp, E_i1, E_n1, E_fc1, &
              E_ni_mean, E_fi_mean, E_nf_mean, time_l, omega_in, omega_out)
@@ -582,12 +603,23 @@ contains
 
       if(upper(p % runmode_sckh_res) .eq. "FULL") then
         
+      if(.true.) then
         ! FULL case, run trajectories with all points in x_new as starting points 
         call compute_F_SCKH_res_PES_full(p, x_new, v_new, X_r, E_dyn2_inp, delta_t, mu_SI, &
              E_i_inp, E_n_inp, E_n0, E_fn_corr, E_f_inp, D_fn_inp, D_ni_inp, E_nf_mean, E_fi_mean,time, gamma, &
              E_i1, E_fc1, gamma_inc, omega_out, F2_tensor) 
+      else if (.true.) then
+        call compute_F_SCKH_res_PES_full_separate(p, x_new2, v_new2, X_r, E_dyn2_inp, delta_t, mu_SI, &
+             E_i_inp, E_n_inp, E_n0, E_fn_corr, E_f_inp, D_fn_inp, D_ni_inp, E_nf_mean, E_fi_mean,time, gamma, &
+             E_i1, E_n1, E_fc1, D_ni1, gamma_inc, omega_out, omega_in, F2_tensor) 
+      else
+        call compute_F_SCKH_res_PES_full_separate_ingoing(p, x_new2, v_new2, X_r, E_dyn2_inp, delta_t, mu_SI, &
+             E_i_inp, E_n_inp, E_n0, E_fn_corr, E_f_inp, D_fn_inp, D_ni_inp, E_nf_mean, E_fi_mean, E_ni_mean,time, gamma, &
+             E_i1, E_n1, E_fc1, D_ni1, D_fn1, gamma_inc, omega_out, omega_in, F2_tensor) 
+      end if
 
-      else if(upper(p % runmode_sckh_res) .eq. "FACTOR_TRAJ") then
+
+    else if(upper(p % runmode_sckh_res) .eq. "FACTOR_TRAJ") then
 
         ! use same initial conditions x_mom_sampl to run another trajectory to compute R(omega -omega')
         call compute_F_SCKH_res_PES_factor_each_traj(p, x_mom_sampl, traj, X_r, E_dyn2_inp, delta_t, mu_SI, &
@@ -2855,6 +2887,481 @@ contains
    end if !  if (upper(p % KH_states_mode) .eq. "STATES") then
    
  end subroutine compute_F_SCKH_res_PES_full
+
+ ! lifted out routine to compute full resonant sckh pes
+ subroutine compute_F_SCKH_res_PES_full_separate(p, x_new, v_new, X_r, E_dyn2_inp, delta_t, mu_SI, &
+      E_i_inp, E_n_inp, E_n0, E_fn_corr, E_f_inp, D_fn_inp, D_ni_inp, E_nf_mean, E_fi_mean,time, gamma, &
+      E_i1, E_n1, E_fc1, D_ni1, gamma_inc, omega_out, omega_in, F2_tensor) 
+
+   use m_precision, only: wp
+   use m_constants, only: const
+   use m_sckh_params_t, only: sckh_params_t 
+   use m_upper, only : upper
+   use m_SCKH_utils, only: compute_F_if_omp_sum_n
+   use m_SCKH_utils, only: compute_F_if_omp_one_n
+   use m_SCKH_utils, only: compute_F_if_om_omp
+   use m_SCKH_utils, only: compute_F_if_om_omp_one_f
+   use m_SCKH_utils, only: compute_F_if_om_omp_one_f_separate
+   use m_SCKH_utils, only: compute_F_if_om_omp_one_f_factor_XAS
+   use m_splines, only: spline_easy
+   use m_SCKH_utils, only: verlet_trajectory_xva
+   
+   type(sckh_params_t), intent(in):: p
+   real(wp), intent(in):: x_new(:)
+   real(wp), intent(in):: v_new(:)
+   real(wp), intent(in)::  X_r(:)
+   real(wp), intent(in):: E_dyn2_inp(:)
+   real(wp), intent(in):: delta_t
+   real(wp), intent(in):: mu_SI
+   real(wp), intent(in):: E_i_inp(:)
+   real(wp), intent(in):: E_n_inp(:,:)
+   real(wp), intent(in):: E_n0(:)
+   real(wp), intent(in):: E_f_inp(:,:)
+   real(wp), intent(in):: E_fn_corr(:,:)
+   real(wp), intent(in):: D_fn_inp(:,:,:,:)
+   real(wp), intent(in):: D_ni_inp(:,:,:)
+   real(wp), intent(in):: E_nf_mean
+   real(wp), intent(in):: E_fi_mean
+   real(wp), intent(in)::  time(:)
+   real(wp), intent(in):: gamma
+   real(wp), intent(in):: E_i1(:)
+   real(wp), intent(in):: E_n1(:,:)   
+   real(wp), intent(in):: E_fc1(:,:,:)   
+   real(wp), intent(in):: D_ni1(:,:,:)   
+   real(wp), intent(in):: gamma_inc
+   real(wp), intent(in):: omega_out(:)
+   real(wp), intent(in):: omega_in(:)
+   real(wp), intent(out)::  F2_tensor(:,:,:,:,:,:)
+
+   real(wp), allocatable:: x_new2(:)
+   real(wp), allocatable:: v_new2(:)
+   real(wp), allocatable:: a_new2(:)
+   real(wp), allocatable:: E_i2(:)
+   real(wp), allocatable:: E_n2(:,:)
+   real(wp), allocatable:: E_fc2(:,:,:)
+   real(wp), allocatable:: D_fn2(:,:,:,:)
+   real(wp), allocatable:: D_ni2(:,:,:)
+
+   complex(wp), allocatable::  F_if_t_omp(:,:,:,:)    
+   complex(wp), allocatable::  F_if_om_omp(:,:,:,:)    
+
+   integer:: f_e
+   integer:: n_e
+   integer:: nfinal
+   integer:: ninter
+   integer:: traj2
+   integer:: ntsteps
+   integer:: npoints_in
+   integer:: m
+   integer:: m1
+   integer:: m2
+   integer:: m3
+   integer:: m4
+
+   ntsteps = size(time)
+   ninter = size(E_n_inp,1)
+   nfinal = size(E_f_inp,1)
+   npoints_in = size(E_n_inp, 2)
+   
+   allocate(x_new2(ntsteps))
+   allocate(v_new2(ntsteps))
+   allocate(a_new2(ntsteps))
+
+   allocate(E_i2(ntsteps))
+   allocate(E_n2(ninter, ntsteps))
+   allocate(D_ni2(ninter, ntsteps,3))
+   allocate(D_fn2(nfinal, ninter, ntsteps,3))
+
+   allocate(F_if_t_omp(ntsteps, ntsteps,3,3))
+   allocate(F_if_om_omp(ntsteps, ntsteps,3,3))
+
+   F2_tensor = 0.0_wp
+
+   ! here two options depending on p % KH_states_mode
+   if (upper(p % KH_states_mode) .eq. "STATES") then
+
+     allocate(E_fc2(nfinal,1, ntsteps))
+     
+     ! now the f_e loop is outside of traj2 to save memory
+     do f_e = 1,nfinal
+       
+       do traj2 =1, ntsteps ! possibly with a stride
+         
+         ! stupid to recalcualte trajectory all the time... could be lifted out of f_e loop by saving x_new2 for each traj2
+         call verlet_trajectory_xva(x_new(traj2), v_new(traj2), X_r, &
+              E_dyn2_inp * const % eV, delta_t, mu_SI, x_new2, v_new2, a_new2 )
+
+
+         ! also E_i2 and E_n2 could be lifted out if they take a lot of time
+         call spline_easy(X_r, E_i_inp, npoints_in, x_new2, E_i2, ntsteps)
+
+         do n_e=1,ninter
+           call spline_easy(X_r, E_n_inp(n_e,:) + E_n0, npoints_in, x_new2, E_n2(n_e,:), ntsteps)
+         end do
+         
+         call spline_easy(X_r, E_f_inp(f_e,:), npoints_in, x_new2, E_fc2(f_e,1,:), ntsteps)  
+         
+         do m=1,3
+           call spline_easy(X_r, D_fn_inp(f_e,1,:,m) , npoints_in, x_new2, D_fn2(f_e,1,:,m) , ntsteps)  
+         end do
+
+         do n_e=1,ninter
+           do m=1,3
+             call spline_easy(X_r, D_ni_inp(n_e,:,m) , npoints_in, x_new2, D_ni2(n_e,:,m) , ntsteps)  
+           end do
+         end do
+
+         ! here changed D_ni2 to D_ni1
+         call compute_F_if_omp_sum_n(E_n2(:,:), E_fc2(f_e,1,:), E_nf_mean, D_fn2(f_e,1,:,:), &
+              D_ni1(:,traj2,:), time, F_if_t_omp(traj2,:,:,:), gamma)
+
+         !call compute_F_if_omp_sum_n(E_n1(:,:), E_fc2(f_e,1,:), E_nf_mean, D_fn2(f_e,1,:,:), &
+         !     D_ni1(:,traj2,:), time, F_if_t_omp(traj2,:,:,:), gamma)
+
+         
+         !F_if_t_omp(traj2,:,:,:) = F_if_t_omp(traj2,:,:,:) + F_if_t_omp_tmp
+         
+       end do !do traj2 =1, ntsteps
+
+       ! here we should have exp(-\int E_in(t) -E_nf(t) - E_fi_mean) where E_in comes from grouind state dynamcis
+       ! and E_nf comes from excited state dynamics
+       ! since n is present we need to also include this before the sum over n, but for one n this should be ok
+
+       call compute_F_if_om_omp_one_f_separate(F_if_t_omp(:,:,:,:), E_fc1(f_e,1,:), E_fc2(f_e,1,:), E_fi_mean, time, &
+            E_i1, E_n1(1,:), E_n2(1,:), gamma_inc, omega_out, E_nf_mean, F_if_om_omp(:,:,:,:)) !F_if_om_omp)
+
+       !call compute_F_if_om_omp_one_f_factor_XAS(F_if_t_omp(:,:,:,:), E_fc1(f_e,1,:), E_fc2(f_e,1,:), E_fi_mean, time, &
+       !     E_i1, E_n1(1,:), E_n2(1,:), gamma_inc, omega_out, omega_in, E_nf_mean, F_if_om_omp(:,:,:,:)) !F_if_om_omp)
+
+
+
+       
+       !! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+       !do m1=1,3
+       !  do m2=1,3
+       !    lambda_F(:, :) = lambda_F(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m1)) * F_if_om_omp(:,:,m2,m2))
+       !    lambda_G(:, :) = lambda_G(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m1,m2))
+       !    lambda_H(:, :) = lambda_H(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m2,m1))
+       !  end do
+       !end do
+
+       ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+       do m1=1,3
+         do m2=1,3
+           do m3=1,3
+             do m4=1,3
+               !lambda_F(:, :) = lambda_F(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m1)) * F_if_om_omp(:,:,m2,m2))
+               !lambda_G(:, :) = lambda_G(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m1,m2))
+               !lambda_H(:, :) = lambda_H(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m2,m1))
+               F2_tensor(:, :, m1,m2,m3,m4) =  F2_tensor(:, :, m1,m2,m3,m4) + &
+                    real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m3,m4))
+             end do
+           end do
+         end do
+       end do
+       write(6,*) "here 3"
+       
+     end do !do f_e = 1,nfinal
+     
+   else if (upper(p % KH_states_mode) .eq. "ORBS") then
+
+     allocate(E_fc2(nfinal,ninter, ntsteps))
+
+     do f_e = 1,nfinal
+       do n_e = 1,ninter
+         
+         !fn_e = ninter * (f_e -1) + n_e  
+         
+         do traj2 =1, ntsteps ! possibly with a stride              
+           
+           call verlet_trajectory_xva(x_new(traj2), v_new(traj2), X_r, &
+                E_dyn2_inp * const % eV, delta_t, mu_SI, x_new2, v_new2, a_new2 )
+           
+           call spline_easy(X_r, E_i_inp, npoints_in, x_new2, E_i2, ntsteps)
+           
+           ! this one really belongs here now
+           call spline_easy(X_r, E_n_inp(n_e,:) + E_n0, npoints_in, x_new2, E_n2(n_e,:), ntsteps)
+           
+           call spline_easy(X_r, E_f_inp(f_e,:) + E_fn_corr(n_e,:), npoints_in, x_new2, E_fc2(f_e,n_e,:), ntsteps)  
+           
+           do m=1,3
+             call spline_easy(X_r, D_fn_inp(f_e,1,:,m) , npoints_in, x_new2, D_fn2(f_e,1,:,m) , ntsteps)  
+             call spline_easy(X_r, D_ni_inp(n_e,:,m) , npoints_in, x_new2, D_ni2(n_e,:,m) , ntsteps)  
+           end do
+           
+           
+           call compute_F_if_omp_one_n(E_n2(n_e,:), E_fc2(f_e,n_e,:), E_nf_mean, D_fn2(f_e,1,:,:), &
+                D_ni2(n_e,1,:), time, F_if_t_omp(traj2,:,:,:), gamma)
+           
+         end do ! do traj2 =1, ntsteps
+         
+         call compute_F_if_om_omp_one_f(F_if_t_omp(:,:,:,:), E_fc1(f_e,n_e,:), E_fi_mean, time, &
+              E_i1, gamma_inc, omega_out, E_nf_mean, F_if_om_omp(:,:,:,:)) 
+         
+         ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+         do m1=1,3
+           do m2=1,3
+             do m3=1,3
+               do m4=1,3
+                 !lambda_F(:, :) = lambda_F(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m1)) * F_if_om_omp(:,:,m2,m2))
+                 !lambda_G(:, :) = lambda_G(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m1,m2))
+                 !lambda_H(:, :) = lambda_H(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m2,m1))
+                 F2_tensor(:, :, m1,m2,m3,m4) =  F2_tensor(:, :, m1,m2,m3,m4) + &
+                      real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m3,m4))
+               end do
+             end do
+           end do
+         end do
+
+         
+       end do! do n_e = 1,ninter
+     end do! do f_e = 1,nfinal
+     
+   end if !  if (upper(p % KH_states_mode) .eq. "STATES") then
+   
+ end subroutine compute_F_SCKH_res_PES_full_separate
+
+
+ ! lifted out routine to compute full resonant sckh pes
+ subroutine compute_F_SCKH_res_PES_full_separate_ingoing(p, x_new, v_new, X_r, E_dyn2_inp, delta_t, mu_SI, &
+      E_i_inp, E_n_inp, E_n0, E_fn_corr, E_f_inp, D_fn_inp, D_ni_inp, E_nf_mean, E_fi_mean, E_ni_mean, time, gamma, &
+      E_i1, E_n1, E_fc1, D_ni1, D_fn1, gamma_inc, omega_out, omega_in, F2_tensor) 
+
+   use m_precision, only: wp
+   use m_constants, only: const
+   use m_sckh_params_t, only: sckh_params_t 
+   use m_upper, only : upper
+   use m_SCKH_utils, only: compute_F_if_omp_sum_n
+   use m_SCKH_utils, only: compute_F_if_om_sum_n
+   use m_SCKH_utils, only: compute_F_if_omp_one_n
+   use m_SCKH_utils, only: compute_F_if_om_omp
+   use m_SCKH_utils, only: compute_F_if_om_omp_one_f
+   use m_SCKH_utils, only: compute_F_if_om_omp_one_f_separate
+      use m_SCKH_utils, only: compute_F_if_om_omp_one_f_separate_ingoing
+   use m_splines, only: spline_easy
+   use m_SCKH_utils, only: verlet_trajectory_xva
+   
+   type(sckh_params_t), intent(in):: p
+   real(wp), intent(in):: x_new(:)
+   real(wp), intent(in):: v_new(:)
+   real(wp), intent(in)::  X_r(:)
+   real(wp), intent(in):: E_dyn2_inp(:)
+   real(wp), intent(in):: delta_t
+   real(wp), intent(in):: mu_SI
+   real(wp), intent(in):: E_i_inp(:)
+   real(wp), intent(in):: E_n_inp(:,:)
+   real(wp), intent(in):: E_n0(:)
+   real(wp), intent(in):: E_f_inp(:,:)
+   real(wp), intent(in):: E_fn_corr(:,:)
+   real(wp), intent(in):: D_fn_inp(:,:,:,:)
+   real(wp), intent(in):: D_ni_inp(:,:,:)
+   real(wp), intent(in):: E_nf_mean
+   real(wp), intent(in):: E_fi_mean
+   real(wp), intent(in):: E_ni_mean
+   real(wp), intent(in)::  time(:)
+   real(wp), intent(in):: gamma
+   real(wp), intent(in):: E_i1(:)
+   real(wp), intent(in):: E_n1(:,:)   
+   real(wp), intent(in):: E_fc1(:,:,:)   
+   real(wp), intent(in):: D_ni1(:,:,:)
+   real(wp), intent(in):: D_fn1(:,:,:,:)   
+   real(wp), intent(in):: gamma_inc
+   real(wp), intent(in):: omega_out(:)
+   real(wp), intent(in):: omega_in(:)
+   real(wp), intent(out)::  F2_tensor(:,:,:,:,:,:)
+
+   real(wp), allocatable:: x_new2(:)
+   real(wp), allocatable:: v_new2(:)
+   real(wp), allocatable:: a_new2(:)
+   real(wp), allocatable:: E_i2(:)
+   real(wp), allocatable:: E_n2(:,:)
+   real(wp), allocatable:: E_fc2(:,:,:)
+   real(wp), allocatable:: D_fn2(:,:,:,:)
+   real(wp), allocatable:: D_ni2(:,:,:)
+
+   complex(wp), allocatable::  F_if_t_omp(:,:,:,:)    
+   complex(wp), allocatable::  F_if_om_omp(:,:,:,:)    
+
+   integer:: f_e
+   integer:: n_e
+   integer:: nfinal
+   integer:: ninter
+   integer:: traj2
+   integer:: ntsteps
+   integer:: npoints_in
+   integer:: m
+   integer:: m1
+   integer:: m2
+   integer:: m3
+   integer:: m4
+
+   ntsteps = size(time)
+   ninter = size(E_n_inp,1)
+   nfinal = size(E_f_inp,1)
+   npoints_in = size(E_n_inp, 2)
+   
+   allocate(x_new2(ntsteps))
+   allocate(v_new2(ntsteps))
+   allocate(a_new2(ntsteps))
+
+   allocate(E_i2(ntsteps))
+   allocate(E_n2(ninter, ntsteps))
+   allocate(D_ni2(ninter, ntsteps,3))
+   allocate(D_fn2(nfinal, ninter, ntsteps,3))
+
+   allocate(F_if_t_omp(ntsteps, ntsteps,3,3))
+   allocate(F_if_om_omp(ntsteps, ntsteps,3,3))
+
+   F2_tensor = 0.0_wp
+
+   ! here two options depending on p % KH_states_mode
+   if (upper(p % KH_states_mode) .eq. "STATES") then
+
+     allocate(E_fc2(nfinal,1, ntsteps))
+     
+     ! now the f_e loop is outside of traj2 to save memory
+     do f_e = 1,nfinal
+       
+       do traj2 =1, ntsteps ! possibly with a stride
+         
+         ! stupid to recalcualte trajectory all the time... could be lifted out of f_e loop by saving x_new2 for each traj2
+         call verlet_trajectory_xva(x_new(traj2), v_new(traj2), X_r, &
+              E_dyn2_inp * const % eV, delta_t, mu_SI, x_new2, v_new2, a_new2 )
+
+
+         ! also E_i2 and E_n2 could be lifted out if they take a lot of time
+         call spline_easy(X_r, E_i_inp, npoints_in, x_new2, E_i2, ntsteps)
+
+         do n_e=1,ninter
+           call spline_easy(X_r, E_n_inp(n_e,:) + E_n0, npoints_in, x_new2, E_n2(n_e,:), ntsteps)
+         end do
+         
+         call spline_easy(X_r, E_f_inp(f_e,:), npoints_in, x_new2, E_fc2(f_e,1,:), ntsteps)  
+         
+         do m=1,3
+           call spline_easy(X_r, D_fn_inp(f_e,1,:,m) , npoints_in, x_new2, D_fn2(f_e,1,:,m) , ntsteps)  
+         end do
+
+         do n_e=1,ninter
+           do m=1,3
+             call spline_easy(X_r, D_ni_inp(n_e,:,m) , npoints_in, x_new2, D_ni2(n_e,:,m) , ntsteps)  
+           end do
+         end do
+
+!         ! here changed D_ni2 to D_ni1
+!         call compute_F_if_omp_sum_n(E_n2(:,:), E_fc2(f_e,1,:), E_nf_mean, D_fn2(f_e,1,:,:), &
+!              D_ni1(:,traj2,:), time, F_if_t_omp(traj2,:,:,:), gamma)
+
+         ! ingoing now
+         call compute_F_if_om_sum_n(E_n2(:,:), E_i2(:), E_ni_mean, D_fn1(f_e,:,traj2,:),  D_ni2(:,:,:),&
+              time, F_if_t_omp(traj2,:,:,:), gamma)
+
+         
+         !F_if_t_omp(traj2,:,:,:) = F_if_t_omp(traj2,:,:,:) + F_if_t_omp_tmp
+         
+       end do !do traj2 =1, ntsteps
+
+       ! here we should have exp(-\int E_in(t) -E_nf(t) - E_fi_mean) where E_in comes from grouind state dynamcis
+       ! and E_nf comes from excited state dynamics
+       ! since n is present we need to also include this before the sum over n, but for one n this should be ok
+
+
+       !call compute_F_if_om_omp_one_f_separate(F_if_t_omp(:,:,:,:), E_fc1(f_e,1,:), E_fc2(f_e,1,:), E_fi_mean, time, &
+       !     E_i1, E_n1(1,:), E_n2(1,:), gamma_inc, omega_out, E_nf_mean, F_if_om_omp(:,:,:,:)) !F_if_om_omp)
+
+       call compute_F_if_om_omp_one_f_separate_ingoing(F_if_t_omp(:,:,:,:), E_fc1(f_e,1,:), E_fc2(f_e,1,:), E_fi_mean, time, &
+            E_i1, E_i2, E_n1(1,:), E_n2(1,:), gamma_inc, omega_in, E_ni_mean, F_if_om_omp(:,:,:,:)) !F_if_om_omp)
+
+
+
+       
+       !! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+       !do m1=1,3
+       !  do m2=1,3
+       !    lambda_F(:, :) = lambda_F(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m1)) * F_if_om_omp(:,:,m2,m2))
+       !    lambda_G(:, :) = lambda_G(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m1,m2))
+       !    lambda_H(:, :) = lambda_H(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m2,m1))
+       !  end do
+       !end do
+
+       ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+       do m1=1,3
+         do m2=1,3
+           do m3=1,3
+             do m4=1,3
+               !lambda_F(:, :) = lambda_F(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m1)) * F_if_om_omp(:,:,m2,m2))
+               !lambda_G(:, :) = lambda_G(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m1,m2))
+               !lambda_H(:, :) = lambda_H(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m2,m1))
+               F2_tensor(:, :, m1,m2,m3,m4) =  F2_tensor(:, :, m1,m2,m3,m4) + &
+                    real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m3,m4))
+             end do
+           end do
+         end do
+       end do
+       write(6,*) "here 3"
+       
+     end do !do f_e = 1,nfinal
+     
+   else if (upper(p % KH_states_mode) .eq. "ORBS") then
+
+     allocate(E_fc2(nfinal,ninter, ntsteps))
+
+     do f_e = 1,nfinal
+       do n_e = 1,ninter
+         
+         !fn_e = ninter * (f_e -1) + n_e  
+         
+         do traj2 =1, ntsteps ! possibly with a stride              
+           
+           call verlet_trajectory_xva(x_new(traj2), v_new(traj2), X_r, &
+                E_dyn2_inp * const % eV, delta_t, mu_SI, x_new2, v_new2, a_new2 )
+           
+           call spline_easy(X_r, E_i_inp, npoints_in, x_new2, E_i2, ntsteps)
+           
+           ! this one really belongs here now
+           call spline_easy(X_r, E_n_inp(n_e,:) + E_n0, npoints_in, x_new2, E_n2(n_e,:), ntsteps)
+           
+           call spline_easy(X_r, E_f_inp(f_e,:) + E_fn_corr(n_e,:), npoints_in, x_new2, E_fc2(f_e,n_e,:), ntsteps)  
+           
+           do m=1,3
+             call spline_easy(X_r, D_fn_inp(f_e,1,:,m) , npoints_in, x_new2, D_fn2(f_e,1,:,m) , ntsteps)  
+             call spline_easy(X_r, D_ni_inp(n_e,:,m) , npoints_in, x_new2, D_ni2(n_e,:,m) , ntsteps)  
+           end do
+           
+           
+           call compute_F_if_omp_one_n(E_n2(n_e,:), E_fc2(f_e,n_e,:), E_nf_mean, D_fn2(f_e,1,:,:), &
+                D_ni2(n_e,1,:), time, F_if_t_omp(traj2,:,:,:), gamma)
+           
+         end do ! do traj2 =1, ntsteps
+         
+         call compute_F_if_om_omp_one_f(F_if_t_omp(:,:,:,:), E_fc1(f_e,n_e,:), E_fi_mean, time, &
+              E_i1, gamma_inc, omega_out, E_nf_mean, F_if_om_omp(:,:,:,:)) 
+         
+         ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+         do m1=1,3
+           do m2=1,3
+             do m3=1,3
+               do m4=1,3
+                 !lambda_F(:, :) = lambda_F(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m1)) * F_if_om_omp(:,:,m2,m2))
+                 !lambda_G(:, :) = lambda_G(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m1,m2))
+                 !lambda_H(:, :) = lambda_H(:, :) +  real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m2,m1))
+                 F2_tensor(:, :, m1,m2,m3,m4) =  F2_tensor(:, :, m1,m2,m3,m4) + &
+                      real(conjg(F_if_om_omp(:,:,m1,m2)) * F_if_om_omp(:,:,m3,m4))
+               end do
+             end do
+           end do
+         end do
+
+         
+       end do! do n_e = 1,ninter
+     end do! do f_e = 1,nfinal
+     
+   end if !  if (upper(p % KH_states_mode) .eq. "STATES") then
+   
+ end subroutine compute_F_SCKH_res_PES_full_separate_ingoing
+
+ 
+
  
  ! lifted out routine to compute sckh where each traj is factorized 
  subroutine compute_F_SCKH_res_PES_factor_each_traj(p, x_mom_sampl, traj, X_r, E_dyn2_inp, delta_t, mu_SI, &

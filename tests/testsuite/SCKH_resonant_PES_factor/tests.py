@@ -19,8 +19,8 @@ def run_test():
     err_code = my_bash.my_exec(sckh_path +'/sckh_main', 'test.out', 'test.err')
 
     # check spectrum
-    err_code += mod_tests.my_diff_sum_ref('spectrum_resonant_sigma_532.04.dat',
-                                          '../ref/spectrum_resonant_sigma_532.04.dat')
+    err_code += mod_tests.my_diff_sum_ref('spectrum_resonant_sigma_532.05.dat',
+                                          '../ref/spectrum_resonant_sigma_532.05.dat')
         
     # clean up
     os.chdir(old_dir)

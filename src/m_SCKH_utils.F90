@@ -379,6 +379,55 @@ contains
  end subroutine sample_x_mom_modes
 
 
+!  subroutine verlet_trajectory(x_in, v_in, V_x, V_y, dt, my_SI, x_out)
+!    use m_precision, only: wp
+!    !use m_constants, only: const
+!
+!    implicit none
+!    ! passed variables
+!    real(wp), dimension(:), intent(in):: V_x, V_y
+!    real(wp), intent(in):: x_in,v_in, dt, my_SI    
+!    real(wp), dimension(:), intent(out)::x_out
+!        
+!    ! local variables
+!    integer:: ntsteps, V_len
+!    integer:: i,j
+!    real(wp):: a, x, v, x_new, v_new, a_new,t
+!    
+!    V_len =size(V_x)     
+!    ntsteps = size(x_out)
+!    
+!    ! first force evaluation on PES
+!    x = x_in
+!    v = v_in
+!    a = force(x, V_x, V_y ) / my_SI
+!
+!    ! write first (zeroth) step to trajectory
+!    t=0
+!    !call trajectory_add(traj,x,v,a,t)
+!    
+!    i=0
+!    !write(14,'(I4,4ES16.6)') i, t, x, v, a
+!    ! run n_steps steps
+!    j=0
+!    do i =1,ntsteps
+!       call verlet_step(x,v,a, V_x, V_y, V_len, x_new, v_new, a_new, dt, my_SI)
+!       
+!       t=t+dt
+!       x = x_new
+!       v= v_new
+!       a = a_new
+!       
+!       j=j+1
+!       x_out(j) = x 
+!
+!       !write(14,'(I4,4ES16.6)') i, t, x, v, a
+!       !call trajectory_add(traj,x,v,a,t)
+!       
+!    end do
+!    
+!  end subroutine verlet_trajectory
+
   subroutine verlet_trajectory(x_in, v_in, V_x, V_y, dt, my_SI, x_out)
     use m_precision, only: wp
     !use m_constants, only: const
@@ -391,7 +440,7 @@ contains
         
     ! local variables
     integer:: ntsteps, V_len
-    integer:: i,j
+    integer:: i
     real(wp):: a, x, v, x_new, v_new, a_new,t
     
     V_len =size(V_x)     
@@ -402,32 +451,25 @@ contains
     v = v_in
     a = force(x, V_x, V_y ) / my_SI
 
-    ! write first (zeroth) step to trajectory
-    t=0
-    !call trajectory_add(traj,x,v,a,t)
-    
-    i=0
-    !write(14,'(I4,4ES16.6)') i, t, x, v, a
-    ! run n_steps steps
-    j=0
-    do i =1,ntsteps
+    t = 0.0_wp
+
+    x_out(1) = x
+
+    do i =2,ntsteps
        call verlet_step(x,v,a, V_x, V_y, V_len, x_new, v_new, a_new, dt, my_SI)
        
        t=t+dt
        x = x_new
        v= v_new
        a = a_new
-       
-       j=j+1
-       x_out(j) = x 
 
-       !write(14,'(I4,4ES16.6)') i, t, x, v, a
-       !call trajectory_add(traj,x,v,a,t)
+       x_out(i) = x 
        
     end do
     
   end subroutine verlet_trajectory
 
+  
   subroutine verlet_trajectory_xva(x_in, v_in, V_x, V_y, dt, my_SI, x_out, v_out, a_out)
     use m_precision, only: wp
     !use m_constants, only: const
@@ -442,7 +484,7 @@ contains
         
     ! local variables
     integer:: ntsteps, V_len
-    integer:: i,j
+    integer:: i
     real(wp):: a, x, v, x_new, v_new, a_new,t
     
     V_len =size(V_x)     
@@ -453,15 +495,13 @@ contains
     v = v_in
     a = force(x, V_x, V_y ) / my_SI
 
-    ! write first (zeroth) step to trajectory
-    t=0
-    !call trajectory_add(traj,x,v,a,t)
+    t = 0.0_wp
+
+    x_out(1) = x
+    v_out(1) = v
+    a_out(1) = a 
     
-    i=0
-    !write(14,'(I4,4ES16.6)') i, t, x, v, a
-    ! run n_steps steps
-    j=0
-    do i =1,ntsteps
+    do i =2,ntsteps
        call verlet_step(x,v,a, V_x, V_y, V_len, x_new, v_new, a_new, dt, my_SI)
        
        t=t+dt
@@ -469,10 +509,13 @@ contains
        v= v_new
        a = a_new
        
-       j=j+1
-       x_out(j) = x
-       v_out(j) = v
-       a_out(j) = a 
+       !j=j+1
+       !x_out(j) = x
+       !v_out(j) = v
+       !a_out(j) = a
+       x_out(i) = x
+       v_out(i) = v
+       a_out(i) = a 
     end do
     
   end subroutine verlet_trajectory_xva
@@ -1261,7 +1304,190 @@ contains
     
   end subroutine compute_F_if_om_omp_one_f
 
+  subroutine compute_F_if_om_omp_one_f_separate(F_if_t_omp, E_f1, E_f2, E_fi_mean, time, &
+       E_i1, E_n1, E_n2,  gamma_inc, omega_out, E_nf_mean,F_if_om_omp)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_forward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    complex(wp), intent(in) ::  F_if_t_omp(:,:,:,:)
+    real(wp), intent(in):: E_f1(:)
+    real(wp), intent(in):: E_f2(:)
+    real(wp), intent(in):: E_fi_mean
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_i1(:)
+    real(wp), intent(in):: E_n1(:)
+    real(wp), intent(in):: E_n2(:)
+    real(wp), intent(in):: gamma_inc
+    real(wp), intent(in):: omega_out(:)
+    real(wp), intent(in):: E_nf_mean
+    complex(wp), intent(out) ::  F_if_om_omp(:,:,:,:)
 
+    integer:: n_omega_in, n_omega_out, om_out, m1, m2
+    complex(wp), allocatable ::  e_factor1(:)
+    real(wp):: mean
+    
+    n_omega_in = size(F_if_t_omp,1)
+    n_omega_out = size(F_if_t_omp,2)
+    
+    allocate(e_factor1(n_omega_in))
+
+    mean = sum(E_n2-E_n1)/size(E_n1) - sum(E_f2-E_f1)/size(E_n1)
+    !mean =  sum(E_f2-E_f1)/size(E_n1)
+    
+    write(6,*) "mean", mean !* const % eV
+
+    call compute_efactor(E_f2(:) -E_n2(:)+mean, E_i1(:)-E_n1(:), E_fi_mean, time, e_factor1(:), .false.)
+    !call compute_efactor(E_f2(:) -E_n2(:), E_i1(:)-E_n1(:), E_fi_mean, time, e_factor1(:), .false.)
+    !call compute_efactor(E_f2(:) -E_n2(:)+mean, E_i1(:)-E_n1(:), E_fi_mean, time, e_factor1(:), .true.)
+    !call compute_efactor(E_f2(:), E_i1(:), E_fi_mean, time, e_factor1(:), .false.)
+    !call compute_efactor(E_f2(:)-mean, E_i1(:), E_fi_mean, time, e_factor1(:), .false.)
+    !call compute_efactor(E_f1(:), E_i1(:), E_fi_mean, time, e_factor1(:), .false.)
+    !call compute_efactor(E_f1(:), E_i1(:), E_fi_mean, time, e_factor1(:), .false.)
+    
+    do om_out= 1, n_omega_out
+      do m1 =1, 3
+        do m2 =1, 3
+          
+          call fft_c2c_1d_forward( e_factor1(:) * &
+               exp(dcmplx(0.0_wp,  (omega_out(om_out) - E_nf_mean)* const % eV * time(:) / const % hbar )) * &
+               F_if_t_omp(:,om_out, m1,m2), &
+               F_if_om_omp(:,om_out, m1,m2))
+          call reorder_sigma_fftw_z(F_if_om_omp(:, om_out, m1,m2))
+          
+        end do
+      end do
+    end do
+    
+  end subroutine compute_F_if_om_omp_one_f_separate
+  
+  subroutine compute_F_if_om_omp_one_f_factor_XAS(F_if_t_omp, E_f1, E_f2, E_fi_mean, time, &
+       E_i1, E_n1, E_n2,  gamma_inc, omega_out, omega_in, E_nf_mean,F_if_om_omp)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_forward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    complex(wp), intent(in) ::  F_if_t_omp(:,:,:,:)
+    real(wp), intent(in):: E_f1(:)
+    real(wp), intent(in):: E_f2(:)
+    real(wp), intent(in):: E_fi_mean
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_i1(:)
+    real(wp), intent(in):: E_n1(:)
+    real(wp), intent(in):: E_n2(:)
+    real(wp), intent(in):: gamma_inc
+    real(wp), intent(in):: omega_out(:)
+    real(wp), intent(in):: omega_in(:)
+    real(wp), intent(in):: E_nf_mean
+    complex(wp), intent(out) ::  F_if_om_omp(:,:,:,:)
+
+    integer:: n_omega_in, n_omega_out, om_in, om_out, m1, m2
+    complex(wp), allocatable ::  e_factor1(:)
+    real(wp):: mean
+    
+    n_omega_in = size(F_if_t_omp,1)
+    n_omega_out = size(F_if_t_omp,2)
+    
+    allocate(e_factor1(n_omega_in))
+
+    mean = sum(E_n2-E_n1)/size(E_n1) - sum(E_f2-E_f1)/size(E_n1)
+    
+    write(6,*) "mean", mean !* const % eV
+
+    call compute_efactor(E_f2(:) -E_n2(:)+mean, E_i1(:)-E_n1(:), E_fi_mean, time, e_factor1(:), .false.)
+    !call compute_efactor(E_f2(:) -E_n2(:), E_i1(:)-E_n1(:), E_fi_mean, time, e_factor1(:), .false.)
+    !call compute_efactor(E_f2(:) -E_n2(:)+mean, E_i1(:)-E_n1(:), E_fi_mean, time, e_factor1(:), .true.)
+    !call compute_efactor(E_f2(:), E_i1(:), E_fi_mean, time, e_factor1(:), .false.)
+    !call compute_efactor(E_n1(:), E_i1(:), E_nf_mean-E_fi_mean, time, e_factor1(:), .false.)
+
+    
+    do om_out= 1, n_omega_out
+      do m1 =1, 3
+        do m2 =1, 3
+
+          call fft_c2c_1d_forward( e_factor1(:) * &
+               exp(dcmplx(0.0_wp,  (omega_out(om_out) - E_nf_mean)* const % eV * time(:) / const % hbar )) * &
+               F_if_t_omp(:,om_out, m1,m2), &
+               F_if_om_omp(:,om_out, m1,m2))
+          call reorder_sigma_fftw_z(F_if_om_omp(:, om_out, m1,m2))
+
+         end do
+      end do
+    end do
+
+    ! cut spectrum at absorption edge
+    do om_in= 1, n_omega_in
+      if (omega_in(om_in) .lt. 200) then
+        F_if_om_omp(om_in,:,:,:) = 0.0d0
+      end if
+    end do
+    
+  end subroutine compute_F_if_om_omp_one_f_factor_XAS
+
+  
+
+  subroutine compute_F_if_om_omp_one_f_separate_ingoing(F_if_t_omp, E_f1, E_f2, E_fi_mean, time, &
+       E_i1, E_i2, E_n1, E_n2,  gamma_inc, omega_out, E_nf_mean,F_if_om_omp)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_forward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    complex(wp), intent(in) ::  F_if_t_omp(:,:,:,:)
+    real(wp), intent(in):: E_f1(:)
+    real(wp), intent(in):: E_f2(:)
+    real(wp), intent(in):: E_fi_mean
+    real(wp), intent(in):: time(:)
+    real(wp), intent(in):: E_i1(:)
+    real(wp), intent(in):: E_i2(:)
+    real(wp), intent(in):: E_n1(:)
+    real(wp), intent(in):: E_n2(:)
+    real(wp), intent(in):: gamma_inc
+    real(wp), intent(in):: omega_out(:)
+    real(wp), intent(in):: E_nf_mean
+    complex(wp), intent(out) ::  F_if_om_omp(:,:,:,:)
+
+    integer:: n_omega_in, n_omega_out, om_out, m1, m2
+    complex(wp), allocatable ::  e_factor1(:)
+    real(wp):: mean
+    
+    n_omega_in = size(F_if_t_omp,1)
+    n_omega_out = size(F_if_t_omp,2)
+    
+    allocate(e_factor1(n_omega_in))
+
+    mean = sum(E_n2-E_n1)/size(E_n1) - sum(E_f2-E_f1)/size(E_n1)
+    
+    
+    write(6,*) "mean", mean !* const % eV
+
+    !call compute_efactor(E_f2(:) -E_n2(:)+mean, E_i1(:)-E_n1(:), E_fi_mean, time, e_factor1(:), .false.)
+    call compute_efactor(E_f2(:) -E_n2(:), E_i1(:)-E_n1(:), E_fi_mean, time, e_factor1(:), .false.)
+    !call compute_efactor(E_f2(:), E_i1(:), E_fi_mean, time, e_factor1(:), .false.)
+    !call compute_efactor(E_f1(:), E_i2(:), E_fi_mean, time, e_factor1(:), .false.)
+    !call compute_efactor(E_f1(:), E_i1(:), E_fi_mean, time, e_factor1(:), .true.)
+      
+    do om_out= 1, n_omega_out
+      do m1 =1, 3
+        do m2 =1, 3
+          
+          call fft_c2c_1d_forward( e_factor1(:) * &
+               exp(dcmplx(0.0_wp,  (omega_out(om_out) - E_nf_mean)* const % eV * time(:) / const % hbar )) * &
+               F_if_t_omp(:,om_out, m1,m2), &
+               F_if_om_omp(:,om_out, m1,m2))
+          call reorder_sigma_fftw_z(F_if_om_omp(:, om_out, m1,m2))
+          
+        end do
+      end do
+    end do
+    
+  end subroutine compute_F_if_om_omp_one_f_separate_ingoing
+
+  
+
+  
 
   
   ! here use factorization

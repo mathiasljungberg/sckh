@@ -16,6 +16,7 @@ program sckh_main
   use m_SCKH_resonant_PES, only: calculate_SCKH_res_PES
   use m_SCKH_resonant_PES, only: calculate_SCKH_res_PES_factor
   use m_SCKH_resonant_PES, only: calculate_SCKH_res_PES_factor_each_traj
+  use m_SCKH_resonant_PES_FC, only: calculate_SCKH_res_PES_FC
   
   implicit none
 
@@ -54,6 +55,8 @@ program sckh_main
     call calculate_SCKH_res_PES_factor(p)
   case("SCKH_RESONANT_PES_FACTOR_EACH_TRAJ")
     call calculate_SCKH_res_PES_factor_each_traj(p)
+  case("SCKH_RESONANT_PES_FC")
+    call calculate_SCKH_res_PES_FC(p)
 
   ! rotines working with general used-supplied trajectories
   case("SCKH")
