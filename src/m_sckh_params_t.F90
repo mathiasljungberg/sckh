@@ -88,7 +88,7 @@ module m_sckh_params_t
      real(kind=wp):: delta_t2
      logical:: use_dynamics_file
      character(80):: runmode_sckh_res
-          
+     logical:: sckh_dyn_separate
      
      ! for SCKH
      integer:: ntraj
@@ -102,6 +102,9 @@ module m_sckh_params_t
      integer:: nproj
      real(kind=wp), allocatable:: projvec(:,:)
 
+     ! printing
+     integer:: kh_print_stride
+     
      
   end type sckh_params_t
 
@@ -216,7 +219,7 @@ contains
 
     ! vib_solver: 1d vibrational solver, SINC_DVR or FOURIER_REAL
     call init_parameter('vib_solver',inp, "SINC_DVR", p % vib_solver ,iv)
-    ! KH_amplitude_mode: OUTGOING or INCOMING
+    ! KH_amplitude_mode: OUTGOING or INGOING
     call init_parameter('KH_amplitude_mode',inp, "OUTGOING", p % KH_amplitude_mode ,iv)
     ! KH_states_mode: ORBS or STATES
     call init_parameter('KH_states_mode',inp, "STATES", p % KH_states_mode ,iv)
@@ -249,6 +252,13 @@ contains
     call init_parameter('mass_scaling',inp, 1.0d0 ,p % mass_scaling,iv)
 
     call init_parameter('runmode_sckh_res',inp,'FULL',p%runmode_sckh_res,iv)
+
+    ! if .true. run D_in on E_dyn and D_nf on E_dyn2
+    ! if .false, run t on E_dyn and t' on E_dyn2
+    call init_parameter('sckh_dyn_separate',inp,.false.,p%sckh_dyn_separate,iv)
+
+    ! stride in frequencies when printing KH cross sections
+    call init_parameter('kh_print_stride',inp,1,p % kh_print_stride,iv)
 
     ! projections
     call init_parameter('use_proj',inp, .false., p % use_proj,iv)

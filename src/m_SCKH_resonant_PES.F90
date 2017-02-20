@@ -572,7 +572,7 @@ contains
 
       
       ! option to do separate dynamcis of D_nf and D_in
-      if(.true.) then
+      if(p % sckh_dyn_separate .eqv. .false.) then
         call compute_traj_and_spline(p, x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, &
              X_r, E_dyn_inp, delta_t, mu_SI, &
              x_new, v_new, a_new, E_i_inp, E_n_inp, E_n0, E_f_inp, E_fn_corr, D_ni_inp, D_fn_inp, &
@@ -603,20 +603,22 @@ contains
 
       if(upper(p % runmode_sckh_res) .eq. "FULL") then
         
-      if(.true.) then
-        ! FULL case, run trajectories with all points in x_new as starting points 
-        call compute_F_SCKH_res_PES_full(p, x_new, v_new, X_r, E_dyn2_inp, delta_t, mu_SI, &
-             E_i_inp, E_n_inp, E_n0, E_fn_corr, E_f_inp, D_fn_inp, D_ni_inp, E_nf_mean, E_fi_mean,time, gamma, &
+        if(p % sckh_dyn_separate .eqv. .false.) then
+          ! FULL case, run trajectories with all points in x_new as starting points 
+          call compute_F_SCKH_res_PES_full(p, x_new, v_new, X_r, E_dyn2_inp, delta_t, mu_SI, &
+               E_i_inp, E_n_inp, E_n0, E_fn_corr, E_f_inp, D_fn_inp, D_ni_inp, E_nf_mean, E_fi_mean,time, gamma, &
              E_i1, E_fc1, gamma_inc, omega_out, F2_tensor) 
-      else if (.true.) then
-        call compute_F_SCKH_res_PES_full_separate(p, x_new2, v_new2, X_r, E_dyn2_inp, delta_t, mu_SI, &
-             E_i_inp, E_n_inp, E_n0, E_fn_corr, E_f_inp, D_fn_inp, D_ni_inp, E_nf_mean, E_fi_mean,time, gamma, &
-             E_i1, E_n1, E_fc1, D_ni1, gamma_inc, omega_out, omega_in, F2_tensor) 
-      else
-        call compute_F_SCKH_res_PES_full_separate_ingoing(p, x_new2, v_new2, X_r, E_dyn2_inp, delta_t, mu_SI, &
-             E_i_inp, E_n_inp, E_n0, E_fn_corr, E_f_inp, D_fn_inp, D_ni_inp, E_nf_mean, E_fi_mean, E_ni_mean,time, gamma, &
-             E_i1, E_n1, E_fc1, D_ni1, D_fn1, gamma_inc, omega_out, omega_in, F2_tensor) 
-      end if
+        else !if (.true.) then
+          write(6,*) "p % sckh_dyn_separate mode"
+          call compute_F_SCKH_res_PES_full_separate(p, x_new2, v_new2, X_r, E_dyn2_inp, delta_t, mu_SI, &
+               E_i_inp, E_n_inp, E_n0, E_fn_corr, E_f_inp, D_fn_inp, D_ni_inp, E_nf_mean, E_fi_mean, &
+               E_ni_mean, time, gamma, &
+               E_i1, E_n1, E_fc1, D_ni1, gamma_inc, omega_out, omega_in, F2_tensor) 
+          !else
+          !  call compute_F_SCKH_res_PES_full_separate_ingoing(p, x_new2, v_new2, X_r, E_dyn2_inp, delta_t, mu_SI, &
+          !       E_i_inp, E_n_inp, E_n0, E_fn_corr, E_f_inp, D_fn_inp, D_ni_inp, E_nf_mean, E_fi_mean, E_ni_mean,time, gamma, &
+          !       E_i1, E_n1, E_fc1, D_ni1, D_fn1, gamma_inc, omega_out, omega_in, F2_tensor) 
+        end if
 
 
     else if(upper(p % runmode_sckh_res) .eq. "FACTOR_TRAJ") then
@@ -686,8 +688,8 @@ contains
     write(6,*) "Done"
     
     ! write spectra to individual files
-    do j=1, n_omega_in
-      
+    do j=1, n_omega_in, p % kh_print_stride
+        
       file="_sigma_"
       write(string,'(F6.2)') omega_in(j)   
       file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
@@ -695,7 +697,7 @@ contains
       ifile = get_free_handle()
       open(ifile,file=file,status='unknown')
       
-      do i=1, n_omega_out
+      do i=1, n_omega_out, p % kh_print_stride
         
         write(ifile,'(4ES18.10)') omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
       end do
@@ -712,15 +714,14 @@ contains
    ifile = get_free_handle()
    open(ifile,file=file,status='unknown')
 
-   do j=1, n_omega_in
-     do i=1, n_omega_out
+   do j=1, n_omega_in, p % kh_print_stride
+     do i=1, n_omega_out, p % kh_print_stride
        write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
      end do
      write(ifile, *) 
    end do
    
    close(ifile) 
-
 
    ! write spectra to file
    file="_sigma_all_nogrid"
@@ -730,8 +731,8 @@ contains
    ifile = get_free_handle()
    open(ifile,file=file,status='unknown')
 
-   do j=1, n_omega_in
-     do i=1, n_omega_out
+   do j=1, n_omega_in, p % kh_print_stride
+     do i=1, n_omega_out, p % kh_print_stride
        write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
      end do
      write(ifile, *) 
@@ -1656,6 +1657,7 @@ contains
 
       ! compute the resonance factor
       if (upper(p % KH_amplitude_mode) .eq. "OUTGOING") then
+
         call compute_F_if_om_omp_no_F(E_f1(:,:), E_fi_mean, time, &
              E_i1, gamma_R, omega_out, E_nf_mean, R_if_om_omp)
 
@@ -2890,7 +2892,8 @@ contains
 
  ! lifted out routine to compute full resonant sckh pes
  subroutine compute_F_SCKH_res_PES_full_separate(p, x_new, v_new, X_r, E_dyn2_inp, delta_t, mu_SI, &
-      E_i_inp, E_n_inp, E_n0, E_fn_corr, E_f_inp, D_fn_inp, D_ni_inp, E_nf_mean, E_fi_mean,time, gamma, &
+      E_i_inp, E_n_inp, E_n0, E_fn_corr, E_f_inp, D_fn_inp, D_ni_inp, E_nf_mean, E_fi_mean, E_ni_mean, &
+      time, gamma, &
       E_i1, E_n1, E_fc1, D_ni1, gamma_inc, omega_out, omega_in, F2_tensor) 
 
    use m_precision, only: wp
@@ -2902,6 +2905,7 @@ contains
    use m_SCKH_utils, only: compute_F_if_om_omp
    use m_SCKH_utils, only: compute_F_if_om_omp_one_f
    use m_SCKH_utils, only: compute_F_if_om_omp_one_f_separate
+   use m_SCKH_utils, only: compute_F_if_om_omp_one_f_separate_ingoing
    use m_SCKH_utils, only: compute_F_if_om_omp_one_f_factor_XAS
    use m_splines, only: spline_easy
    use m_SCKH_utils, only: verlet_trajectory_xva
@@ -2922,6 +2926,7 @@ contains
    real(wp), intent(in):: D_ni_inp(:,:,:)
    real(wp), intent(in):: E_nf_mean
    real(wp), intent(in):: E_fi_mean
+   real(wp), intent(in):: E_ni_mean
    real(wp), intent(in)::  time(:)
    real(wp), intent(in):: gamma
    real(wp), intent(in):: E_i1(:)
@@ -2943,7 +2948,8 @@ contains
    real(wp), allocatable:: D_ni2(:,:,:)
 
    complex(wp), allocatable::  F_if_t_omp(:,:,:,:)    
-   complex(wp), allocatable::  F_if_om_omp(:,:,:,:)    
+   complex(wp), allocatable::  F_if_om_omp(:,:,:,:)
+   complex(wp), allocatable::  F_tmp(:,:,:,:)    
 
    integer:: f_e
    integer:: n_e
@@ -2974,6 +2980,7 @@ contains
 
    allocate(F_if_t_omp(ntsteps, ntsteps,3,3))
    allocate(F_if_om_omp(ntsteps, ntsteps,3,3))
+   allocate(F_tmp(ntsteps, ntsteps,3,3))
 
    F2_tensor = 0.0_wp
 
@@ -3011,10 +3018,18 @@ contains
            end do
          end do
 
-         ! here changed D_ni2 to D_ni1
-         call compute_F_if_omp_sum_n(E_n2(:,:), E_fc2(f_e,1,:), E_nf_mean, D_fn2(f_e,1,:,:), &
+         
+         if (upper(p % KH_amplitude_mode) .eq. "OUTGOING") then 
+           ! here changed D_ni2 to D_ni1
+           call compute_F_if_omp_sum_n(E_n2(:,:), E_fc2(f_e,1,:), E_nf_mean, D_fn2(f_e,1,:,:), &
               D_ni1(:,traj2,:), time, F_if_t_omp(traj2,:,:,:), gamma)
 
+         else if (upper(p % KH_amplitude_mode) .eq. "INGOING") then
+           ! watch it, only one n
+           call compute_F_if_omp_one_n(E_n2(1,:), E_i2(:), E_ni_mean, D_ni2(1,:,:), &
+                D_fn2(f_e,1,traj2,:), time, F_if_t_omp(traj2,:,:,:), gamma)
+         end if
+         
          !call compute_F_if_omp_sum_n(E_n1(:,:), E_fc2(f_e,1,:), E_nf_mean, D_fn2(f_e,1,:,:), &
          !     D_ni1(:,traj2,:), time, F_if_t_omp(traj2,:,:,:), gamma)
 
@@ -3027,9 +3042,31 @@ contains
        ! and E_nf comes from excited state dynamics
        ! since n is present we need to also include this before the sum over n, but for one n this should be ok
 
-       call compute_F_if_om_omp_one_f_separate(F_if_t_omp(:,:,:,:), E_fc1(f_e,1,:), E_fc2(f_e,1,:), E_fi_mean, time, &
-            E_i1, E_n1(1,:), E_n2(1,:), gamma_inc, omega_out, E_nf_mean, F_if_om_omp(:,:,:,:)) !F_if_om_omp)
+       F_if_om_omp = 0.0_wp
+       do n_e = 1, ninter
+         if (upper(p % KH_amplitude_mode) .eq. "OUTGOING") then 
 
+           write(6,*) "outgoing"
+
+           call compute_F_if_om_omp_one_f_separate(F_if_t_omp(:,:,:,:), E_fc1(f_e, n_e,:), &
+                E_fc2(f_e, n_e,:), E_fi_mean, time, &
+                E_i1, E_n1(n_e,:), E_n2(n_e,:), gamma_inc, &
+                omega_out, E_nf_mean, F_tmp(:,:,:,:)) !F_if_om_omp)
+           
+         else if (upper(p % KH_amplitude_mode) .eq. "INGOING") then
+
+           write(6,*) "ingoing"
+
+           call compute_F_if_om_omp_one_f_separate_ingoing(F_if_t_omp(:,:,:,:), E_fc1(f_e,1,:), &
+                E_fc2(f_e, n_e,:), E_fi_mean, time, &
+                E_i1, E_i2, E_n1(n_e,:), E_n2(n_e,:), gamma_inc, &
+                omega_in, E_nf_mean, E_ni_mean, F_tmp(:,:,:,:)) !F_if_om_omp)
+
+         end if
+         
+         F_if_om_omp = F_if_om_omp + F_tmp
+
+       end do
        !call compute_F_if_om_omp_one_f_factor_XAS(F_if_t_omp(:,:,:,:), E_fc1(f_e,1,:), E_fc2(f_e,1,:), E_fi_mean, time, &
        !     E_i1, E_n1(1,:), E_n2(1,:), gamma_inc, omega_out, omega_in, E_nf_mean, F_if_om_omp(:,:,:,:)) !F_if_om_omp)
 
@@ -3089,14 +3126,19 @@ contains
              call spline_easy(X_r, D_ni_inp(n_e,:,m) , npoints_in, x_new2, D_ni2(n_e,:,m) , ntsteps)  
            end do
            
-           
+           ! here changed D_ni2 to D_ni1           
+           !call compute_F_if_omp_one_n(E_n2(n_e,:), E_fc2(f_e,n_e,:), E_nf_mean, D_fn2(f_e,1,:,:), &
+           !     D_ni2(n_e,1,:), time, F_if_t_omp(traj2,:,:,:), gamma)
            call compute_F_if_omp_one_n(E_n2(n_e,:), E_fc2(f_e,n_e,:), E_nf_mean, D_fn2(f_e,1,:,:), &
-                D_ni2(n_e,1,:), time, F_if_t_omp(traj2,:,:,:), gamma)
-           
+                D_ni1(n_e,traj2,:), time, F_if_t_omp(traj2,:,:,:), gamma)
+                      
          end do ! do traj2 =1, ntsteps
          
-         call compute_F_if_om_omp_one_f(F_if_t_omp(:,:,:,:), E_fc1(f_e,n_e,:), E_fi_mean, time, &
-              E_i1, gamma_inc, omega_out, E_nf_mean, F_if_om_omp(:,:,:,:)) 
+         !call compute_F_if_om_omp_one_f(F_if_t_omp(:,:,:,:), E_fc1(f_e,n_e,:), E_fi_mean, time, &
+         !     E_i1, gamma_inc, omega_out, E_nf_mean, F_if_om_omp(:,:,:,:)) 
+         
+         call compute_F_if_om_omp_one_f_separate(F_if_t_omp(:,:,:,:), E_fc1(f_e, n_e,:), E_fc2(f_e, n_e,:), E_fi_mean, time, &
+              E_i1, E_n1(1,:), E_n2(1,:), gamma_inc, omega_out, E_nf_mean, F_if_om_omp(:,:,:,:)) !F_if_om_omp)
          
          ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
          do m1=1,3
@@ -3113,7 +3155,7 @@ contains
            end do
          end do
 
-         
+
        end do! do n_e = 1,ninter
      end do! do f_e = 1,nfinal
      
@@ -3137,7 +3179,7 @@ contains
    use m_SCKH_utils, only: compute_F_if_om_omp
    use m_SCKH_utils, only: compute_F_if_om_omp_one_f
    use m_SCKH_utils, only: compute_F_if_om_omp_one_f_separate
-      use m_SCKH_utils, only: compute_F_if_om_omp_one_f_separate_ingoing
+   use m_SCKH_utils, only: compute_F_if_om_omp_one_f_separate_ingoing
    use m_splines, only: spline_easy
    use m_SCKH_utils, only: verlet_trajectory_xva
    
@@ -3253,8 +3295,11 @@ contains
 !              D_ni1(:,traj2,:), time, F_if_t_omp(traj2,:,:,:), gamma)
 
          ! ingoing now
-         call compute_F_if_om_sum_n(E_n2(:,:), E_i2(:), E_ni_mean, D_fn1(f_e,:,traj2,:),  D_ni2(:,:,:),&
-              time, F_if_t_omp(traj2,:,:,:), gamma)
+         !call compute_F_if_om_sum_n(E_n2(:,:), E_i2(:), E_ni_mean, D_fn1(f_e,:,traj2,:),  D_ni2(:,:,:),&
+         !     time, F_if_t_omp(traj2,:,:,:), gamma)
+
+!         call compute_F_if_om_sum_n(E_n1(:,:), E_i2(:), E_ni_mean, D_fn2(f_e,1,traj2,:),  D_ni1(:,traj,:),&
+!              time, F_if_t_omp(traj2,:,:,:), gamma)
 
          
          !F_if_t_omp(traj2,:,:,:) = F_if_t_omp(traj2,:,:,:) + F_if_t_omp_tmp
@@ -3270,7 +3315,7 @@ contains
        !     E_i1, E_n1(1,:), E_n2(1,:), gamma_inc, omega_out, E_nf_mean, F_if_om_omp(:,:,:,:)) !F_if_om_omp)
 
        call compute_F_if_om_omp_one_f_separate_ingoing(F_if_t_omp(:,:,:,:), E_fc1(f_e,1,:), E_fc2(f_e,1,:), E_fi_mean, time, &
-            E_i1, E_i2, E_n1(1,:), E_n2(1,:), gamma_inc, omega_in, E_ni_mean, F_if_om_omp(:,:,:,:)) !F_if_om_omp)
+            E_i1, E_i2, E_n1(1,:), E_n2(1,:), gamma_inc, omega_in, E_nf_mean, E_ni_mean, F_if_om_omp(:,:,:,:)) !F_if_om_omp)
 
 
 

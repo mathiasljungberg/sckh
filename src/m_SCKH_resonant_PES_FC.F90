@@ -123,9 +123,10 @@ contains
     integer:: om_in
 
     !complex(wp), allocatable::  F_if_t_omp(:,:,:,:)    
-    complex(wp), allocatable::  F_if_om_omp(:,:,:,:,:)
+    !complex(wp), allocatable::  F_if_om_omp(:,:,:,:,:)
 
     complex(wp), allocatable::  F_tmp(:,:,:,:)
+    complex(wp), allocatable::  F_tmp2(:,:,:,:)
 
     !complex(wp), allocatable::  F_if_omp(:,:,:,:)    
     !complex(wp), allocatable::  F_if_omp_tmp(:,:,:,:)    
@@ -136,9 +137,13 @@ contains
     !complex(wp), allocatable::  R_if_om_omp(:,:,:)    
     !real(wp), allocatable:: R_factor(:,:,:)
 
-    real(wp), allocatable:: lambda_F(:,:,:)
-    real(wp), allocatable:: lambda_G(:,:,:)
-    real(wp), allocatable:: lambda_H(:,:,:)
+    !real(wp), allocatable:: lambda_F(:,:,:)
+    !real(wp), allocatable:: lambda_G(:,:,:)
+    !real(wp), allocatable:: lambda_H(:,:,:)
+
+    real(wp), allocatable:: lambda_F(:,:)
+    real(wp), allocatable:: lambda_G(:,:)
+    real(wp), allocatable:: lambda_H(:,:)
 
     !real(wp), allocatable:: lambda_F_tmp(:,:)
     !real(wp), allocatable:: lambda_G_tmp(:,:)
@@ -341,17 +346,22 @@ contains
     allocate(omega_in(n_omega_in))
     allocate(omega_out(n_omega_out))
 
-    allocate(lambda_F(nfinal, n_omega_in, n_omega_out))
-    allocate(lambda_G(nfinal, n_omega_in, n_omega_out))
-    allocate(lambda_H(nfinal, n_omega_in, n_omega_out))
+    !allocate(lambda_F(nfinal_tot, n_omega_in, n_omega_out))
+    !allocate(lambda_G(nfinal_tot, n_omega_in, n_omega_out))
+    !allocate(lambda_H(nfinal_tot, n_omega_in, n_omega_out))
+
+    allocate(lambda_F(n_omega_in, n_omega_out))
+    allocate(lambda_G(n_omega_in, n_omega_out))
+    allocate(lambda_H(n_omega_in, n_omega_out))
 
     allocate(lambda_lp(n_omega_in, n_omega_out))
     allocate(lambda_ln(n_omega_in, n_omega_out))
     allocate(lambda_cp(n_omega_in, n_omega_out))
     allocate(sigma_tmp(n_omega_in, n_omega_out))
 
-    allocate(F_if_om_omp(nfinal, n_omega_in, n_omega_out,3,3))
+    !allocate(F_if_om_omp(nfinal_tot, n_omega_in, n_omega_out,3,3))
     allocate(F_tmp(n_omega_in, n_omega_out,3,3))
+    allocate(F_tmp2(n_omega_in, n_omega_out,3,3))
 
     !
     ! Here starts the program proper
@@ -361,13 +371,18 @@ contains
       time(i)= (i-1)*delta_t
     end do
     
-    call compute_E_means_and_omegas_one(E_i_inp, E_i_inp, E_n_inp(1,:), E_f_inp(1,:), &
+    call compute_E_means_and_omegas_one(E_i_inp, E_i_inp, E_n_inp(1,:)+ E_n0, &
+         E_f_inp(1,:), &
          E_ni_mean, E_fi_mean, E_nf_mean, time_l, omega_in, omega_out)    
 
-    F_if_om_omp = 0.0_wp
+    !write(6,*) "omega_in", omega_in
+    !write(6,*) "omega_out", omega_out
+    
+    !F_if_om_omp = 0.0_wp
     
     do traj=1, npoints_x_mom_sampl
 
+      write(6,*) "traj ", traj, "out of ", npoints_x_mom_sampl
       ! compute mean energies on E_dyn_inp that will match with the other routines
        call verlet_trajectory_xva(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, X_r, &
            E_dyn2_inp * const % eV, delta_t, mu_SI, x_new, v_new, a_new )
@@ -390,44 +405,112 @@ contains
         end do
       end do
 
-      do f_e=1,nfinal
-        call spline_easy(X_r, E_f_inp(f_e,:), npoints_in, x_new, E_fc1(f_e,1,:), ntsteps)  
-      end do
-
-
-      !write(6,*) "Here..."
-      F_if_om_omp = 0.0_wp
-      do f_e=1,nfinal
-        do n_e=1,ninter
-
-          E_ni = E_n1(n_e,1)-E_i1(1) + (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
-
-          call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
-               D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
-
-          !write(6,*) "Here... 3"
-          F_if_om_omp(f_e,:,:,:,:) = F_if_om_omp(f_e,:,:,:,:) + F_tmp(:,:,:,:)  
-
-        end do
-      end do
+      !F_if_om_omp = 0.0_wp
       
-      ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
-      do m1=1,3
-        do m2=1,3
-          lambda_F(:, :, :) = lambda_F(:, :, :) +  real(conjg(F_if_om_omp(:,:,:,m1,m1)) * F_if_om_omp(:,:,:,m2,m2))
-          lambda_G(:, :, :) = lambda_G(:, :, :) +  real(conjg(F_if_om_omp(:,:,:,m1,m2)) * F_if_om_omp(:,:,:,m1,m2))
-          lambda_H(:, :, :) = lambda_H(:, :, :) +  real(conjg(F_if_om_omp(:,:,:,m1,m2)) * F_if_om_omp(:,:,:,m2,m1))
+      if (upper(p % KH_states_mode) .eq. "STATES") then
+
+        do f_e=1,nfinal
+          call spline_easy(X_r, E_f_inp(f_e,:), npoints_in, x_new, E_fc1(f_e,1,:), ntsteps)  
         end do
-      end do
+        
+        do f_e=1,nfinal
+
+          F_tmp =0.0_wp
+          
+          do n_e=1,ninter
+            
+            E_ni = E_n1(n_e,1)-E_i1(1) + (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
+            
+            call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                 D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp2) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            
+            !write(6,*) "Here... 3"
+            !F_if_om_omp(f_e,:,:,:,:) = F_if_om_omp(f_e,:,:,:,:) + F_tmp(:,:,:,:)  
+
+            ! internal sum only over intermediate states
+            F_tmp = F_tmp + F_tmp2
+
+          end do
+          
+            ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+            do m1=1,3
+              do m2=1,3
+                lambda_F(:, :) = lambda_F(:, :) +  real(conjg(F_tmp(:,:,m1,m1)) * F_tmp(:,:,m2,m2))
+                lambda_G(:, :) = lambda_G(:, :) +  real(conjg(F_tmp(:,:,m1,m2)) * F_tmp(:,:,m1,m2))
+                lambda_H(:, :) = lambda_H(:, :) +  real(conjg(F_tmp(:,:,m1,m2)) * F_tmp(:,:,m2,m1))
+              end do
+            end do
+
+        end do
+        
+      else if (upper(p % KH_states_mode) .eq. "ORBS") then
+
+        do f_e=1,nfinal
+          do n_e=1,ninter
+
+            fn_e = ninter * (f_e -1) + n_e  
+
+            write(6,*) "f_e, n_e ", f_e, n_e, " out of ", nfinal, ninter
+            
+            call spline_easy(X_r, E_f_inp(f_e,:) + E_fn_corr(n_e,:), npoints_in, x_new, E_fc1(f_e,n_e,:), ntsteps)  
+            
+            E_ni = E_n1(n_e,1)-E_i1(1) + (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
+            
+            call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                 D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            
+            !write(6,*) "Here... 3"
+            !F_if_om_omp(fn_e,:,:,:,:) = F_if_om_omp(fn_e,:,:,:,:) + F_tmp(:,:,:,:)  
+
+            ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+            do m1=1,3
+              do m2=1,3
+                lambda_F(:, :) = lambda_F(:, :) +  real(conjg(F_tmp(:,:,m1,m1)) * F_tmp(:,:,m2,m2))
+                lambda_G(:, :) = lambda_G(:, :) +  real(conjg(F_tmp(:,:,m1,m2)) * F_tmp(:,:,m1,m2))
+                lambda_H(:, :) = lambda_H(:, :) +  real(conjg(F_tmp(:,:,m1,m2)) * F_tmp(:,:,m2,m1))
+              end do
+            end do
+            
+          end do
+        end do
+        
+      end if
+      
+!      ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+!      do m1=1,3
+!        do m2=1,3
+!          lambda_F(:, :, :) = lambda_F(:, :, :) +  real(conjg(F_if_om_omp(:,:,:,m1,m1)) * F_if_om_omp(:,:,:,m2,m2))
+!          lambda_G(:, :, :) = lambda_G(:, :, :) +  real(conjg(F_if_om_omp(:,:,:,m1,m2)) * F_if_om_omp(:,:,:,m1,m2))
+!          lambda_H(:, :, :) = lambda_H(:, :, :) +  real(conjg(F_if_om_omp(:,:,:,m1,m2)) * F_if_om_omp(:,:,:,m2,m1))
+!        end do
+!      end do
+
       
     end do ! do traj=1, npoints_x_mom_sampl
 
+!      ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+!      do m1=1,3
+!        do m2=1,3
+!          lambda_F(:, :, :) = lambda_F(:, :, :) +  real(conjg(F_if_om_omp(:,:,:,m1,m1)) * F_if_om_omp(:,:,:,m2,m2))
+!          lambda_G(:, :, :) = lambda_G(:, :, :) +  real(conjg(F_if_om_omp(:,:,:,m1,m2)) * F_if_om_omp(:,:,:,m1,m2))
+!          lambda_H(:, :, :) = lambda_H(:, :, :) +  real(conjg(F_if_om_omp(:,:,:,m1,m2)) * F_if_om_omp(:,:,:,m2,m1))
+!        end do
+!      end do
+
+
+    
+!    ! averages according to J. Phys. B. 27, 4169 (1994) 
+!    ! lambda_lp: parallel linear, lambda_ln: perpendicular linear, lambda_cp: circularly polarized
+!    lambda_lp = sum(2.0_wp * lambda_F + 2.0_wp * lambda_G  + 2.0_wp * lambda_H, 1)
+!    lambda_ln = sum(-1.0_wp * lambda_F + 4.0_wp  * lambda_G -1.0_wp * lambda_H, 1)
+!    lambda_cp = sum(-2.0_wp * lambda_F + 3.0_wp * lambda_G + 3.0_wp * lambda_H, 1)
+
     ! averages according to J. Phys. B. 27, 4169 (1994) 
     ! lambda_lp: parallel linear, lambda_ln: perpendicular linear, lambda_cp: circularly polarized
-    lambda_lp = sum(2.0_wp * lambda_F + 2.0_wp * lambda_G  + 2.0_wp * lambda_H, 1)
-    lambda_ln = sum(-1.0_wp * lambda_F + 4.0_wp  * lambda_G -1.0_wp * lambda_H, 1)
-    lambda_cp = sum(-2.0_wp * lambda_F + 3.0_wp * lambda_G + 3.0_wp * lambda_H, 1)
-    
+    lambda_lp = 2.0_wp * lambda_F + 2.0_wp * lambda_G  + 2.0_wp * lambda_H
+    lambda_ln = -1.0_wp * lambda_F + 4.0_wp  * lambda_G -1.0_wp * lambda_H
+    lambda_cp = -2.0_wp * lambda_F + 3.0_wp * lambda_G + 3.0_wp * lambda_H
+
 
     write(6,*) "Entering convolute_incoming, broadening ",  upper(p % broadening_func_inc)
     
@@ -461,16 +544,17 @@ contains
     write(6,*) "Done"
 
     ! write spectra to individual files
-    do j=1, n_omega_in
+    do j=1, n_omega_in, p % kh_print_stride
       
       file="_sigma_"
       write(string,'(F6.2)') omega_in(j)   
+
       file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
       
       ifile = get_free_handle()
       open(ifile,file=file,status='unknown')
       
-      do i=1, n_omega_out
+      do i=1, n_omega_out, p % kh_print_stride
         
         write(ifile,'(4ES18.10)') omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
       end do
@@ -479,7 +563,7 @@ contains
       
    end do
 
-   if(.false.) then
+   if(.true.) then
    
     ! write spectra to file
    file="_sigma_all"
@@ -489,8 +573,8 @@ contains
    ifile = get_free_handle()
    open(ifile,file=file,status='unknown')
 
-   do j=1, n_omega_in
-     do i=1, n_omega_out
+   do j=1, n_omega_in, p % kh_print_stride
+     do i=1, n_omega_out, p % kh_print_stride
        write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
      end do
      write(ifile, *) 
@@ -507,8 +591,8 @@ contains
    ifile = get_free_handle()
    open(ifile,file=file,status='unknown')
 
-   do j=1, n_omega_in
-     do i=1, n_omega_out
+   do j=1, n_omega_in, p % kh_print_stride
+     do i=1, n_omega_out, p % kh_print_stride
        write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
      end do
      write(ifile, *) 
@@ -570,7 +654,7 @@ contains
    !write(6,*) "time", time
    !call compute_efactor_one(E_fc1(:)- E_n1(:), E_fi_mean, time, e_factor1(:), .true.)
 
-   write(6,*) "E_ni", E_ni
+!   write(6,*) "E_ni", E_ni
    
    call compute_efactor( E_n1(:), E_fc1(:), E_nf_mean, time, e_factor1(:), .true.)
    !call compute_efactor( E_n1(:), E_fc1(:), E_nf_mean, time, e_factor1(:), .false.)

@@ -1429,10 +1429,11 @@ contains
   
 
   subroutine compute_F_if_om_omp_one_f_separate_ingoing(F_if_t_omp, E_f1, E_f2, E_fi_mean, time, &
-       E_i1, E_i2, E_n1, E_n2,  gamma_inc, omega_out, E_nf_mean,F_if_om_omp)
+       E_i1, E_i2, E_n1, E_n2,  gamma_inc, omega_in, E_nf_mean, E_ni_mean, F_if_om_omp)
     use m_precision, only: wp
     use m_constants, only: const
     use m_fftw3, only: fft_c2c_1d_forward
+    use m_fftw3, only: fft_c2c_1d_backward
     use m_fftw3, only: reorder_sigma_fftw_z
     
     complex(wp), intent(in) ::  F_if_t_omp(:,:,:,:)
@@ -1445,16 +1446,17 @@ contains
     real(wp), intent(in):: E_n1(:)
     real(wp), intent(in):: E_n2(:)
     real(wp), intent(in):: gamma_inc
-    real(wp), intent(in):: omega_out(:)
+    real(wp), intent(in):: omega_in(:)
     real(wp), intent(in):: E_nf_mean
+    real(wp), intent(in):: E_ni_mean
     complex(wp), intent(out) ::  F_if_om_omp(:,:,:,:)
 
-    integer:: n_omega_in, n_omega_out, om_out, m1, m2
+    integer:: n_omega_in, om_in, m1, m2
     complex(wp), allocatable ::  e_factor1(:)
     real(wp):: mean
     
-    n_omega_in = size(F_if_t_omp,1)
-    n_omega_out = size(F_if_t_omp,2)
+    n_omega_in = size(F_if_t_omp,2)
+    !n_omega_out = size(F_if_t_omp,2)
     
     allocate(e_factor1(n_omega_in))
 
@@ -1464,20 +1466,21 @@ contains
     write(6,*) "mean", mean !* const % eV
 
     !call compute_efactor(E_f2(:) -E_n2(:)+mean, E_i1(:)-E_n1(:), E_fi_mean, time, e_factor1(:), .false.)
-    call compute_efactor(E_f2(:) -E_n2(:), E_i1(:)-E_n1(:), E_fi_mean, time, e_factor1(:), .false.)
+    !call compute_efactor(E_f1(:) -E_n1(:), E_i2(:)-E_n2(:), E_fi_mean, time, e_factor1(:), .false.)
+    call compute_efactor(E_f2(:), E_i1(:), E_fi_mean, time, e_factor1(:), .false.)
     !call compute_efactor(E_f2(:), E_i1(:), E_fi_mean, time, e_factor1(:), .false.)
     !call compute_efactor(E_f1(:), E_i2(:), E_fi_mean, time, e_factor1(:), .false.)
     !call compute_efactor(E_f1(:), E_i1(:), E_fi_mean, time, e_factor1(:), .true.)
       
-    do om_out= 1, n_omega_out
+    do om_in= 1, n_omega_in
       do m1 =1, 3
         do m2 =1, 3
           
-          call fft_c2c_1d_forward( e_factor1(:) * &
-               exp(dcmplx(0.0_wp,  (omega_out(om_out) - E_nf_mean)* const % eV * time(:) / const % hbar )) * &
-               F_if_t_omp(:,om_out, m1,m2), &
-               F_if_om_omp(:,om_out, m1,m2))
-          call reorder_sigma_fftw_z(F_if_om_omp(:, om_out, m1,m2))
+          call fft_c2c_1d_backward( e_factor1(:) * &
+               exp(dcmplx(0.0_wp,  (-omega_in(om_in) + E_ni_mean)* const % eV * time(:) / const % hbar )) * &
+               F_if_t_omp(:,om_in, m1,m2), &
+               F_if_om_omp(om_in,:, m2,m1)) ! just switch om_in and om_out and m1 and m2
+          call reorder_sigma_fftw_z(F_if_om_omp(om_in, :, m2,m1))
           
         end do
       end do
