@@ -6,9 +6,9 @@ use_dynamics_file    .true.
 pes_file_dyn         test_energy_tot.dat !test_energy_tot_exc.dat
 shift_PES            0
 pes_file_lp_corr     test_lp_lp_energy.dat
-npesfile_f           6
-pes_file_list_f      pes_file_list_f.txt
-dipole_file_list_f   dipole_file_list_f.txt
+npesfile_n           6
+pes_file_list_n      pes_file_list_n.txt
+dipole_file_list_n   dipole_file_list_n.txt
 outfile              scxas_pes
 
 !for vib solver 

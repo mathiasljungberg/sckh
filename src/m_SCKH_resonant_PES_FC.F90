@@ -155,7 +155,8 @@ contains
     real(wp), allocatable:: sigma_tmp(:,:)
     
     real(wp):: E_ni
-
+    real(wp):: E_i_min, E_i_av
+    
     !real(wp), allocatable::  F2_tensor(:,:,:,:,:,:)
 
 
@@ -259,7 +260,7 @@ contains
       call read_PES_file(p % pes_file_dyn2, p % npoints_in, p % npoints_in, X_r, E_dyn2_inp)
     else
       E_dyn_inp = E_i_inp
-      E_dyn2_inp = E_n_inp(1,:)
+      E_dyn2_inp = E_n_inp(1,:) + E_n0 ! add reference state to dynamics 
     end if
 
     ! read list of final state pes_files and dipole_files
@@ -315,8 +316,15 @@ contains
     E_dyn_inp = E_dyn_inp  / const % eV
     E_dyn2_inp = E_dyn2_inp  / const % eV
     E_f_inp = E_f_inp / const % eV
-    if(allocated( E_fn_corr))  E_fn_corr =  E_fn_corr / const % eV
+
+    ind = minloc(E_i_inp)
+    E_i_min = E_i_inp(ind(1))
+    E_i_av = sum(E_i_inp * c_i(:,1)**2) - E_i_min! ZPE
+
+    write(6,*) "Average potenital energy, from minimum", E_i_av
     
+    if(allocated( E_fn_corr))  E_fn_corr =  E_fn_corr / const % eV
+
     ifile = get_free_handle()
     open(ifile, file="inital_state_eigvec.txt", action='write')
     do i=1,npoints_in
@@ -393,18 +401,46 @@ contains
         call spline_easy(X_r, E_n_inp(n_e,:) + E_n0, npoints_in, x_new, E_n1(n_e,:), ntsteps)  
       end do
       
-      do n_e=1,ninter
-        do m=1,3
-          call spline_easy(X_r, D_ni_inp(n_e,:,m) , npoints_in, x_new, D_ni1(n_e,:,m) , ntsteps)  
-        end do
-      end do
-      
-      do f_e=1,nfinal
-        do m=1,3
-          call spline_easy(X_r, D_fn_inp(f_e,1,:,m) , npoints_in, x_new, D_fn1(f_e,1,:,m) , ntsteps)  
-        end do
-      end do
 
+      ! options for dipole moments in XAS
+      if (upper(p % dipole_mode) .eq. "DIPOLE") then
+        do n_e=1,ninter
+          do m=1,3
+            call spline_easy(X_r, D_ni_inp(n_e,:,m) , npoints_in, x_new, D_ni1(n_e,:,m) , ntsteps)  
+          end do
+        end do
+      else if(upper(p % dipole_mode) .eq. "FC") then
+        D_ni1 = 1.0_wp
+      else if(upper(p % dipole_mode) .eq. "DIPOLE_X0") then
+        do i=1, npoints_in !p % nstates
+          D_ni1(:,i,:) = D_ni_inp(:,ind(1),:) 
+        end do
+      else
+        write(6,*) "p % dipole_mode must be DIPOLE, FC or DIPOLE_X0"
+        stop
+      end if
+
+
+      ! options for dipole moments in XES
+      if (upper(p % dipole_mode) .eq. "DIPOLE") then        
+        do f_e=1,nfinal
+          do m=1,3
+            call spline_easy(X_r, D_fn_inp(f_e,1,:,m) , npoints_in, x_new, D_fn1(f_e,1,:,m) , ntsteps)  
+          end do
+        end do
+      else if(upper(p % dipole_mode) .eq. "FC") then
+        D_fn1 = 1.0_wp
+      else if(upper(p % dipole_mode) .eq. "DIPOLE_X0") then
+        do i=1, npoints_in !p % nstates
+          D_fn1(:,1,i,:) = D_fn_inp(:,1,ind(1),:) 
+        end do
+      else
+        write(6,*) "p % dipole_mode must be DIPOLE, FC or DIPOLE_X0"
+        stop
+      end if
+
+
+        
       !F_if_om_omp = 0.0_wp
       
       if (upper(p % KH_states_mode) .eq. "STATES") then
@@ -419,17 +455,25 @@ contains
           
           do n_e=1,ninter
             
-            E_ni = E_n1(n_e,1)-E_i1(1) + (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
+            !E_ni = E_n1(n_e,1)-E_i1(1) + (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
+
+            if(p % include_ZPE) then
+              E_ni = E_n1(n_e,1)- (E_i_min + E_i_av)
+            else
+              E_ni = E_n1(n_e,1)-E_i1(1) 
+              !E_ni = E_n1(n_e,1)-E_i1(1) + (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
+            end if
+            
             
             call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
                  D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp2) !F_if_om_omp(:,om_in,:,:,:), gamma)
             
             !write(6,*) "Here... 3"
             !F_if_om_omp(f_e,:,:,:,:) = F_if_om_omp(f_e,:,:,:,:) + F_tmp(:,:,:,:)  
-
+            
             ! internal sum only over intermediate states
             F_tmp = F_tmp + F_tmp2
-
+            
           end do
           
             ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
@@ -454,7 +498,11 @@ contains
             
             call spline_easy(X_r, E_f_inp(f_e,:) + E_fn_corr(n_e,:), npoints_in, x_new, E_fc1(f_e,n_e,:), ntsteps)  
             
-            E_ni = E_n1(n_e,1)-E_i1(1) + (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
+            if(p % include_ZPE) then
+              E_ni = E_n1(n_e,1)- (E_i_min + E_i_av)
+            else
+              E_ni = E_n1(n_e,1)-E_i1(1) !+ (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
+            end if
             
             call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
                  D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
@@ -601,6 +649,35 @@ contains
    
    close(ifile) 
 
+   ! write spectra summed over incoming frequencies
+   file="_nonres"
+   !write(string,'(F6.2)') omega_in(j)   
+   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+   
+   ifile = get_free_handle()
+   open(ifile,file=file,status='unknown')
+
+   do i=1, n_omega_out, p % kh_print_stride
+     write(ifile,'(5ES18.10)') omega_out(i), sum(lambda_lp(:,i)), sum(lambda_ln(:,i)), sum(lambda_cp(:,i))
+   end do
+   
+   close(ifile) 
+
+   ! write spectra summed over outgoing frequencies
+   file="_xas"
+   !write(string,'(F6.2)') omega_in(j)   
+   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+   
+   ifile = get_free_handle()
+   open(ifile,file=file,status='unknown')
+   
+   do i=1, n_omega_in, p % kh_print_stride
+     write(ifile,'(5ES18.10)') omega_in(i), sum(lambda_lp(i,:)), sum(lambda_ln(i,:)), sum(lambda_cp(i,:))
+   end do
+   
+   close(ifile) 
+
+   
  end if! if(.false.) then
    
     
@@ -617,6 +694,7 @@ contains
    use m_fftw3, only: reorder_sigma_fftw_z
    use m_SCKH_utils, only:compute_efactor_one
    use m_SCKH_utils, only:compute_efactor
+   use m_SCKH_utils, only: put_on_grid
    
    real(wp), intent(in):: E_ni
    real(wp), intent(in):: E_n1(:)
@@ -669,7 +747,7 @@ contains
    
    do om_in= 1, n_omega_in
      do m1 =1, 3
-       call fft_c2c_1d_backward( e_factor1(:) * exp(-gamma_F * const % eV * time(:) / const % hbar) *&
+       call fft_c2c_1d_backward( e_factor1(:) *& !* exp(-gamma_F * const % eV * time(:) / const % hbar) *&
             exp(dcmplx(0.0_wp,  (-omega_in(om_in) + E_ni )* const % eV * time(:) / const % hbar )) * &
             !( i_low_weight * exp(dcmplx(0.0_wp,  (-omega_in(om_in) + omega_in(i_low))* const % eV * time(:) / const % hbar ))  &
             !+ (1.0_wp -i_low_weight) * exp(dcmplx(0.0_wp,  (-omega_in(om_in) + omega_in(i_low+1))* const % eV *&
@@ -686,9 +764,9 @@ contains
          !F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) / dcmplx(omega_in(om_in) - E_ni, gamma)
 
          F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) * &
-              i_low_weight / dcmplx(omega_in(om_in) - omega_in(i_low), gamma_F)
+              i_low_weight / dcmplx(omega_in(om_in) - omega_in(i_low), gamma)
          F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) * &
-              (1.0_wp -i_low_weight) / dcmplx(omega_in(om_in) - omega_in(i_low+1), gamma_F) 
+              (1.0_wp -i_low_weight) / dcmplx(omega_in(om_in) - omega_in(i_low+1), gamma) 
        end do
        
      end do
@@ -697,40 +775,40 @@ contains
  end subroutine compute_F_FC_if_om_omp
 
 
- ! given a equally spaced range x, and a point x_in
- ! find i_low, the index of the point below x_in
- ! and i_low_weigth in that point, assuming "tents"
- ! the weight on i_low +1 is 1-i_low_weigth
- subroutine put_on_grid(x, x_in, i_low, i_low_weight )
-
-   use m_precision, only: wp
-
-   real(wp), intent(in):: x(:)
-   real(wp), intent(in):: x_in
-   integer, intent(out):: i_low
-   real(wp), intent(out):: i_low_weight
-
-   integer:: nx
-   real(wp):: dx
-   
-   nx = size(x)
-   dx = x(2)-x(1)
-
-   i_low = floor((x_in-x(1))/dx) +1
-      
-   if(i_low .lt. 1) then
-     i_low = 1
-     i_low_weight =1.0_wp
-   else if(i_low .gt. nx-1) then
-     i_low = nx-1
-     i_low_weight =0.0_wp
-   else
-     i_low_weight = -x_in/dx +(1 + x(i_low)/dx)
-   end if
-
-!   write(6,*) "x_in, i_low, i_low_weight, x(i_low)", x_in, i_low, i_low_weight, x(i_low)
-   
-   
- end subroutine put_on_grid
+! ! given a equally spaced range x, and a point x_in
+! ! find i_low, the index of the point below x_in
+! ! and i_low_weigth in that point, assuming "tents"
+! ! the weight on i_low +1 is 1-i_low_weigth
+! subroutine put_on_grid(x, x_in, i_low, i_low_weight )
+!
+!   use m_precision, only: wp
+!
+!   real(wp), intent(in):: x(:)
+!   real(wp), intent(in):: x_in
+!   integer, intent(out):: i_low
+!   real(wp), intent(out):: i_low_weight
+!
+!   integer:: nx
+!   real(wp):: dx
+!   
+!   nx = size(x)
+!   dx = x(2)-x(1)
+!
+!   i_low = floor((x_in-x(1))/dx) +1
+!      
+!   if(i_low .lt. 1) then
+!     i_low = 1
+!     i_low_weight =1.0_wp
+!   else if(i_low .gt. nx-1) then
+!     i_low = nx-1
+!     i_low_weight =0.0_wp
+!   else
+!     i_low_weight = -x_in/dx +(1 + x(i_low)/dx)
+!   end if
+!
+!!   write(6,*) "x_in, i_low, i_low_weight, x(i_low)", x_in, i_low, i_low_weight, x(i_low)
+!   
+!   
+! end subroutine put_on_grid
  
 end module m_SCKH_resonant_PES_FC

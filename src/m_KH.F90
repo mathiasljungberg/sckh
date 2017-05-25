@@ -16,6 +16,7 @@ contains
     use m_PES_io, only: read_file_list
     use m_sckh_params_t, only: sckh_params_t 
     use m_KH_utils, only: calculate_dipoles_KH_nonres
+    use m_KH_utils, only: calculate_dipoles_one
     use m_KH_utils, only: spectrum_XES
     use m_KH_utils, only: compute_XES_nonres
     use m_io, only: get_free_handle
@@ -37,6 +38,9 @@ contains
     integer:: ifile
     real(wp):: norm
 
+    integer:: ind(1)
+    real(wp), allocatable:: D_tmp(:,:,:)
+    
 
     !
     ! This progam calculates the KH emission spectrum using the eigenstate basis
@@ -74,6 +78,10 @@ contains
 
     ! read PES files
     call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_r, E_i)
+
+    ind = minloc(E_i)
+    write(6,*) "ind", ind
+    
     call read_PES_file(p % pes_file_n, p % npoints_in, p % nstates, X_r, E_n)
 
     ! read list of final state pes_files and dipole_files
@@ -123,8 +131,16 @@ contains
     !call solve_non_adiabatic(eig_f, c_f, eig_na, c_na)
 
     ! calculate transition dipoles
-    call calculate_dipoles_KH_nonres( c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
+    !call calculate_dipoles_KH_nonres( c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
 
+    allocate(D_tmp(p % nstates, 1,3))
+    call calculate_dipoles_one( c_i(:,1:1), c_n(:,:), dipole(:,1,:), D_tmp(:,:,:), "FC")
+    D_ni = D_tmp(:,1,:)
+    
+    do j=1,p % npesfile_f
+      call calculate_dipoles_one( c_n(:,:), c_f(j,:,:), dipole(j,:,:), D_fn(j,:,:,:), p % dipole_mode, ind(1))
+    end do
+    
     ! convert eigenvalues to eV units
     eig_i =eig_i / const % eV
     eig_n =eig_n / const % eV
@@ -491,6 +507,9 @@ contains
     real(wp), allocatable:: sigma_XAS_tensor(:,:,:)
     real(wp), allocatable:: sigma_XAS(:)
 
+    integer:: ind(1)
+    real(wp), allocatable:: D_tmp(:,:,:)
+    
     !
     ! This progam calculates the KH emission spectrum using the eigenstate basis
     !
@@ -553,6 +572,10 @@ contains
     ! iniital state
     call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_r, E_i, p % PES_units)
 
+    ind = minloc(E_i)
+
+    write(6,*) "ind", ind
+    
     ! intermediate state reference energy (lowest state) 
     if(p % use_n0_state) then 
       call read_PES_file(p % pes_file_n, p % npoints_in, p % nstates, X_r, E_n0, p % PES_units)
@@ -650,7 +673,15 @@ contains
       write(6,*) "Intermediate state fundamental", j, (eig_n(j,2) -eig_n(j,1))*const % cm
     end do
 
-    call calculate_dipoles_KH_res_ni(c_i, c_n, dipole_n, D_ni, "DIPOLE") 
+    !call calculate_dipoles_KH_res_ni(c_i, c_n, dipole_n, D_ni, p % dipole_mode, ind(1))
+    !call calculate_dipoles_KH_res_ni(c_i, c_n, dipole_n, D_ni, "FC", ind(1)) 
+
+    allocate(D_tmp(p % nstates, 1,3))
+    do n_e =1, p % npesfile_n
+      call calculate_dipoles_one( c_i(:,1:1), c_n(n_e,:,:), dipole_n(n_e,:,:), D_tmp(:,:,:), &
+           p  % dipole_mode, ind(1))
+      D_ni(n_e,:,:) =  D_tmp(:,1,:)
+    end do
     
     ! convert eigenvalues to eV units
     eig_i =eig_i / const % eV
@@ -716,7 +747,8 @@ contains
           call solve_vib_problem(dx, E_f(f_e,:) + E_fn_corr(n_e,:), eig_fc(f_e,n_e,:), c_fc(f_e, n_e,:,:), mu_SI, p % vib_solver)
           write(6,*) "Final state fundamental",f_e,n_e, (eig_fc(f_e,n_e,2) -eig_fc(f_e,n_e,1))*const % cm
           
-          call calculate_dipoles_one(c_n(n_e,:,:), c_fc(f_e,n_e,:,:), dipole_f(f_e,:,:), D_fn(f_e,:,n_e,:,:), "DIPOLE")
+          call calculate_dipoles_one(c_n(n_e,:,:), c_fc(f_e,n_e,:,:), dipole_f(f_e,:,:), &
+               D_fn(f_e,:,n_e,:,:), p % dipole_mode, ind(1))
           
         end do
       end do
@@ -734,7 +766,7 @@ contains
         write(6,*) "Final state fundamental",f_e, (eig_fc(f_e,1,2) -eig_fc(f_e,1,1))*const % cm
         
         do n_e = 1,p % npesfile_n
-          call calculate_dipoles_one(c_n(n_e,:,:), c_fc(f_e,1,:,:), dipole_f(f_e,:,:), D_fn(f_e,:,n_e,:,:), "DIPOLE")
+          call calculate_dipoles_one(c_n(n_e,:,:), c_fc(f_e,1,:,:), dipole_f(f_e,:,:), D_fn(f_e,:,n_e,:,:), p % dipole_mode)
         end do
         
       end do
@@ -849,8 +881,34 @@ contains
    
    close(ifile) 
 
+   ! write spectra summed over incoming frequencies
+   file="_nonres"
+   !write(string,'(F6.2)') omega_in(j)   
+   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+   
+   ifile = get_free_handle()
+   open(ifile,file=file,status='unknown')
+   
+   do i=1, p % n_omega_out !, p % kh_print_stride
+     write(ifile,'(5ES18.10)') omega_out(i), sum(lambda_lp(:,i)), sum(lambda_ln(:,i)), sum(lambda_cp(:,i))
+   end do
+   
+   close(ifile)
 
-
+   ! write spectra summed over outgoing frequencies
+   file="_xas"
+   !write(string,'(F6.2)') omega_in(j)   
+   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+   
+   ifile = get_free_handle()
+   open(ifile,file=file,status='unknown')
+   
+   do i=1, p % n_omega_in !, p % kh_print_stride
+     write(ifile,'(5ES18.10)') omega_in(i), sum(lambda_lp(i,:)), sum(lambda_ln(i,:)), sum(lambda_cp(i,:))
+   end do
+   
+   close(ifile) 
+   
     
   end subroutine calculate_KH_res
 

@@ -1833,7 +1833,97 @@ contains
     
   end subroutine compute_SCXAS_sigma_f_om_mm
 
+  ! XAS with FC, only vertical transition
 
+  subroutine compute_SCXAS_sigma_FC_f_om_mm(E_i, E_f, D_fi, omega_in, sigma_f_om_mm, gamma)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_fftw3, only: fft_c2c_1d_backward
+    use m_fftw3, only: reorder_sigma_fftw_z
+    
+    real(wp), intent(in):: E_i
+    real(wp), intent(in):: E_f(:)
+    real(wp), intent(in):: D_fi(:,:) 
+    real(wp), intent(in):: omega_in(:)
+    real(wp), intent(out) ::  sigma_f_om_mm(:,:,:,:)
+    real(wp), intent(in):: gamma
+    
+    integer:: nfinal, n_omega_in, f_e, om_in
+    complex(wp), allocatable:: F_m(:,:)
+    integer:: m1, m2 
+    integer:: i_low
+    real(wp):: i_low_weight
+    
+    nfinal = size(E_f,1) 
+    n_omega_in = size(omega_in)
+    
+    allocate( F_m(n_omega_in,3))
+    
+    do f_e =1,nfinal! final state 
+
+      call put_on_grid(omega_in, E_f(f_e)-E_i, i_low, i_low_weight )
+
+      F_m = 0.0_wp
+      do om_in= 1, n_omega_in
+        do m1=1,3 ! polarization
+          
+          F_m(om_in, m1) = F_m(om_in, m1) + D_fi(f_e,m1) * i_low_weight / dcmplx(omega_in(om_in) &
+               - omega_in(i_low), gamma)
+          F_m(om_in, m1) = F_m(om_in, m1) + D_fi(f_e,m1) * (1.0_wp -i_low_weight) / &
+               dcmplx(omega_in(om_in) - omega_in(i_low+1), gamma)
+          
+        end do ! m1
+      end do ! om_in
+      
+      ! compute full sigma tensor
+      do m1=1,3
+        do m2=1,3
+          sigma_f_om_mm(f_e,:,m1,m2) = real(conjg(F_m(:,m1))* F_m(:,m2))
+        end do
+      end do
+      
+    end do ! f_e
+    
+  end subroutine compute_SCXAS_sigma_FC_f_om_mm
+
+
+  ! given a equally spaced range x, and a point x_in
+  ! find i_low, the index of the point below x_in
+  ! and i_low_weigth in that point, assuming "tents"
+  ! the weight on i_low +1 is 1-i_low_weigth
+  subroutine put_on_grid(x, x_in, i_low, i_low_weight )
+    
+    use m_precision, only: wp
+    
+    real(wp), intent(in):: x(:)
+    real(wp), intent(in):: x_in
+    integer, intent(out):: i_low
+    real(wp), intent(out):: i_low_weight
+    
+    integer:: nx
+    real(wp):: dx
+    
+    nx = size(x)
+    dx = x(2)-x(1)
+    
+    i_low = floor((x_in-x(1))/dx) +1
+    
+    if(i_low .lt. 1) then
+      i_low = 1
+      i_low_weight =1.0_wp
+    else if(i_low .gt. nx-1) then
+      i_low = nx-1
+      i_low_weight =0.0_wp
+    else
+      i_low_weight = -x_in/dx +(1 + x(i_low)/dx)
+    end if
+    
+    !   write(6,*) "x_in, i_low, i_low_weight, x(i_low)", x_in, i_low, i_low_weight, x(i_low)
+   
+   
+  end subroutine put_on_grid
+
+  
   
 
   !

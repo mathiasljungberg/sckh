@@ -32,6 +32,7 @@ contains
     real(wp), dimension(:),allocatable::  sigma, omega_in
     real(wp), dimension(:,:),allocatable::  c_i, &
          eig_n, E_n, sigma_states
+    real(wp), allocatable:: E_n0(:)
     real(wp), dimension(:,:,:),allocatable:: c_n, dipole_n, D_ni, c_na
     real(wp), dimension(:,:,:,:),allocatable::  nac
     real(wp), dimension(:,:),allocatable::  M_dsinc
@@ -40,6 +41,7 @@ contains
     real(wp):: gamma_instr, gamma_inc 
     integer::i,j,ii,jj,k,l,m, ifile
     real(wp):: norm
+    integer:: ind(1)
     
     !
     ! This progam calculates the XAS cross section including vibrational effects
@@ -60,7 +62,8 @@ contains
     allocate(D_ni(p % npesfile_n,p % nstates,3) )
     allocate(sigma_final(p % npesfile_n, p % n_omega_in, 3, 3))
     allocate(sigma_tensor(p % n_omega_in, 3, 3))
-
+    allocate(E_n0(p % nstates))
+    
     npoints = (p % nstates-1)/2
     mu_SI = p % mu * const % u
     dvr_start = p % dvr_start_in * 1.0d-10
@@ -74,6 +77,15 @@ contains
     
     ! read PES files
     call read_PES_file(p % pes_file_i, p % npoints_in, p % nstates, X_r, E_i)
+
+    ind = minloc(E_i)
+
+    ! intermediate state reference energy (lowest state) 
+    if(p % use_n0_state) then 
+      call read_PES_file(p % pes_file_n, p % npoints_in, p % nstates, X_r, E_n0)
+    else
+      E_n0 =0.0d0
+    end if
 
     ! read list of final state pes_files and dipole_files
     call read_file_list(p % pes_file_list_n, p % npesfile_n, p % pes_files_n)
@@ -97,12 +109,12 @@ contains
     
     ! final states
     do j=1,p % npesfile_n
-      call solve_vib_problem(dx, E_n(j,:), eig_n(j,:), c_n(j,:,:), mu_SI, p % vib_solver)
+      call solve_vib_problem(dx, E_n0 + E_n(j,:), eig_n(j,:), c_n(j,:,:), mu_SI, p % vib_solver)
       write(6,*) "Final state fundamental",j, (eig_n(j,2) -eig_n(j,1)) * const % cm
     end do
     
     ! calculate transition dipoles
-    call calculate_dipoles_XAS( c_i, c_n, dipole_n, D_ni)
+    call calculate_dipoles_XAS( c_i, c_n, dipole_n, D_ni, p % dipole_mode, ind(1))
     
     ! convert eigenvalues to eV units
     eig_i =eig_i / const % eV
@@ -158,7 +170,7 @@ contains
       open(ifile,file=file,status='unknown')
       
       do i=1,p % nstates
-        write(ifile,*) eig_n(j,i)
+        write(ifile,*) eig_n(j,i), D_ni(j,i,1), D_ni(j,i,2), D_ni(j,i,3)
       end do
       
       write(ifile,*) 

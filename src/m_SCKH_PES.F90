@@ -22,7 +22,8 @@ contains
     use m_PES_io, only: read_file_list
     use m_KH_functions, only: solve_vib_problem
     use m_fftw3, only: get_omega_reordered_fftw
-
+    use m_upper, only : upper
+    
     type(sckh_params_t), intent(inout):: p 
 
     integer:: nfinal, ntsteps  
@@ -201,13 +202,7 @@ contains
       do i=1,nfinal
         call spline_easy(X_r, E_f_inp(i,:), npoints_in, x_new, E_f(i,:), ntsteps)  
       end do
-
-      do i=1,nfinal
-        do m=1,3
-          call spline_easy(X_r, D_fn_inp(i,:,m) , npoints_in, x_new, D_fn(i,:,m) , ntsteps)  
-        end do
-      end do
-
+      
       ! first time, compute the mean transition energy, and frequency
       if (traj .eq. 1) then
         ind = minloc(E_i_inp)
@@ -216,6 +211,30 @@ contains
 
         call get_omega_reordered_fftw(time_l * const % eV /  const % hbar, omega)
         omega = omega + E_nf_mean
+      end if
+
+      !do i=1,nfinal
+      !  do m=1,3
+      !    call spline_easy(X_r, D_fn_inp(i,:,m) , npoints_in, x_new, D_fn(i,:,m) , ntsteps)  
+      !  end do
+      !end do
+
+      ! options for dipole moments in XES
+      if (upper(p % dipole_mode) .eq. "DIPOLE") then        
+        do i=1,nfinal
+          do m=1,3
+            call spline_easy(X_r, D_fn_inp(i,:,m) , npoints_in, x_new, D_fn(i,:,m) , ntsteps)  
+          end do
+        end do
+      else if(upper(p % dipole_mode) .eq. "FC") then
+        D_fn = 1.0_wp
+      else if(upper(p % dipole_mode) .eq. "DIPOLE_X0") then
+        do i=1, npoints_in !p % nstates
+          D_fn(:,i,:) = D_fn_inp(:,ind(1),:) 
+        end do
+      else
+        write(6,*) "p % dipole_mode must be DIPOLE, FC or DIPOLE_X0"
+        stop
       end if
       
       call compute_F_if_omp(E_n, E_f, E_nf_mean, D_fn, D_ni, time,  F_if_omp, gamma)

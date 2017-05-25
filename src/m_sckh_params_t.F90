@@ -78,6 +78,11 @@ module m_sckh_params_t
      logical:: use_n0_state
      
      ! sckh parameters
+     ! for SCXAS
+     character(80):: runmode_scxas
+     logical:: include_ZPE
+     character(80):: dipole_mode
+     
      ! for SCKH_PES
      integer:: samplemode
      integer:: npoints_x_sampl 
@@ -227,6 +232,12 @@ contains
     call init_parameter('use_n0_state',inp, .false.,p % use_n0_state,iv)
     
     ! sckh parameters
+    call init_parameter('runmode_scxas',inp, "full", p % runmode_scxas,iv)
+
+    call init_parameter('include_ZPE',inp, .false., p % include_ZPE,iv)
+    
+    call init_parameter('dipole_mode',inp, "DIPOLE", p % dipole_mode,iv)
+    
     call init_parameter('samplemode',inp, 1, p % samplemode,iv)
 
     call init_parameter('npoints_x_sampl',inp, 1, p % npoints_x_sampl,iv)

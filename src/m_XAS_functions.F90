@@ -93,30 +93,66 @@ subroutine solve_non_adiabatic(eig_f, c_f, nac, eig_na, c_na, M_dsinc )
 end subroutine solve_non_adiabatic
 
 
-subroutine calculate_dipoles_XAS(c_i, c_f, dipole, D_fi)
+subroutine calculate_dipoles_XAS(c_i, c_f, dipole, D_fi, mode, ind_in)
   use m_precision, only: wp
 
   real(kind=wp), intent(in):: c_i(:,:), c_f(:,:,:), dipole(:,:,:)
   real(kind=wp), intent(out)::  D_fi(:,:,:)
+  character(*), intent(in):: mode
+  integer, intent(in), optional :: ind_in
 
+  real(wp), allocatable:: factor(:,:,:)
   integer:: nstates, npesfile_f,i,j,l
+  integer:: ind
 
+  write(6,*) "calculate_dipoles_XAS: mode ", mode
+  
+  if (present(ind_in)) then
+    ind = ind_in
+    write(6,*) "ind", ind
+  else
+    ind  = 1
+  end if
+  
   nstates = size(c_i,2)
   npesfile_f = size(c_f,1)
+
+  allocate(factor(npesfile_f, nstates, 3))
 
   !
   ! calculate dipole matrix elements between states 
   !
 
+  if (mode .eq. "DIPOLE") then
+    factor = dipole
+  else if(mode .eq. "FC") then
+    factor = 1.0_wp
+  else if(mode .eq. "DIPOLE_X0") then
+    
+    write(6,*) "calculate_dipoles_XAS: DIPOLE_X0"
+
+    do i=1, nstates
+      factor(:,i,:) = dipole(:, ind, :)
+    end do
+    
+  else
+    
+    write(6,*) "calculate_dipoles_XAS: mode must be either DIPOLE, FC, DIPOLE_X0"
+    
+  end if
+    
   ! transitions from ground state to final states
   do i=1,npesfile_f
-     do j=1,nstates ! final
-        do l=1,3
-           D_fi(i,j,l) = sum(dipole(i,:,l) * c_f(i,:,j) * c_i(:,1))   ! true dipole moment
-        end do
-     end do
+    do j=1,nstates ! final
+      do l=1,3
+        D_fi(i,j,l) = sum(factor(i,:,l) * c_f(i,:,j) * c_i(:,1))   ! true dipole moment
+        !D_fi(i,j,l) = sum(abs(dipole(i,:,l)) * c_f(i,:,j) * c_i(:,1))   ! true dipole moment
+        !D_fi(i,j,l) = sum(c_f(i,:,j) * c_i(:,1))   ! FC profile 
+      end do
+    end do
   end do
   
+    
   write(6,*) "Calculated dipole matrix elements"
 
 end subroutine calculate_dipoles_XAS
