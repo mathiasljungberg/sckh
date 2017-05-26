@@ -94,6 +94,11 @@ module m_sckh_params_t
      logical:: use_dynamics_file
      character(80):: runmode_sckh_res
      logical:: sckh_dyn_separate
+     character(80):: sckh_pes_dyn_mode
+
+     logical:: use_E_mean
+     real(wp):: E_nf_mean
+     real(wp):: E_ni_mean
      
      ! for SCKH
      integer:: ntraj
@@ -268,6 +273,17 @@ contains
     ! if .false, run t on E_dyn and t' on E_dyn2
     call init_parameter('sckh_dyn_separate',inp,.false.,p%sckh_dyn_separate,iv)
 
+    ! option in SCKH_resonant_PES_FC 
+    ! if "SINGLE", run dynamics on E_dyn2_inp
+    ! if "SEPARATE", run dynamics on each intermediate state
+    call init_parameter('sckh_pes_dyn_mode',inp, "SINGLE" ,p % sckh_pes_dyn_mode,iv)
+    
+    ! if use_E_mean= .true. then we use the input values, instead of computing them on the fly.
+    ! E_nf_mean and E_ni_mean in eV
+    call init_parameter('use_E_mean',inp, .false. ,p % use_E_mean,iv)
+    call init_parameter('E_nf_mean',inp, 0.0_wp ,p % E_nf_mean,iv)
+    call init_parameter('E_ni_mean',inp, 0.0_wp ,p % E_ni_mean,iv)
+        
     ! stride in frequencies when printing KH cross sections
     call init_parameter('kh_print_stride',inp,1,p % kh_print_stride,iv)
 
