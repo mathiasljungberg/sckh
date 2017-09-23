@@ -21,8 +21,7 @@ else:
            'KH_resonant_el',
            'XAS',
            'SCXAS_PES',
-           'KH_resonant_orb',
-           'KH_resonant_bin']
+           'KH_resonant_orb']
 
 print(dirs)
     

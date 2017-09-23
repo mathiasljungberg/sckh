@@ -520,8 +520,10 @@ contains
             
             E_nf = E_n1(n_e,1)- E_fc1(f_e,1,1)
             
+
+            ! change the sckh_alt_mode NORMAL to what before was ALT4, the old normal will be ALT5 
             if(upper(p % sckh_alt_mode) .eq. "NORMAL") then
-              call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+              call compute_F_FC_if_om_omp_alt4(E_ni, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
                    D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
             else if (upper(p % sckh_alt_mode) .eq. "ALT") then
               call compute_F_FC_if_om_omp_alt(E_ni, E_nf, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
@@ -534,6 +536,9 @@ contains
                    D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
             else if (upper(p % sckh_alt_mode) .eq. "ALT4") then
               call compute_F_FC_if_om_omp_alt4(E_ni, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            else if (upper(p % sckh_alt_mode) .eq. "ALT5") then
+              call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
                    D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
             end if
               
@@ -575,8 +580,9 @@ contains
 
             E_nf = E_n1(n_e,1)- E_fc1(f_e,n_e,1)
             
+            ! change the sckh_alt_mode NORMAL to what before was ALT4, the old normal will be ALT5 
             if(upper(p % sckh_alt_mode) .eq. "NORMAL") then
-              call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+              call compute_F_FC_if_om_omp_alt4(E_ni, E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
                    D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
             else if (upper(p % sckh_alt_mode) .eq. "ALT") then
               call compute_F_FC_if_om_omp_alt(E_ni, E_nf,E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
@@ -589,6 +595,9 @@ contains
                    D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
             else if (upper(p % sckh_alt_mode) .eq. "ALT4") then
               call compute_F_FC_if_om_omp_alt4(E_ni, E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            else if (upper(p % sckh_alt_mode) .eq. "ALT5") then
+              call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
                    D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
             end if
               
