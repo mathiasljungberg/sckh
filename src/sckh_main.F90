@@ -17,6 +17,8 @@ program sckh_main
   use m_SCKH_resonant_PES, only: calculate_SCKH_res_PES_factor
   use m_SCKH_resonant_PES, only: calculate_SCKH_res_PES_factor_each_traj
   use m_SCKH_resonant_PES_FC, only: calculate_SCKH_res_PES_FC
+  use m_SCKH_resonant, only: calculate_SCKH_res_FC
+  use m_broaden_rixs, only: read_broaden_write_rixs
   
   implicit none
 
@@ -73,9 +75,15 @@ program sckh_main
       call compute_sckh_diagonal_nonresonant(p)
     case("NONRESONANT_OFFDIAGONAL")
       call compute_sckh_offdiagonal(p)
-      
+    case("RESONANT")
+      call calculate_SCKH_res_FC(p)
+
     end select
-    
+
+    ! utility to broaden spectra afterwards
+    case("BROADEN_RIXS")
+      call read_broaden_write_rixs(p)
+      
   case default
     write(6,*) "runmode must be one of 'XAS', 'KH', 'KH_RESONANT', 'KH_RESONANT_EL',&
          'SCKH_PES', 'SCKH' ", upper(p % runmode)

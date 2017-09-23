@@ -470,7 +470,8 @@ contains
   end subroutine verlet_trajectory
 
   
-  subroutine verlet_trajectory_xva(x_in, v_in, V_x, V_y, dt, my_SI, x_out, v_out, a_out)
+  subroutine verlet_trajectory_xva(x_in, v_in, V_x, V_y, dt, my_SI, x_out, v_out, a_out, &
+       use_abs_bc_in, abs_bc_max_x_in)
     use m_precision, only: wp
     !use m_constants, only: const
 
@@ -481,11 +482,28 @@ contains
     real(wp), intent(out):: x_out(:)
     real(wp), intent(out):: v_out(:)
     real(wp), intent(out):: a_out(:)
-        
+    logical, intent(in), optional::  use_abs_bc_in
+    real(wp), intent(in), optional::  abs_bc_max_x_in 
+    
     ! local variables
     integer:: ntsteps, V_len
     integer:: i
     real(wp):: a, x, v, x_new, v_new, a_new,t
+
+    logical::  use_abs_bc
+    real(wp)::  abs_bc_max_x
+
+    if(present(use_abs_bc_in)) then
+      use_abs_bc =use_abs_bc_in
+    else
+      use_abs_bc = .false.
+    end if
+
+    if(present(abs_bc_max_x_in)) then
+      abs_bc_max_x = abs_bc_max_x_in
+    else
+      abs_bc_max_x = 1.0d100
+    end if
     
     V_len =size(V_x)     
     ntsteps = size(x_out)
@@ -502,7 +520,19 @@ contains
     a_out(1) = a 
     
     do i =2,ntsteps
-       call verlet_step(x,v,a, V_x, V_y, V_len, x_new, v_new, a_new, dt, my_SI)
+
+      ! absorbing boundary conditions
+      if(use_abs_bc) then
+        if(x .gt. abs_bc_max_x) then
+          write(6,*) "absorbing boundary at x", abs_bc_max_x, "reached, exit loop"
+          x_out(i:ntsteps) = x
+          v_out(i:ntsteps) = 0.0_wp
+          a_out(i:ntsteps) = 0.0_wp
+          exit
+        end if
+      end if
+      
+      call verlet_step(x,v,a, V_x, V_y, V_len, x_new, v_new, a_new, dt, my_SI)
        
        t=t+dt
        x = x_new
@@ -2371,7 +2401,59 @@ contains
     
   end subroutine compute_efactor
 
+  ! computes the integral from t to inf, complex version
+  subroutine compute_int_t_inf_z(integrand, time, integral)
+    use m_precision,only:wp
+    use m_constants, only: const
+    
+    complex(wp), intent(in):: integrand(:)
+    real(wp), intent(in):: time(:)
+    complex(wp), intent(out):: integral(:)
+    
+    real(wp):: delta_t
+    integer:: i, ntsteps
+    
+    ntsteps = size(time,1)
+    
+    delta_t = time(2)-time(1)
 
+    integral(ntsteps) = integrand(ntsteps)
+    do i = ntsteps-1, 1, -1
+      integral(i) = integral(i+1) + integrand(i)
+    end do
+
+    integral = integral * delta_t
+    
+  end subroutine compute_int_t_inf_z
+
+!  ! computes the integral from 0 to t
+!  subroutine compute_int_0_t(integrand, time, integral)
+!    use m_precision,only:wp
+!    use m_constants, only: const
+!    
+!    real(wp), intent(in):: E_f(:), E_n(:), time(:), E_nf_mean
+!    complex(wp), intent(out):: efactor(:)
+!    logical:: negative
+!    
+!    real(wp):: delta_t, factor
+!    real(wp), allocatable:: int_W_I(:)
+!    integer:: i, ntsteps
+!    
+!    ntsteps = size(time,1)
+!    
+!    delta_t = time(2)-time(1)
+!
+!    integral(nsteps) = integrand(nsteps)
+!    do i = nsteps-1, 1, -1
+!      integral(i) = int_W_I(i+1) + integrand(i)
+!    end do
+!
+!    integral = integral * delta_t
+!    
+!  end subroutine compute_int_t_inf
+
+
+  
   
   subroutine read_projections(p)
     use m_precision, only: wp
@@ -2479,5 +2561,126 @@ contains
     
   end subroutine read_one_sckh_traj
 
+
+  subroutine read_one_sckh_res_traj(ntsteps_inp, nfinal, ninter, traj_file, time_inp, &
+       time_inp2, E_gs_inp, E_n_inp, &
+       !E_IP1s, E_trans,&
+       E_f_inp, D_fn_inp, &
+       D_in_inp,&
+       E_n0, &
+       E_fn_corr, &
+       check_times_in)
+    use m_precision, only: wp
+    use m_constants, only: const
+    use m_io, only: get_free_handle
+
+    integer, intent(in):: ntsteps_inp, nfinal, ninter
+    character(*), intent(in):: traj_file
+    real(kind=wp), intent(in):: time_inp(:)
+    real(kind=wp), intent(out)::  time_inp2(:), E_gs_inp(:),  E_n_inp(:,:)
+    real(kind=wp), intent(out):: E_f_inp(:,:), D_fn_inp(:,:,:)
+    real(kind=wp), intent(out)::  D_in_inp(:,:)
+    real(kind=wp), intent(out)::  E_n0(:)
+    real(wp), intent(out):: E_fn_corr(:,:)
+    logical, intent(in), optional:: check_times_in
+
+    real(kind=wp)::  E_XAS_inp, E_IP1s_XAS
+    real(kind=wp), allocatable:: E_IP1s(:), E_trans(:,:)
+    real(wp), allocatable:: E_trans_XAS(:)
+    integer:: norbs_gs, nocc_gs, norbs_exc, nocc_exc
+    real(kind=wp), allocatable::  eps_gs(:,:), eps_exc(:,:)
+    integer:: ifile, i, j, ntrans, jj
+    character(80):: dummy
+    logical:: check_times
+
+    if(present(check_times_in)) then
+      check_times =check_times_in
+    else
+      check_times =.true.
+    end if
+    
+    ifile = get_free_handle()
+    open(ifile,file=traj_file,status='old')  
+
+    ! XAS for first time step
+    read(ifile,*) E_XAS_inp  ! total energy
+    read(ifile,*) E_IP1s_XAS   ! 1s orbital energy
+    read(ifile,*) dummy, ntrans ! number of x-ray transitions, should be the same number as the number of unocc states used
+
+    allocate(E_trans_XAS(ninter))
+
+    !! check 
+    !if ( ntrans .ne. ninter ) then
+    !  write(6,*) "Error, ntrans != nfinal", ntrans, ninter
+    !end if
+    
+    do j =1,ninter
+      read(ifile,*) E_trans_XAS(j), D_in_inp(j,1), D_in_inp(j,2), D_in_inp(j,3)
+    end do
+
+    ! now read trajectory with XES and more stuff
+    do i=1,ntsteps_inp
+
+      read(ifile,*) time_inp2(i)
+      read(ifile,*) E_gs_inp(i)
+      read(ifile,*) E_n0(i)
+      read(ifile,*) E_IP1s(i)  
+
+      ! XES
+
+      read(ifile,*) dummy, ntrans
+
+      !! check that
+      !if ( ntrans .ne. nfinal ) then
+      !  write(6,*) "Error, ntrans != nfinal", ntrans, nfinal
+      !end if
+
+      do j =1,nfinal
+        jj = j + ntrans-nfinal 
+        read(ifile,*) E_trans(jj,i), D_fn_inp(jj,i,1), D_fn_inp(jj,i,2), D_fn_inp(jj,i,3)
+      end do
+
+      ! all orbital energies for the ground state
+      read(ifile,*) norbs_gs, nocc_gs
+      do j =1, norbs_gs
+        read(ifile,*) eps_gs(j,i)
+      end do
+
+      ! all orbital energies for the excited state
+      read(ifile,*) norbs_exc, nocc_exc
+      do j =1, norbs_exc
+        read(ifile,*) eps_exc(j,i)
+      end do
+      
+      ! compute E_f_inp (will later be corrected through orbital energies)
+      E_f_inp(:,i) = E_gs_inp(i) - E_trans(:,i) + E_IP1s(i) * (const % eV / const % Hartree)
+
+      ! corrections to the intermediate state E_n0 (note that we start at HOMO!)
+      E_n_inp(:,i) = eps_exc(nocc_exc:nocc_exc+ninter-1 ,i) -eps_exc(nocc_exc,i)
+      
+      ! corrections to final state depending on the interemediate state
+      E_fn_corr(:,i) = eps_gs(nocc_gs+1:nocc_gs+ninter,i)
+      
+      !check that time_inp(i) = time_inp2(i) 
+      if(check_times) then
+        if ( abs(time_inp(i) - time_inp2(i)*1.d-15 ) .gt. 1.d-30) then
+          !write(6,*) "Error in time too big", i, abs(time_inp(i) - time_inp2(i)*1.d-15 )
+        end if
+      end if
+      
+    end do !i
+
+    ! convert to eV units
+    E_n_inp = E_n_inp * const % hartree / const % eV
+    do j=1,nfinal 
+      E_f_inp(j,:) = E_f_inp(j,:) * const % hartree / const % eV 
+    end do
+
+    close(ifile)
+    
+  end subroutine read_one_sckh_res_traj
+
+
+  
 end module m_SCKH_utils
 

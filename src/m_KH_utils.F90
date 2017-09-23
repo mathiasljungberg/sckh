@@ -694,6 +694,79 @@ subroutine compute_XES_res(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
     
   end subroutine compute_XES_res
 
+  ! this routine does not include a broadeing but just put the results on the grid 
+  ! preserving the norm
+subroutine compute_XES_res_bin(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
+     gamma, &
+     flag_res, flag_nonres,&
+     sigma_final, lambda_F, lambda_G, lambda_H) 
+  use m_precision, only: wp
+  use m_SCKH_utils, only: put_on_grid
+  
+  real(kind=wp), intent(in):: E_i, E_n(:), E_f(:)
+  real(kind=wp), intent(in):: D_ni(:,:), D_fn(:,:,:)
+  real(kind=wp), intent(in):: omega_in(:)
+  real(kind=wp), intent(in):: omega_out(:)
+  real(kind=wp), intent(in):: gamma
+  logical,intent(in):: flag_res, flag_nonres
+  real(kind=wp), intent(out):: sigma_final(:,:,:,:)
+  real(kind=wp), intent(out):: lambda_F(:,:)
+  real(kind=wp), intent(out):: lambda_G(:,:)
+  real(kind=wp), intent(out):: lambda_H(:,:)
+  
+  integer:: om_in, om_out, i_f, i_n, m1, m2,i 
+  complex(wp):: F(3,3), F_tmp(3,3)
+  real(wp):: prefac 
+  integer:: i_low
+  real(wp):: i_low_weight, weight
+  real(wp), allocatable:: E_tmp_low(:)
+
+  allocate(E_tmp_low(size(E_n)))
+
+  sigma_final = 0.0_wp
+  lambda_F =0 
+  lambda_G =0
+  lambda_H =0
+
+  do i_f = 1, size(E_f)
+
+    ! bin the energy differences (now on lower grid point)
+    do i_n = 1, size(E_n)
+      call put_on_grid(omega_out, E_n(i_n) -E_f(i_f), i_low, i_low_weight )
+      E_tmp_low(i_n) = omega_out(i_low)
+    end do
+  
+    do om_out = 1, size(omega_out)
+    
+      call compute_amplitude_F(E_i, E_tmp_low(:), 0.0_wp, &
+           D_ni(:,:),  D_fn(i_f,:,:), omega_out(om_out), gamma, F(:,:), &
+           flag_res, flag_nonres)
+
+      ! bin the delta function (now on the lower grid point)
+      call put_on_grid(omega_in, omega_out(om_out) + (E_f(i_f)- E_i), i_low, i_low_weight )
+      
+      prefac = omega_out(om_out) / (omega_out(om_out) + (E_f(i_f)- E_i))
+      om_in = i_low
+      
+      sigma_final(om_in, om_out,:,:) =  sigma_final(om_in, om_out,:,:) + &
+               abs(F)**2 * prefac !* weight
+          
+          ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+          do m1=1,3
+            do m2=1,3
+              lambda_F(om_in, om_out) = lambda_F(om_in, om_out) +  real(F(m1,m1) * conjg(F(m2,m2)) ) * prefac !* weight
+              lambda_G(om_in, om_out) = lambda_G(om_in, om_out) +  real(F(m1,m2) * conjg(F(m1,m2)) ) * prefac !* weight
+              lambda_H(om_in, om_out) = lambda_H(om_in, om_out) +  real(F(m1,m2) * conjg(F(m2,m1)) ) * prefac !* weight
+            end do
+          end do
+          
+      end do ! do i_f = 1, size(E_f)
+    end do ! do om_out = 1, size(omega_out)
+
+  end subroutine compute_XES_res_bin
+
+
+  
   ! this routine factorized the KH cross section into the non-resonant spectrum and a resonance part
   subroutine compute_XES_res_factor(E_i, E_n, E_f, D_ni, D_fn, omega_in, omega_out, &
        gamma, gamma_inc, gamma_instr, flag_res, flag_nonres,&

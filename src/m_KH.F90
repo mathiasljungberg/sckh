@@ -472,10 +472,15 @@ contains
     use m_KH_utils, only: calculate_dipoles_KH_res_ni
     use m_KH_utils, only: calculate_dipoles_one
     use m_KH_utils, only: compute_XES_res
+    use m_KH_utils, only: compute_XES_res_bin
     use m_io, only: get_free_handle
     use m_KH_functions, only: solve_vib_problem
     use m_upper, only : upper
     use m_XAS_functions, only: compute_XAS_spectrum
+    use m_spectrum_utils, only: convolution_lorentzian_grid_fft_many_freq
+    use m_rixs_io, only: write_RIXS_spectra
+    use m_rixs_io, only: write_RIXS_map
+    use m_broaden_rixs, only: broaden_rixs
     
     type(sckh_params_t), intent(inout):: p 
 
@@ -498,7 +503,7 @@ contains
     real(wp), allocatable:: lambda_lp(:,:), lambda_ln(:,:), lambda_cp(:,:)
     real(wp), allocatable:: eig_n_cmp(:), D_ni_cmp(:,:), D_fn_cmp(:,:,:,:)
     integer:: n_e, n_v, n_ev, f_e
-    integer::i,j,ii,jj,k,l,m,t 
+    integer::i,j,ii,jj,k,l,m,t, m1, m2 
 
     real(wp), allocatable:: lambda_F_tmp(:,:), lambda_G_tmp(:,:), lambda_H_tmp(:,:)
     real(wp), allocatable:: sigma_final_tmp(:,:,:,:)
@@ -509,14 +514,15 @@ contains
 
     integer:: ind(1)
     real(wp), allocatable:: D_tmp(:,:,:)
+    real(wp), allocatable:: sigma_tmp(:,:)
     
     !
     ! This progam calculates the KH emission spectrum using the eigenstate basis
     !
 
-    gamma = p % gamma_FWHM /  2
-    gamma_instr = p % gamma_instr_FWHM /  2
-    gamma_inc = p % gamma_inc_FWHM /  2 
+    gamma = p % gamma_FWHM /  2.0_wp
+    gamma_instr = p % gamma_instr_FWHM /  2.0_wp
+    gamma_inc = p % gamma_inc_FWHM /  2.0_wp 
 
     allocate( X_r(p % nstates), &
          E_i(p % nstates), &
@@ -727,7 +733,6 @@ contains
     deallocate(sigma_XAS_final,&
          sigma_XAS_tensor, &
          sigma_XAS)
-    
 
     !
     ! KH XES spectrum
@@ -801,13 +806,22 @@ contains
           write(6,*) "KH_states_mode should de either 'ORBS' or 'STATES'"
           stop
         end if
-        
-        call compute_XES_res(eig_i(1), eig_n(n_e, :), eig_f_tmp, &
-             D_ni(n_e, :, :), D_fn(f_e,:,n_e,:,:), &
-             omega_in, omega_out, gamma, gamma_inc, gamma_instr, .true., .true., &
-             sigma_final_tmp(:,:,:,:), &
-             lambda_F_tmp(:,:), lambda_G_tmp(:,:), lambda_H_tmp(:,:), &
-             upper(p % broadening_func_inc)) 
+
+        if (p % kh_bin_mode) then
+          call compute_XES_res_bin(eig_i(1), eig_n(n_e, :), eig_f_tmp, &
+               D_ni(n_e, :, :), D_fn(f_e,:,n_e,:,:), &
+               omega_in, omega_out, gamma, .true., .true., &
+               sigma_final_tmp(:,:,:,:), &
+               lambda_F_tmp(:,:), lambda_G_tmp(:,:), lambda_H_tmp(:,:))
+        else
+          call compute_XES_res(eig_i(1), eig_n(n_e, :), eig_f_tmp, &
+               D_ni(n_e, :, :), D_fn(f_e,:,n_e,:,:), &
+               omega_in, omega_out, gamma, gamma_inc, gamma_instr, .true., &
+               p % KH_nonres_mode, &
+               sigma_final_tmp(:,:,:,:), &
+               lambda_F_tmp(:,:), lambda_G_tmp(:,:), lambda_H_tmp(:,:), &
+               upper(p % broadening_func_inc)) 
+        end if
         
         sigma_final(f_e,:,:,:,:) = sigma_final(f_e,:,:,:,:) + sigma_final_tmp(:,:,:,:)
         lambda_F(f_e,:,:) = lambda_F(f_e,:,:) + lambda_F_tmp(:,:)
@@ -822,94 +836,176 @@ contains
     lambda_lp = sum(2.0_wp * lambda_F + 2.0_wp * lambda_G  + 2.0_wp * lambda_H, 1)
     lambda_ln = sum(-1.0_wp * lambda_F + 4.0_wp  * lambda_G -1.0_wp * lambda_H, 1)
     lambda_cp = sum(-2.0_wp * lambda_F + 3.0_wp * lambda_G + 3.0_wp * lambda_H, 1)
+
+
     
+    ! write non-broadened spectra to file
+    if (p % kh_bin_mode) then
+      call write_RIXS_map(omega_in, omega_out, lambda_lp, lambda_ln, lambda_cp, &
+           p % outfile, p % kh_print_stride)
+    end if
+
+    !
+    ! broadening
+    !
+
+        
+    if (p % kh_bin_mode) then
+
+      call broaden_rixs(omega_in, omega_out, lambda_lp, lambda_ln, lambda_cp, &
+           gamma_inc, gamma_instr, p % broadening_func_inc, p %broadening_func_instr)
+
+      
+!      allocate(sigma_tmp(size(omega_in), size(omega_out)))
+!
+!      if(gamma_inc .gt. 1d-5) then
+!
+!        write(6,*) "Entering convolute_incoming, broadening ",  upper(p % broadening_func_inc)
+!    
+!        do m1=1,3
+!          do m2=1,3
+!            do f_e=1,p % npesfile_f
+!              sigma_tmp = sigma_final(f_e,:,:,m1,m2)
+!              call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+!                   2.0_wp * gamma_inc, omega_out, sigma_final(f_e,:,:,m1,m2), 1, &
+!                 upper(p % broadening_func_inc))
+!            end do
+!          end do
+!        end do
+!      
+!        sigma_tmp = lambda_lp
+!        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+!             2.0_wp * gamma_inc, omega_out, lambda_lp, 1,  upper(p % broadening_func_inc))
+!        sigma_tmp = lambda_ln
+!        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+!             2.0_wp * gamma_inc, omega_out, lambda_ln, 1, upper(p % broadening_func_inc))
+!        sigma_tmp = lambda_cp
+!        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+!             2.0_wp * gamma_inc, omega_out, lambda_cp, 1, upper(p % broadening_func_inc))
+!
+!        write(6,*) "Done"
+!
+!      end if
+!      
+!      if(gamma_instr .gt. 1d-5) then
+!
+!        write(6,*) "Entering convolute_instrumental, broadening  ",  upper(p % broadening_func_instr) 
+!
+!        do m1=1,3
+!          do m2=1,3
+!            do f_e=1,p % npesfile_f
+!              sigma_tmp = sigma_final(f_e, :,:,m1,m2)
+!              call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+!                   2.0_wp * gamma_instr, omega_out, sigma_final(f_e,:,:,m1,m2), 2, &
+!                   upper(p % broadening_func_instr))
+!            end do
+!          end do
+!        end do
+!        
+!        sigma_tmp = lambda_lp
+!        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+!             2.0_wp * gamma_instr, omega_out, lambda_lp, 2, upper(p % broadening_func_instr))
+!        sigma_tmp = lambda_ln
+!        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+!             2.0_wp * gamma_instr, omega_out, lambda_ln, 2, upper(p % broadening_func_instr))
+!        sigma_tmp = lambda_cp
+!        call convolution_lorentzian_grid_fft_many_freq(omega_in, sigma_tmp, &
+!             2.0_wp * gamma_instr, omega_out, lambda_cp, 2, upper(p % broadening_func_instr))
+!      end if
+!      
+!      write(6,*) "Done"
+
+    end if !  if (p % kh_bin_mode) then
+
+
     !
     ! Write to files
     ! 
 
-    do j=1, p % n_omega_in
-      
-      file="_sigma_"
-      write(string,'(F6.2)') omega_in(j)   
-      file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
-      
-      ifile = get_free_handle()
-      open(ifile,file=file,status='unknown')
-      
-      do i=1, p % n_omega_out 
-        write(ifile,'(13ES18.10)') omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i), &
-             ((sum(sigma_final(:, j, i, k, l)), k=1,3), l=1,3)
-      end do
-      
-      close(ifile) 
-      
-    end do
+    call write_RIXS_spectra(omega_in, omega_out, lambda_lp, lambda_ln, lambda_cp, p % outfile, p %kh_print_stride)
     
-    ! write spectra to file
-   file="_sigma_all"
-   !write(string,'(F6.2)') omega_in(j)   
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
-   
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
-
-   do j=1, p % n_omega_in
-     do i=1, p % n_omega_out
-       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
-     end do
-     write(ifile, *) 
-   end do
-   
-   close(ifile) 
-
-
-   ! write spectra to file
-   file="_sigma_all_nogrid"
-   !write(string,'(F6.2)') omega_in(j)   
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
-   
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
-
-   do j=1, p % n_omega_in
-     do i=1, p % n_omega_out
-       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
-     end do
-     write(ifile, *) 
-     write(ifile, *) 
-   end do
-   
-   close(ifile) 
-
-   ! write spectra summed over incoming frequencies
-   file="_nonres"
-   !write(string,'(F6.2)') omega_in(j)   
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
-   
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
-   
-   do i=1, p % n_omega_out !, p % kh_print_stride
-     write(ifile,'(5ES18.10)') omega_out(i), sum(lambda_lp(:,i)), sum(lambda_ln(:,i)), sum(lambda_cp(:,i))
-   end do
-   
-   close(ifile)
-
-   ! write spectra summed over outgoing frequencies
-   file="_xas"
-   !write(string,'(F6.2)') omega_in(j)   
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
-   
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
-   
-   do i=1, p % n_omega_in !, p % kh_print_stride
-     write(ifile,'(5ES18.10)') omega_in(i), sum(lambda_lp(i,:)), sum(lambda_ln(i,:)), sum(lambda_cp(i,:))
-   end do
-   
-   close(ifile) 
-   
-    
+!    do j=1, p % n_omega_in
+!      
+!      file="_sigma_"
+!      write(string,'(F6.2)') omega_in(j)   
+!      file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+!      
+!      ifile = get_free_handle()
+!      open(ifile,file=file,status='unknown')
+!      
+!      do i=1, p % n_omega_out 
+!        write(ifile,'(13ES18.10)') omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i), &
+!             ((sum(sigma_final(:, j, i, k, l)), k=1,3), l=1,3)
+!      end do
+!      
+!      close(ifile) 
+!      
+!    end do
+!    
+!    ! write spectra to file
+!   file="_sigma_all"
+!   !write(string,'(F6.2)') omega_in(j)   
+!   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+!   
+!   ifile = get_free_handle()
+!   open(ifile,file=file,status='unknown')
+!
+!   do j=1, p % n_omega_in
+!     do i=1, p % n_omega_out
+!       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+!     end do
+!     write(ifile, *) 
+!   end do
+!   
+!   close(ifile) 
+!
+!
+!   ! write spectra to file
+!   file="_sigma_all_nogrid"
+!   !write(string,'(F6.2)') omega_in(j)   
+!   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+!   
+!   ifile = get_free_handle()
+!   open(ifile,file=file,status='unknown')
+!
+!   do j=1, p % n_omega_in
+!     do i=1, p % n_omega_out
+!       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+!     end do
+!     write(ifile, *) 
+!     write(ifile, *) 
+!   end do
+!   
+!   close(ifile) 
+!
+!   ! write spectra summed over incoming frequencies
+!   file="_nonres"
+!   !write(string,'(F6.2)') omega_in(j)   
+!   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+!   
+!   ifile = get_free_handle()
+!   open(ifile,file=file,status='unknown')
+!   
+!   do i=1, p % n_omega_out !, p % kh_print_stride
+!     write(ifile,'(5ES18.10)') omega_out(i), sum(lambda_lp(:,i)), sum(lambda_ln(:,i)), sum(lambda_cp(:,i))
+!   end do
+!   
+!   close(ifile)
+!
+!   ! write spectra summed over outgoing frequencies
+!   file="_xas"
+!   !write(string,'(F6.2)') omega_in(j)   
+!   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+!   
+!   ifile = get_free_handle()
+!   open(ifile,file=file,status='unknown')
+!   
+!   do i=1, p % n_omega_in !, p % kh_print_stride
+!     write(ifile,'(5ES18.10)') omega_in(i), sum(lambda_lp(i,:)), sum(lambda_ln(i,:)), sum(lambda_cp(i,:))
+!   end do
+!   
+!   close(ifile) 
+     
   end subroutine calculate_KH_res
 
   

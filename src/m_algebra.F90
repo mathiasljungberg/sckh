@@ -1450,6 +1450,22 @@ subroutine matmul_Atx_d(A, x, y)
   
 end subroutine 
 
+subroutine matmul_Adagger_x_z(A, x, y)
+  implicit none
+  complex(8), intent(in):: A(:,:), x(:)
+  complex(8), intent(inout):: y(:)
+  
+  !write(6,*) "in matmul_AB_d"
+  ! SUBROUTINE DGEMV(TRANS, M, N, ALPHA, A, LDA, X,
+  ! INCX, BETA, Y, INCY)
+  
+  call ZGEMV('C', size(A,1), size(A,2), (1.0d0, 0.0d0), A, size(A,1), x, &
+       1, (0.0d0,0.0d0), Y, 1)
+  
+end subroutine matmul_Adagger_x_z
+
+
+
 
 !
 !

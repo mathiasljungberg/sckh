@@ -13,10 +13,7 @@ if (len(sys.argv) > 1):
     dirs=sys.argv[1:]
 else:
     #dirs = ['XAS', 'SCKH_PES', 'SCKH','vib_finite_diff', 'KH', 'KH_resonant', 'KH_resonant_el']
-    dirs= ['SCKH_resonant_PES',
-           'SCKH_resonant_PES_factor',
-           'SCKH_resonant_PES_factor_each_traj',
-           'SCKH_resonant_PES_FC',
+    dirs= ['SCKH_resonant_PES_FC',
            'SCKH_PES',
            'SCKH',
            'KH',
@@ -24,7 +21,8 @@ else:
            'KH_resonant_el',
            'XAS',
            'SCXAS_PES',
-           'KH_resonant_orb']
+           'KH_resonant_orb',
+           'KH_resonant_bin']
 
 print(dirs)
     

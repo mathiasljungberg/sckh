@@ -74,7 +74,9 @@ module m_sckh_params_t
      character(80):: vib_solver
      character(80):: KH_amplitude_mode
      character(80):: KH_states_mode
-
+     logical:: KH_bin_mode
+     logical:: KH_nonres_mode
+     
      logical:: use_n0_state
      
      ! sckh parameters
@@ -95,10 +97,14 @@ module m_sckh_params_t
      character(80):: runmode_sckh_res
      logical:: sckh_dyn_separate
      character(80):: sckh_pes_dyn_mode
+     character(80):: sckh_alt_mode
 
      logical:: use_E_mean
      real(wp):: E_nf_mean
      real(wp):: E_ni_mean
+
+     logical:: use_abs_bc
+     real(wp):: abs_bc_max_x
      
      ! for SCKH
      integer:: ntraj
@@ -233,6 +239,10 @@ contains
     call init_parameter('KH_amplitude_mode',inp, "OUTGOING", p % KH_amplitude_mode ,iv)
     ! KH_states_mode: ORBS or STATES
     call init_parameter('KH_states_mode',inp, "STATES", p % KH_states_mode ,iv)
+    ! KH_bin_mode: true or false 
+    call init_parameter('KH_bin_mode',inp, .false., p % KH_bin_mode ,iv)
+    ! KH_nonres_mode: true or false. Include nonresonant term or not  
+    call init_parameter('KH_nonres_mode',inp, .true., p % KH_nonres_mode ,iv)
     ! use_n0_state: if .true., read reference state for |n>  
     call init_parameter('use_n0_state',inp, .false.,p % use_n0_state,iv)
     
@@ -277,13 +287,21 @@ contains
     ! if "SINGLE", run dynamics on E_dyn2_inp
     ! if "SEPARATE", run dynamics on each intermediate state
     call init_parameter('sckh_pes_dyn_mode',inp, "SINGLE" ,p % sckh_pes_dyn_mode,iv)
+
+    call init_parameter('sckh_alt_mode',inp, "NORMAL" ,p % sckh_alt_mode,iv)
     
     ! if use_E_mean= .true. then we use the input values, instead of computing them on the fly.
     ! E_nf_mean and E_ni_mean in eV
     call init_parameter('use_E_mean',inp, .false. ,p % use_E_mean,iv)
     call init_parameter('E_nf_mean',inp, 0.0_wp ,p % E_nf_mean,iv)
     call init_parameter('E_ni_mean',inp, 0.0_wp ,p % E_ni_mean,iv)
-        
+
+
+    ! Absorbing boundary conditions in verlet_trajectory_xva, if use_abs_bc = .true,
+    ! then at potential will be absorbing at the value abs_bc_max_x [Angstrom] 
+    call init_parameter('use_abs_bc',inp, .false. ,p % use_abs_bc,iv)
+    call init_parameter('abs_bc_max_x',inp, 0.0_wp ,p % abs_bc_max_x,iv)
+    
     ! stride in frequencies when printing KH cross sections
     call init_parameter('kh_print_stride',inp,1,p % kh_print_stride,iv)
 

@@ -26,7 +26,29 @@ contains
         
   end subroutine wpd_eigenfun_z
 
-  
+  ! n and m ar eigenfunctions in orthogonal basis l (grid points)
+  ! psi_n = <n | psi>
+  ! psi_m = <m | psi>
+  ! c_ln = < l | n >
+  ! c_lm = < l | m >
+  ! psi_m =  sum_l c_lm^*  sum_l c_ln * psi_n
+  subroutine basis_transf_wfn_z(psi_n, c_ln, c_lm, psi_m)
+    use m_precision, only: wp
+    use m_algebra, only: matmul_Ax_z
+    use m_algebra, only: matmul_Adagger_x_z
+    
+    complex(wp), intent(in):: psi_n(:)
+    complex(wp), intent(in):: c_ln(:,:)
+    complex(wp), intent(in):: c_lm(:,:)
+    complex(wp), intent(out):: psi_m(:)
 
+    complex(wp), allocatable:: psi_l(:)
+
+    allocate(psi_l(size(psi_n)))
+    
+    call matmul_Ax_z(c_ln, psi_n, psi_l)
+    call matmul_Adagger_x_z(c_lm, psi_l, psi_m)    
+    
+  end subroutine basis_transf_wfn_z
   
 end module m_wave_packet_dynamics

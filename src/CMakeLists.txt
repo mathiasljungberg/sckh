@@ -98,6 +98,9 @@ m_convolution.F90
 m_SCXAS_PES.F90
 m_crank_nicolson.F90
 m_SCKH_resonant_PES_FC.F90
+m_SCKH_resonant.F90
+m_rixs_io.F90
+m_broaden_rixs.F90
 )
 
 SET(ALL_MODULES_F 

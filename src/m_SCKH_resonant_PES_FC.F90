@@ -29,6 +29,8 @@ contains
     use m_KH_utils, only: convolute_instrumental
     use m_spectrum_utils, only: convolution_lorentzian_grid_fft_many_freq
     use m_SCKH_resonant_PES, only: compute_E_means_and_omegas_one
+    use m_rixs_io, only: write_RIXS_spectra
+    use m_rixs_io, only: write_RIXS_map
     
     type(sckh_params_t), intent(inout):: p 
 
@@ -155,6 +157,7 @@ contains
     real(wp), allocatable:: sigma_tmp(:,:)
     
     real(wp):: E_ni
+    real(wp):: E_nf
     real(wp):: E_i_min, E_i_av
     
     !real(wp), allocatable::  F2_tensor(:,:,:,:,:,:)
@@ -214,6 +217,8 @@ contains
     
     ! in ORB mode there are nfinal * ninter final states
     write(6,*) "p % KH_states_mode = ", p % KH_states_mode
+    write(6,*) "p % sckh_pes_dyn_mode  = ", p % sckh_pes_dyn_mode
+    write(6,*) "p % sckh_alt_mode  = ", p % sckh_alt_mode
     if (upper(p % KH_states_mode) .eq. "STATES") then
       nfinal_tot = nfinal
 
@@ -379,10 +384,34 @@ contains
       time(i)= (i-1)*delta_t
     end do
     
-    call compute_E_means_and_omegas_one(E_i_inp, E_i_inp, E_n_inp(1,:)+ E_n0, &
-         E_f_inp(1,:), &
-         E_ni_mean, E_fi_mean, E_nf_mean, time_l, omega_in, omega_out)    
+    ! get mean energies and omegas
 
+    !call compute_E_means_and_omegas_one(E_i_inp, E_i_inp, E_n_inp(1,:)+ E_n0, &
+    !     E_f_inp(1,:), &
+    !     E_ni_mean, E_fi_mean, E_nf_mean, time_l, omega_in, omega_out)    
+
+    if (p % use_E_mean) then
+      write(6,*) "p % use_E_mean", p % use_E_mean
+      E_nf_mean = p % E_nf_mean
+      E_ni_mean = p % E_ni_mean
+    else
+      write(6,*) "p % use_E_mean", p % use_E_mean
+      E_nf_mean =   E_n_inp(1,ind(1))+ E_n0(ind(1)) - E_f_inp(1,ind(1)) !E_n1(1,ind(1)) - E_fc1(1,1,ind(1))
+      E_ni_mean =   E_n_inp(1,ind(1))+ E_n0(ind(1)) - E_i_inp(ind(1))   !E_n1(1,ind(1)) - E_i1(ind(1))
+    end if
+    E_fi_mean = E_ni_mean -E_nf_mean
+
+    write(6,*) "E_nf_mean", E_nf_mean
+    write(6,*) "E_ni_mean", E_ni_mean
+    write(6,*) "E_fi_mean", E_fi_mean
+    
+    call get_omega_reordered_fftw(time_l * const % eV /  const % hbar, omega_in)
+    omega_in = omega_in + E_ni_mean 
+    
+    call get_omega_reordered_fftw(time_l * const % eV /  const % hbar, omega_out)
+    omega_out = omega_out + E_nf_mean
+
+    
     !write(6,*) "omega_in", omega_in
     !write(6,*) "omega_out", omega_out
     
@@ -400,7 +429,8 @@ contains
           write(6,*) "dynamics mode: SEPARATE"
             ! compute mean energies on E_dyn_inp that will match with the other routines
             call verlet_trajectory_xva(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, X_r, &
-                 (E_n_inp(n_e,:) + E_n0) * const % eV, delta_t, mu_SI, x_new, v_new, a_new )
+                 (E_n_inp(n_e,:) + E_n0) * const % eV, delta_t, mu_SI, x_new, v_new, a_new, &
+                 p % use_abs_bc, p % abs_bc_max_x * 1.0d-10)
           
         else if (upper(p % sckh_pes_dyn_mode) .eq. "SINGLE") then
 
@@ -411,8 +441,8 @@ contains
             
             ! compute mean energies on E_dyn_inp that will match with the other routines
             call verlet_trajectory_xva(x_mom_sampl(traj,1), x_mom_sampl(traj,2)/mu_SI, X_r, &
-                 E_dyn2_inp * const % eV, delta_t, mu_SI, x_new, v_new, a_new )
-
+                 E_dyn2_inp * const % eV, delta_t, mu_SI, x_new, v_new, a_new, &
+                 p % use_abs_bc, p % abs_bc_max_x * 1.0d-10)
           end if
 
         else
@@ -482,15 +512,31 @@ contains
 
             if(p % include_ZPE) then
               E_ni = E_n1(n_e,1)- (E_i_min + E_i_av)
+              !E_ni = E_n1(n_e,1)-E_i1(1) + (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
             else
               E_ni = E_n1(n_e,1)-E_i1(1) 
               !E_ni = E_n1(n_e,1)-E_i1(1) + (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
             end if
             
+            E_nf = E_n1(n_e,1)- E_fc1(f_e,1,1)
             
-            call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
-                 D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
-            
+            if(upper(p % sckh_alt_mode) .eq. "NORMAL") then
+              call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            else if (upper(p % sckh_alt_mode) .eq. "ALT") then
+              call compute_F_FC_if_om_omp_alt(E_ni, E_nf, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            else if (upper(p % sckh_alt_mode) .eq. "ALT2") then
+              call compute_F_FC_if_om_omp_alt2(E_ni, E_nf, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            else if (upper(p % sckh_alt_mode) .eq. "ALT3") then
+              call compute_F_FC_if_om_omp_alt3(E_ni, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            else if (upper(p % sckh_alt_mode) .eq. "ALT4") then
+              call compute_F_FC_if_om_omp_alt4(E_ni, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            end if
+              
             !write(6,*) "Here... 3"
             !F_if_om_omp(f_e,:,:,:,:) = F_if_om_omp(f_e,:,:,:,:) + F_tmp(:,:,:,:)  
             
@@ -526,11 +572,27 @@ contains
             else
               E_ni = E_n1(n_e,1)-E_i1(1) !+ (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
             end if
+
+            E_nf = E_n1(n_e,1)- E_fc1(f_e,n_e,1)
             
-            call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
-                 D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
-            
-            !write(6,*) "Here... 3"
+            if(upper(p % sckh_alt_mode) .eq. "NORMAL") then
+              call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            else if (upper(p % sckh_alt_mode) .eq. "ALT") then
+              call compute_F_FC_if_om_omp_alt(E_ni, E_nf,E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            else if (upper(p % sckh_alt_mode) .eq. "ALT2") then
+              call compute_F_FC_if_om_omp_alt2(E_ni, E_nf,E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            else if (upper(p % sckh_alt_mode) .eq. "ALT3") then
+              call compute_F_FC_if_om_omp_alt3(E_ni, E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            else if (upper(p % sckh_alt_mode) .eq. "ALT4") then
+              call compute_F_FC_if_om_omp_alt4(E_ni, E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+            end if
+              
+              !write(6,*) "Here... 3"
             !F_if_om_omp(fn_e,:,:,:,:) = F_if_om_omp(fn_e,:,:,:,:) + F_tmp(:,:,:,:)  
 
             ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
@@ -543,9 +605,9 @@ contains
             end do
             
           !end do
-        end do
+          end do ! do f_e=1,nfinal
         
-      end if
+        end if ! if (upper(p % KH_states_mode) .eq. "STATES") then
       
 !      ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
 !      do m1=1,3
@@ -556,8 +618,8 @@ contains
 !        end do
 !      end do
       
-    end do ! do n_e=1,ninter
-  end do ! do traj=1, npoints_x_mom_sampl
+      end do ! do n_e=1,ninter
+    end do ! do traj=1, npoints_x_mom_sampl
 
 !      ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
 !      do m1=1,3
@@ -582,6 +644,9 @@ contains
     lambda_ln = -1.0_wp * lambda_F + 4.0_wp  * lambda_G -1.0_wp * lambda_H
     lambda_cp = -2.0_wp * lambda_F + 3.0_wp * lambda_G + 3.0_wp * lambda_H
 
+    ! write unbroadened spectrum (well, only lifetime and extra lifetime on omega' here)
+    call write_RIXS_map(omega_in, omega_out, lambda_lp, lambda_ln, lambda_cp, &
+         p % outfile, p % kh_print_stride)
 
     write(6,*) "Entering convolute_incoming, broadening ",  upper(p % broadening_func_inc)
     
@@ -614,94 +679,96 @@ contains
     
     write(6,*) "Done"
 
-    ! write spectra to individual files
-    do j=1, n_omega_in, p % kh_print_stride
-      
-      file="_sigma_"
-      write(string,'(F6.2)') omega_in(j)   
+    call write_RIXS_spectra(omega_in, omega_out, lambda_lp, lambda_ln, lambda_cp, p % outfile, p %kh_print_stride)
 
-      file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
-      
-      ifile = get_free_handle()
-      open(ifile,file=file,status='unknown')
-      
-      do i=1, n_omega_out, p % kh_print_stride
-        
-        write(ifile,'(4ES18.10)') omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
-      end do
-      
-      close(ifile) 
-      
-   end do
-
-   if(.true.) then
-   
-    ! write spectra to file
-   file="_sigma_all"
-   !write(string,'(F6.2)') omega_in(j)   
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
-   
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
-
-   do j=1, n_omega_in, p % kh_print_stride
-     do i=1, n_omega_out, p % kh_print_stride
-       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
-     end do
-     write(ifile, *) 
-   end do
-   
-   close(ifile) 
-
-
-   ! write spectra to file
-   file="_sigma_all_nogrid"
-   !write(string,'(F6.2)') omega_in(j)   
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
-   
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
-
-   do j=1, n_omega_in, p % kh_print_stride
-     do i=1, n_omega_out, p % kh_print_stride
-       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
-     end do
-     write(ifile, *) 
-     write(ifile, *) 
-   end do
-   
-   close(ifile) 
-
-   ! write spectra summed over incoming frequencies
-   file="_nonres"
-   !write(string,'(F6.2)') omega_in(j)   
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
-   
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
-
-   do i=1, n_omega_out, p % kh_print_stride
-     write(ifile,'(5ES18.10)') omega_out(i), sum(lambda_lp(:,i)), sum(lambda_ln(:,i)), sum(lambda_cp(:,i))
-   end do
-   
-   close(ifile) 
-
-   ! write spectra summed over outgoing frequencies
-   file="_xas"
-   !write(string,'(F6.2)') omega_in(j)   
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
-   
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
-   
-   do i=1, n_omega_in, p % kh_print_stride
-     write(ifile,'(5ES18.10)') omega_in(i), sum(lambda_lp(i,:)), sum(lambda_ln(i,:)), sum(lambda_cp(i,:))
-   end do
-   
-   close(ifile) 
-
-   
- end if! if(.false.) then
+!    ! write spectra to individual files
+!    do j=1, n_omega_in, p % kh_print_stride
+!      
+!      file="_sigma_"
+!      write(string,'(F6.2)') omega_in(j)   
+!
+!      file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+!      
+!      ifile = get_free_handle()
+!      open(ifile,file=file,status='unknown')
+!      
+!      do i=1, n_omega_out, p % kh_print_stride
+!        
+!        write(ifile,'(4ES18.10)') omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+!      end do
+!      
+!      close(ifile) 
+!      
+!   end do
+!
+!   if(.true.) then
+!   
+!    ! write spectra to file
+!   file="_sigma_all"
+!   !write(string,'(F6.2)') omega_in(j)   
+!   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+!   
+!   ifile = get_free_handle()
+!   open(ifile,file=file,status='unknown')
+!
+!   do j=1, n_omega_in, p % kh_print_stride
+!     do i=1, n_omega_out, p % kh_print_stride
+!       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+!     end do
+!     write(ifile, *) 
+!   end do
+!   
+!   close(ifile) 
+!
+!
+!   ! write spectra to file
+!   file="_sigma_all_nogrid"
+!   !write(string,'(F6.2)') omega_in(j)   
+!   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+!   
+!   ifile = get_free_handle()
+!   open(ifile,file=file,status='unknown')
+!
+!   do j=1, n_omega_in, p % kh_print_stride
+!     do i=1, n_omega_out, p % kh_print_stride
+!       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+!     end do
+!     write(ifile, *) 
+!     write(ifile, *) 
+!   end do
+!   
+!   close(ifile) 
+!
+!   ! write spectra summed over incoming frequencies
+!   file="_nonres"
+!   !write(string,'(F6.2)') omega_in(j)   
+!   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+!   
+!   ifile = get_free_handle()
+!   open(ifile,file=file,status='unknown')
+!
+!   do i=1, n_omega_out, p % kh_print_stride
+!     write(ifile,'(5ES18.10)') omega_out(i), sum(lambda_lp(:,i)), sum(lambda_ln(:,i)), sum(lambda_cp(:,i))
+!   end do
+!   
+!   close(ifile) 
+!
+!   ! write spectra summed over outgoing frequencies
+!   file="_xas"
+!   !write(string,'(F6.2)') omega_in(j)   
+!   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+!   
+!   ifile = get_free_handle()
+!   open(ifile,file=file,status='unknown')
+!   
+!   do i=1, n_omega_in, p % kh_print_stride
+!     write(ifile,'(5ES18.10)') omega_in(i), sum(lambda_lp(i,:)), sum(lambda_ln(i,:)), sum(lambda_cp(i,:))
+!   end do
+!   
+!   close(ifile) 
+!
+!   
+! end if! if(.false.) then
    
     
  end subroutine calculate_SCKH_res_PES_FC
@@ -1452,8 +1519,9 @@ end subroutine calculate_SCKH_res_PES_FC_old
    
    do om_in= 1, n_omega_in
      do m1 =1, 3
-       call fft_c2c_1d_backward( e_factor1(:) *& !* exp(-gamma_F * const % eV * time(:) / const % hbar) *&
-            exp(dcmplx(0.0_wp,  (-omega_in(om_in) + E_ni )* const % eV * time(:) / const % hbar )) * &
+       ! the factor of exp(-gamma * const % eV * time(:) / const % hbar) seems to belong here, but I must figure out why.
+       call fft_c2c_1d_backward( e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar) *&
+            !exp(dcmplx(0.0_wp,  (-omega_in(om_in) + E_ni )* const % eV * time(:) / const % hbar )) * &
             !( i_low_weight * exp(dcmplx(0.0_wp,  (-omega_in(om_in) + omega_in(i_low))* const % eV * time(:) / const % hbar ))  &
             !+ (1.0_wp -i_low_weight) * exp(dcmplx(0.0_wp,  (-omega_in(om_in) + omega_in(i_low+1))* const % eV *&
             !time(:) / const % hbar )) ) * &
@@ -1479,6 +1547,421 @@ end subroutine calculate_SCKH_res_PES_FC_old
    
  end subroutine compute_F_FC_if_om_omp
 
+! various failed attempts to approximate things
+ subroutine compute_F_FC_if_om_omp_alt(E_ni, E_nf, E_n1, E_fc1, E_ni_mean, E_nf_mean, E_fi_mean, &
+      D_fn1, D_ni1, omega_in, omega_out, time, gamma, gamma_F, F_if_om_omp)
+
+   use m_precision, only: wp
+   use m_constants, only: const
+   use m_fftw3, only: fft_c2c_1d_backward
+   use m_fftw3, only: fft_c2c_1d_forward
+   use m_fftw3, only: reorder_sigma_fftw_z
+   use m_SCKH_utils, only:compute_efactor_one
+   use m_SCKH_utils, only:compute_efactor
+   use m_SCKH_utils, only: put_on_grid
+   
+   real(wp), intent(in):: E_ni
+   real(wp), intent(in):: E_nf
+   real(wp), intent(in):: E_n1(:)
+   real(wp), intent(in):: E_fc1(:)
+   real(wp), intent(in):: E_ni_mean
+   real(wp), intent(in):: E_nf_mean
+   real(wp), intent(in):: E_fi_mean
+   real(wp), intent(in):: D_fn1(:,:)
+   real(wp), intent(in):: D_ni1(:)
+   real(wp), intent(in):: omega_in(:)
+   real(wp), intent(in):: omega_out(:)
+   real(wp), intent(in):: time(:)
+   real(wp), intent(in):: gamma
+   real(wp), intent(in):: gamma_F
+   complex(wp), intent(out):: F_if_om_omp(:,:,:,:)
+   
+   integer:: ntsteps, ninter
+   ! complex(wp), allocatable:: funct(:,:,:)
+   complex(wp), allocatable::  e_factor1(:)
+   complex(wp), allocatable::  F_tmp(:)
+   integer:: m1, m2, om_in, om_out, n_omega_in, n_omega_out
+
+   integer:: i_low
+   real(wp):: i_low_weight
+   
+   n_omega_in = size(F_if_om_omp,1)
+   n_omega_out = size(F_if_om_omp,2)
+   
+   allocate(e_factor1(n_omega_in))
+   allocate(F_tmp(n_omega_out))
+
+   !write(6,*) "Here... 1...", n_omega_in, n_omega_out
+   !write(6,*) "E_n1(:)", E_n1(:)
+   !write(6,*) "E_fc1(f_e,1,:)",E_fc1(:)
+   !write(6,*) "E_fi_mean", E_nf_mean
+   !write(6,*) "time", time
+   !call compute_efactor_one(E_fc1(:)- E_n1(:), E_fi_mean, time, e_factor1(:), .true.)
+
+!   write(6,*) "E_ni", E_ni
+   
+   call compute_efactor( E_n1(:), E_fc1(:), E_nf_mean, time, e_factor1(:), .true.)
+   !call compute_efactor( E_n1(:), E_fc1(:), E_nf_mean, time, e_factor1(:), .false.)
+   
+   F_if_om_omp = 0.0_wp
+
+   !call put_on_grid(omega_in, E_ni, i_low, i_low_weight )
+   !call put_on_grid(omega_out, E_nf, i_low2, i_low_weight2 )
+
+   !write(6,*) "Here... 2"
+
+   !write(6,*) e_factor1
+   
+   do m1 =1, 3
+     ! the factor of exp(-gamma * const % eV * time(:) / const % hbar) seems to belong here, but I must figure out why.
+     call fft_c2c_1d_backward( e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar) *&
+          !exp(dcmplx(0.0_wp,  (-omega_in(om_in) + E_ni )* const % eV * time(:) / const % hbar )) * &
+          !( i_low_weight * exp(dcmplx(0.0_wp,  (-omega_in(om_in) + omega_in(i_low))* const % eV * time(:) / const % hbar ))  &
+          !+ (1.0_wp -i_low_weight) * exp(dcmplx(0.0_wp,  (-omega_in(om_in) + omega_in(i_low+1))* const % eV *&
+          !time(:) / const % hbar )) ) * &
+          D_fn1(:,m1), &
+          F_tmp(:))
+     !call fft_c2c_1d_forward( e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar) *&
+     !     exp(dcmplx(0.0_wp,  (omega_in(om_in) - E_ni )* const % eV * time(:) / const % hbar )) * &
+     !    D_fn1(:,m1), &
+     !    F_tmp(:))
+     call reorder_sigma_fftw_z(F_tmp(:))
+     
+     do om_in= 1, n_omega_in
+       do om_out= 1, n_omega_out
+
+         do m2 =1, 3
+         !F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) / dcmplx(omega_in(om_in) - E_ni, gamma)
+
+         !F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) * &
+         !     i_low_weight / dcmplx(omega_in(om_in) - omega_in(i_low), gamma)
+         !F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) * &
+           !     (1.0_wp -i_low_weight) / dcmplx(omega_in(om_in) - omega_in(i_low+1), gamma)
+
+           ! Dyson type separation  
+           !F_if_om_omp(om_in,om_out,m1,m2) = F_if_om_omp(om_in,om_out,m1,m2) +  F_tmp(om_out) * D_ni1(m2)  &
+           !     / dcmplx(omega_in(om_in) - E_ni, gamma)
+
+           !F_if_om_omp(om_in,om_out,m1,m2) = F_if_om_omp(om_in,om_out,m1,m2) +  F_tmp(om_out) * D_ni1(m2)  &
+           !     / (dcmplx(omega_in(om_in) - E_ni, gamma) * dcmplx(omega_in(om_in) - E_ni -(omega_out(om_out) - E_nf), gamma) )
+
+           
+           !F_if_om_omp(om_in,om_out,m1,m2) = F_if_om_omp(om_in,om_out,m1,m2) +  F_tmp(om_out) * D_ni1(m2) * &
+           !     (omega_out(om_out) - E_nf)**2 / (dcmplx(omega_in(om_in) - E_ni,gamma)* &
+           !     dcmplx(omega_in(om_in) - E_ni -(omega_out(om_out) - E_nf), gamma))
+
+           !F_if_om_omp(om_in,om_out,m1,m2) = F_if_om_omp(om_in,om_out,m1,m2) +  F_tmp(om_out) * D_ni1(m2) * &
+           !     (omega_out(om_out) - E_nf)/dcmplx(omega_in(om_in) - E_ni,gamma)**2 
+
+           ! with coupling
+           F_if_om_omp(om_in,om_out,m1,m2) = F_if_om_omp(om_in,om_out,m1,m2) +  F_tmp(om_out) * D_ni1(m2) / &
+                !dcmplx(omega_in(om_in) - E_ni -(omega_out(om_out) - E_nf), gamma)
+                dcmplx((omega_out(om_out) - E_nf) - (omega_in(om_in) - E_ni), gamma)
+
+
+           
+         end do
+       
+       end do
+     end do
+
+   end do! do m1 =1, 3
+
+ 
+ end subroutine compute_F_FC_if_om_omp_alt
+
+ ! Lars' suggestion
+ subroutine compute_F_FC_if_om_omp_alt2(E_ni, E_nf, E_n1, E_fc1, E_ni_mean, E_nf_mean, E_fi_mean, &
+      D_fn1, D_ni1, omega_in, omega_out, time, gamma, gamma_F, F_if_om_omp)
+
+   use m_precision, only: wp
+   use m_constants, only: const
+   use m_fftw3, only: fft_c2c_1d_backward
+   use m_fftw3, only: fft_c2c_1d_forward
+   use m_fftw3, only: reorder_sigma_fftw_z
+   use m_SCKH_utils, only:compute_efactor_one
+   use m_SCKH_utils, only:compute_efactor
+   use m_SCKH_utils, only: put_on_grid
+   use m_SCKH_utils, only: compute_int_t_inf_z
+   
+   real(wp), intent(in):: E_ni
+   real(wp), intent(in):: E_nf
+   real(wp), intent(in):: E_n1(:)
+   real(wp), intent(in):: E_fc1(:)
+   real(wp), intent(in):: E_ni_mean
+   real(wp), intent(in):: E_nf_mean
+   real(wp), intent(in):: E_fi_mean
+   real(wp), intent(in):: D_fn1(:,:)
+   real(wp), intent(in):: D_ni1(:)
+   real(wp), intent(in):: omega_in(:)
+   real(wp), intent(in):: omega_out(:)
+   real(wp), intent(in):: time(:)
+   real(wp), intent(in):: gamma
+   real(wp), intent(in):: gamma_F
+   complex(wp), intent(out):: F_if_om_omp(:,:,:,:)
+   
+   integer:: ntsteps, ninter
+   ! complex(wp), allocatable:: funct(:,:,:)
+   complex(wp), allocatable::  e_factor1(:)
+   complex(wp), allocatable::  F_tmp(:)
+   complex(wp), allocatable::  integral(:)
+   integer:: m1, m2, om_in, om_out, n_omega_in, n_omega_out
+
+   integer:: i_low
+   real(wp):: i_low_weight
+   
+   n_omega_in = size(F_if_om_omp,1)
+   n_omega_out = size(F_if_om_omp,2)
+   
+   allocate(e_factor1(n_omega_out))
+   allocate(F_tmp(n_omega_in))
+   allocate(integral(n_omega_out))
+
+   !write(6,*) "Here... 1...", n_omega_in, n_omega_out
+   !write(6,*) "E_n1(:)", E_n1(:)
+   !write(6,*) "E_fc1(f_e,1,:)",E_fc1(:)
+   !write(6,*) "E_fi_mean", E_nf_mean
+   !write(6,*) "time", time
+   !call compute_efactor_one(E_fc1(:)- E_n1(:), E_fi_mean, time, e_factor1(:), .true.)
+
+!   write(6,*) "E_ni", E_ni
+   
+   call compute_efactor( E_n1(:), E_fc1(:), E_nf_mean, time, e_factor1(:), .true.)
+   !call compute_efactor( E_n1(:), E_fc1(:), E_nf_mean, time, e_factor1(:), .false.)
+   
+   F_if_om_omp = 0.0_wp
+
+   !call put_on_grid(omega_in, E_ni, i_low, i_low_weight )
+   !call put_on_grid(omega_out, E_nf, i_low2, i_low_weight2 )
+
+   !write(6,*) "Here... 2"
+
+   !write(6,*) e_factor1
+   
+   do m2 =1, 3
+
+     do om_out= 1, n_omega_out
+       
+       ! \int_{t}^{\infty} ds D(s) e^{-i \int_0^{s} d\tau E_{nf}(\tau)} e^{i(\omega' +i\Gamma)s}
+       call compute_int_t_inf_z(e_factor1(:) * D_fn1(:,m2) * exp(dcmplx(-gamma, omega_out(om_out) - E_nf_mean) *&
+            const % eV * time(:) / const % hbar), &
+            time(:), integral(:))
+
+         call fft_c2c_1d_forward(  exp(dcmplx(+gamma-gamma_F, (E_ni-E_ni_mean)) * const % eV * time(:) / const % hbar ) *&
+              integral(:), &
+              F_tmp(:))
+         call reorder_sigma_fftw_z(F_tmp(:))
+
+         do m1=1,3
+           F_if_om_omp(:, om_out, m1,m2) = D_ni1(m1) * F_tmp(:)
+         end do 
+
+     end do ! do om_out= 1, n_omega_out
+   end do !do m2 =1, 3
+   
+ end subroutine compute_F_FC_if_om_omp_alt2
+ 
+
+ ! include a t-dependence  e^{-i (\int^t_ d\tau E_nf{\tau} -\omega' t) in the XES spectrum to get the connection  
+ subroutine compute_F_FC_if_om_omp_alt3(E_ni, E_n1, E_fc1, E_ni_mean, E_nf_mean, E_fi_mean, &
+      D_fn1, D_ni1, omega_in, omega_out, time, gamma, gamma_F, F_if_om_omp)
+
+   use m_precision, only: wp
+   use m_constants, only: const
+   use m_fftw3, only: fft_c2c_1d_backward
+   use m_fftw3, only: fft_c2c_1d_forward
+   use m_fftw3, only: reorder_sigma_fftw_z
+   use m_SCKH_utils, only:compute_efactor_one
+   use m_SCKH_utils, only:compute_efactor
+   use m_SCKH_utils, only: put_on_grid
+   
+   real(wp), intent(in):: E_ni
+   real(wp), intent(in):: E_n1(:)
+   real(wp), intent(in):: E_fc1(:)
+   real(wp), intent(in):: E_ni_mean
+   real(wp), intent(in):: E_nf_mean
+   real(wp), intent(in):: E_fi_mean
+   real(wp), intent(in):: D_fn1(:,:)
+   real(wp), intent(in):: D_ni1(:)
+   real(wp), intent(in):: omega_in(:)
+   real(wp), intent(in):: omega_out(:)
+   real(wp), intent(in):: time(:)
+   real(wp), intent(in):: gamma
+   real(wp), intent(in):: gamma_F
+   complex(wp), intent(out):: F_if_om_omp(:,:,:,:)
+   
+   integer:: ntsteps, ninter
+   ! complex(wp), allocatable:: funct(:,:,:)
+   complex(wp), allocatable::  e_factor1(:)
+   complex(wp), allocatable::  e_factor2(:)
+   complex(wp), allocatable::  F_tmp(:)
+   complex(wp), allocatable::  F_tmp_om_out(:,:)
+   integer:: m1, m2, om_in, om_out, n_omega_in, n_omega_out
+
+   real(wp), allocatable:: E_n1_tmp(:)
+   
+   integer:: i_low
+   real(wp):: i_low_weight
+   
+   n_omega_in = size(F_if_om_omp,1)
+   n_omega_out = size(F_if_om_omp,2)
+   
+   allocate(e_factor1(n_omega_in))
+   allocate(e_factor2(n_omega_in))
+   allocate(F_tmp_om_out(n_omega_out, 3))
+   allocate(F_tmp(n_omega_in))
+   allocate(E_n1_tmp(n_omega_in))
+   
+   !write(6,*) "Here... 1...", n_omega_in, n_omega_out
+   !write(6,*) "E_n1(:)", E_n1(:)
+   !write(6,*) "E_fc1(f_e,1,:)",E_fc1(:)
+   !write(6,*) "E_fi_mean", E_nf_mean
+   !write(6,*) "time", time
+   !call compute_efactor_one(E_fc1(:)- E_n1(:), E_fi_mean, time, e_factor1(:), .true.)
+
+   !   write(6,*) "E_ni", E_ni
+   
+   call compute_efactor( E_n1(:), E_fc1(:), E_nf_mean, time, e_factor1(:), .true.)
+
+   E_n1_tmp = E_ni
+   call compute_efactor( E_n1_tmp(:), E_fc1(:), E_nf_mean, time, e_factor2(:), .true.)
+   !call compute_efactor( E_n1(:), E_fc1(:), E_nf_mean, time, e_factor1(:), .false.)
+   
+   F_if_om_omp = 0.0_wp
+
+   call put_on_grid(omega_in, E_ni, i_low, i_low_weight )
+
+   !write(6,*) "Here... 2"
+
+   !write(6,*) e_factor1
+   
+
+   ! XES spectrum
+   do m1 =1, 3
+     ! the factor of exp(-gamma * const % eV * time(:) / const % hbar) seems to belong here, but I must figure out why.
+     call fft_c2c_1d_backward( e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar) *&
+          !exp(dcmplx(0.0_wp,  (-omega_in(om_in) + E_ni )* const % eV * time(:) / const % hbar )) * &
+          !( i_low_weight * exp(dcmplx(0.0_wp,  (-omega_in(om_in) + omega_in(i_low))* const % eV * time(:) / const % hbar ))  &
+          !+ (1.0_wp -i_low_weight) * exp(dcmplx(0.0_wp,  (-omega_in(om_in) + omega_in(i_low+1))* const % eV *&
+          !time(:) / const % hbar )) ) * &
+          D_fn1(:,m1), &
+          F_tmp_om_out(:,m1))
+     call reorder_sigma_fftw_z(F_tmp_om_out(:, m1))
+     
+   end do
+
+   ! XAS and coupling to XES
+   do om_out= 1, n_omega_out
+     do m2 =1, 3
+       call fft_c2c_1d_forward(  exp(dcmplx(-gamma_F, (E_ni-E_ni_mean)) * const % eV * time(:) / const % hbar ) * &
+            e_factor2(:) * exp(dcmplx(0.0_wp,  (omega_out(om_out) - E_nf_mean +E_ni)* const % eV * time(:) / const % hbar )) * &
+            D_ni1(m2), &
+            F_tmp(:))
+       call reorder_sigma_fftw_z(F_tmp(:))
+       
+       do m1=1,3
+         F_if_om_omp(:,om_out,m1,m2) = F_if_om_omp(:,om_out,m1,m2) +  F_tmp(:) *  F_tmp_om_out(om_out, m1)
+       end do
+
+     end do
+   end do
+   
+ end subroutine compute_F_FC_if_om_omp_alt3
+
+ ! this is the method I tried implementing first, that actually seemed to work more or less, but without an additional broadening
+ ! it worked less well. It inlcudes the omega -E_in in the emission
+ subroutine compute_F_FC_if_om_omp_alt4(E_ni, E_n1, E_fc1, E_ni_mean, E_nf_mean, E_fi_mean, &
+      D_fn1, D_ni1, omega_in, time, gamma, gamma_F, F_if_om_omp)
+
+   use m_precision, only: wp
+   use m_constants, only: const
+   use m_fftw3, only: fft_c2c_1d_backward
+   use m_fftw3, only: fft_c2c_1d_forward
+   use m_fftw3, only: reorder_sigma_fftw_z
+   use m_SCKH_utils, only:compute_efactor_one
+   use m_SCKH_utils, only:compute_efactor
+   use m_SCKH_utils, only: put_on_grid
+   
+   real(wp), intent(in):: E_ni
+   real(wp), intent(in):: E_n1(:)
+   real(wp), intent(in):: E_fc1(:)
+   real(wp), intent(in):: E_ni_mean
+   real(wp), intent(in):: E_nf_mean
+   real(wp), intent(in):: E_fi_mean
+   real(wp), intent(in):: D_fn1(:,:)
+   real(wp), intent(in):: D_ni1(:)
+   real(wp), intent(in):: omega_in(:)
+   real(wp), intent(in):: time(:)
+   real(wp), intent(in):: gamma
+   real(wp), intent(in):: gamma_F
+   complex(wp), intent(out):: F_if_om_omp(:,:,:,:)
+   
+   integer:: ntsteps, ninter
+   ! complex(wp), allocatable:: funct(:,:,:)
+   complex(wp), allocatable::  e_factor1(:)
+   complex(wp), allocatable::  F_tmp(:)
+   integer:: m1, m2, om_in, n_omega_in, n_omega_out
+
+   integer:: i_low
+   real(wp):: i_low_weight
+   
+   n_omega_in = size(F_if_om_omp,1)
+   n_omega_out = size(F_if_om_omp,2)
+   
+   allocate(e_factor1(n_omega_in))
+   allocate(F_tmp(n_omega_out))
+
+   !write(6,*) "Here... 1...", n_omega_in, n_omega_out
+   !write(6,*) "E_n1(:)", E_n1(:)
+   !write(6,*) "E_fc1(f_e,1,:)",E_fc1(:)
+   !write(6,*) "E_fi_mean", E_nf_mean
+   !write(6,*) "time", time
+   !call compute_efactor_one(E_fc1(:)- E_n1(:), E_fi_mean, time, e_factor1(:), .true.)
+
+!   write(6,*) "E_ni", E_ni
+   
+   call compute_efactor( E_n1(:), E_fc1(:), E_nf_mean, time, e_factor1(:), .true.)
+   !call compute_efactor( E_n1(:), E_fc1(:), E_nf_mean, time, e_factor1(:), .false.)
+   
+   F_if_om_omp = 0.0_wp
+
+   call put_on_grid(omega_in, E_ni, i_low, i_low_weight )
+
+   !write(6,*) "Here... 2"
+
+   !write(6,*) e_factor1
+   
+   do om_in= 1, n_omega_in
+     do m1 =1, 3
+       ! the factor of exp(-gamma * const % eV * time(:) / const % hbar) seems to belong here, but I must figure out why.
+       call fft_c2c_1d_backward( e_factor1(:) * exp(-gamma_F * const % eV * time(:) / const % hbar) *&
+            exp(dcmplx(0.0_wp,  (-omega_in(om_in) + E_ni )* const % eV * time(:) / const % hbar )) * &
+            !( i_low_weight * exp(dcmplx(0.0_wp,  (-omega_in(om_in) + omega_in(i_low))* const % eV * time(:) / const % hbar ))  &
+            !+ (1.0_wp -i_low_weight) * exp(dcmplx(0.0_wp,  (-omega_in(om_in) + omega_in(i_low+1))* const % eV *&
+            !time(:) / const % hbar )) ) * &
+            D_fn1(:,m1), &
+            F_tmp(:))
+       !call fft_c2c_1d_forward( e_factor1(:) * exp(-gamma * const % eV * time(:) / const % hbar) *&
+       !     exp(dcmplx(0.0_wp,  (omega_in(om_in) - E_ni )* const % eV * time(:) / const % hbar )) * &
+        !    D_fn1(:,m1), &
+        !    F_tmp(:))
+       call reorder_sigma_fftw_z(F_tmp(:))
+       
+       do m2 =1, 3
+         !F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) / dcmplx(omega_in(om_in) - E_ni, gamma)
+
+         F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) * &
+              i_low_weight / dcmplx(omega_in(om_in) - omega_in(i_low), gamma)
+         F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) * &
+              (1.0_wp -i_low_weight) / dcmplx(omega_in(om_in) - omega_in(i_low+1), gamma) 
+       end do
+       
+     end do
+   end do
+   
+ end subroutine compute_F_FC_if_om_omp_alt4
+
+ 
 
 ! ! given a equally spaced range x, and a point x_in
 ! ! find i_low, the index of the point below x_in

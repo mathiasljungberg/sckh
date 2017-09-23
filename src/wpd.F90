@@ -8,6 +8,8 @@ program wpd
   use m_KH_functions, only: solve_sinc_DVR
   use m_KH_functions, only: dsinc_mat_elems
   use m_wave_packet_dynamics, only: wpd_eigenfun_z
+  use m_algebra, only: matmul_Adagger_x_z
+
   implicit none 
 
   character(75)::inputfile_i, inputfile_n, outputfile
@@ -86,13 +88,16 @@ program wpd
 
   ! create intial wave packet, S_ni = sum_l <n | l> <l | i> = sum_l c^*_ln c_li 
   ! slow, shoudl use matmul
-  S_ni = 0.0d0
-  do l=1, size(eigvec_z_n, 1)
-    do n=1, size(eigvec_z_n, 2)  
-      S_ni(n) =  S_ni(n) + conjg(eigvec_z_n(l,n)) * eigvec_z_i(l,1)  
-    end do
-  end do
-  
+  !S_ni = 0.0d0
+  !do l=1, size(eigvec_z_n, 1)
+  !  do n=1, size(eigvec_z_n, 2)  
+  !    S_ni(n) =  S_ni(n) + conjg(eigvec_z_n(l,n)) * eigvec_z_i(l,1)  
+  !  end do
+  !end do
+
+  ! this is faster
+  call matmul_Adagger_x_z(eigvec_z_n, eigvec_z_i(:,1), S_ni)
+    
   ! now do wpd
   ntimes=20
   allocate(times(ntimes),  c_l_t(npoints, ntimes))

@@ -14,8 +14,8 @@ contains
     use m_io, only: get_free_handle
     use m_splines, only: spline_easy
     use m_splines, only: linspace
-    use m_FFT, only: next_power_of_2
-    use m_KH_utils, only: compute_XES_nonres_elec 
+    !use m_FFT, only: next_power_of_2
+    !use m_KH_utils, only: compute_XES_nonres_elec 
 
     type(sckh_params_t), intent(inout):: p 
 
@@ -242,7 +242,7 @@ contains
     end do !j
     
   end subroutine calculate_SCKH
-
+  
 !  subroutine read_projections(p)
 !    use m_precision, only: wp
 !    use m_io, only: get_free_handle
