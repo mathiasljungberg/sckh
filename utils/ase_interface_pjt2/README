@@ -1,7 +1,15 @@
 create library like this
-f2py-2.7 -c *.f  --fcompiler=gfortran -m h2o_pjt2 -h 
 
+f2py H2O.pjt2.f  -m h2o_pjt2 -h h2o_pjt2.pyf
 
-smarter
-f2py-2.7 H2O.pjt2.f  -m h2o_pjt2 -h h2o_pjt2.pyf
-f2py-2.7 -c H2O.pjt2.f h2o_pjt2.pyf  --fcompiler=gfortran -m h2o_pjt2
+then edit h2o_pjt2.pyf and change the intent of the variables in order to get v as output
+
+subroutine pots(v,q1,q2,theta) ! in :h2o_pjt2:H2O.pjt2.f
+      double precision, intent(out) :: v
+      double precision, intent(in) :: q1
+      double precision, intent(in) :: q2
+      double precision, intent(in) :: theta
+end subroutine pots
+							
+
+f2py -c H2O.pjt2.f h2o_pjt2.pyf  --fcompiler=gfortran -m h2o_pjt2

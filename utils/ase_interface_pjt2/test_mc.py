@@ -12,7 +12,7 @@ from ase.vibrations import Vibrations
 from mc import Mc, Mc_observer, Fix_centre_of_mass
 from ase.constraints import FixAtoms, FixInternals
 from mc_utils import Cov_xy, Cov, Histogram, Mc_coord_observer
-import scipy 
+import scipy.linalg 
 
 #r_OH1 = 0.95792059
 #r_OH2 = r_OH1
