@@ -31,7 +31,7 @@ contains
     use m_SCKH_resonant_PES, only: compute_E_means_and_omegas_one
     use m_rixs_io, only: write_RIXS_spectra
     use m_rixs_io, only: write_RIXS_map
-    
+
     type(sckh_params_t), intent(inout):: p 
 
     real(wp), allocatable::  time(:)
@@ -43,24 +43,27 @@ contains
     real(wp), allocatable:: shift(:)
     real(wp), allocatable:: E_i_inp(:)
     real(wp), allocatable:: E_i1(:)
-    real(wp), allocatable:: E_i2(:)
+!    real(wp), allocatable:: E_i2(:)
     real(wp), allocatable:: E_n_inp(:,:)
     real(wp), allocatable:: E_n1(:,:)
-    real(wp), allocatable:: E_n2(:,:)
+!    real(wp), allocatable:: E_n2(:,:)
     real(wp), allocatable:: E_f_inp(:,:)
     real(wp), allocatable:: E_f1(:,:)
-    real(wp), allocatable:: E_f2(:,:)
+!    real(wp), allocatable:: E_f2(:,:)
     real(wp), allocatable:: E_fc1(:,:,:)
-    real(wp), allocatable:: E_fc2(:,:,:)
+!    real(wp), allocatable:: E_fc2(:,:,:)
     real(wp), allocatable:: D_fn_inp(:,:,:,:)
     real(wp), allocatable:: D_fn1(:,:,:,:)
-    real(wp), allocatable:: D_fn2(:,:,:,:)
+!    real(wp), allocatable:: D_fn2(:,:,:,:)
     real(wp), allocatable:: D_ni_inp(:,:,:)
     real(wp), allocatable:: D_ni1(:,:,:)
-    real(wp), allocatable:: D_ni2(:,:,:) 
+!    real(wp), allocatable:: D_ni2(:,:,:) 
     real(wp):: E_nf_mean
     real(wp):: E_fi_mean
     real(wp):: E_ni_mean
+!!!!!!!!!!!!!!!!!!
+    real(wp), allocatable:: E_corr(:,:)
+!!!!!!!!!!!!!!!!!!
     
     character(80)::  string
     character(80)::  file
@@ -196,12 +199,12 @@ contains
     allocate(D_fn_inp(nfinal, ninter, npoints_in,3))
     allocate(time(ntsteps))
     allocate(E_i1(ntsteps))
-    allocate(E_i2(ntsteps))
+!    allocate(E_i2(ntsteps))
     allocate(E_n1(ninter, ntsteps))
-    allocate(E_n2(ninter, ntsteps))
+!    allocate(E_n2(ninter, ntsteps))
     allocate(D_ni1(ninter, ntsteps,3))
-    allocate(D_ni2(ninter, ntsteps,3))
-    allocate(D_fn2(nfinal, ninter, ntsteps,3))
+!    allocate(D_ni2(ninter, ntsteps,3))
+!    allocate(D_fn2(nfinal, ninter, ntsteps,3))
     allocate(D_fn1(nfinal, ninter, ntsteps,3))
     !allocate(E_i_mean(ntsteps))
     allocate(shift(npoints_in))
@@ -214,6 +217,10 @@ contains
     allocate(v_new2(ntsteps))
     allocate(a_new2(ntsteps))
     allocate(X_r(npoints_in))
+!!!!!!!!!!!!!!!!
+    allocate(E_f1(nfinal,ntsteps))
+    allocate(E_corr(ninter,ntsteps))
+!!!!!!!!!!!!!!!!
     
     ! in ORB mode there are nfinal * ninter final states
     write(6,*) "p % KH_states_mode = ", p % KH_states_mode
@@ -222,14 +229,17 @@ contains
     if (upper(p % KH_states_mode) .eq. "STATES") then
       nfinal_tot = nfinal
 
-      allocate(E_fc1(nfinal,1, ntsteps), &
-           E_fc2(nfinal,1,ntsteps))
+!      allocate(E_fc1(nfinal,1, ntsteps), &
+!           E_fc2(nfinal,1,ntsteps))
+      allocate(E_fc1(nfinal,1, ntsteps))
       
     else if (upper(p % KH_states_mode) .eq. "ORBS") then
       nfinal_tot = nfinal * ninter
 
-      allocate(E_fc1(nfinal,ninter, ntsteps), &
-           E_fc2(nfinal,ninter, ntsteps))
+!      allocate(E_fc1(nfinal,ninter, ntsteps), &
+!           E_fc2(nfinal,ninter, ntsteps))
+      allocate(E_fc1(nfinal,ninter, ntsteps))
+
     else
       write(6,*) "p % KH_states_mode should be either 'STATES' or 'ORBS'"
     end if
@@ -570,7 +580,11 @@ contains
 
             write(6,*) "f_e, n_e ", f_e, n_e, " out of ", nfinal, ninter
             
-            call spline_easy(X_r, E_f_inp(f_e,:) + E_fn_corr(n_e,:), npoints_in, x_new, E_fc1(f_e,n_e,:), ntsteps)  
+!!!!!!!!!!!!!!!!
+            call spline_easy(X_r, E_f_inp(f_e,:), npoints_in, x_new, E_f1(f_e,:), ntsteps)  
+            call spline_easy(X_r, E_fn_corr(n_e,:), npoints_in, x_new, E_corr(n_e,:), ntsteps)  
+!!!!!!!!!!!!!!!!
+            call spline_easy(X_r, E_f_inp(f_e,:) + E_fn_corr(n_e,:), npoints_in, x_new, E_fc1(f_e,n_e,:), ntsteps)
             
             if(p % include_ZPE) then
               E_ni = E_n1(n_e,1)- (E_i_min + E_i_av)
@@ -628,6 +642,7 @@ contains
 !      end do
       
       end do ! do n_e=1,ninter
+
     end do ! do traj=1, npoints_x_mom_sampl
 
 !      ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
@@ -2009,6 +2024,7 @@ end subroutine calculate_SCKH_res_PES_FC_old
 ! end subroutine put_on_grid
  
 end module m_SCKH_resonant_PES_FC
+
 
 
 

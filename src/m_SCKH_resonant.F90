@@ -34,7 +34,11 @@ contains
     use m_SCKH_resonant_PES_FC, only:  compute_f_fc_if_om_omp_alt
     use m_SCKH_resonant_PES_FC, only:  compute_f_fc_if_om_omp_alt2
     use m_SCKH_utils, only: read_one_sckh_res_traj
-
+    use m_SCKH_resonant_PES_traj, only: read_one_sckh_res_PES_traj
+    use m_SCKH_resonant_PES_traj, only: read_one_sckh_res_PES_traj_orbs
+    ! add by O.Takahashi 2018/07/11
+    use m_rixs_io, only: write_RIXS_spectra
+    use m_rixs_io, only: write_RIXS_map
     
     type(sckh_params_t), intent(inout):: p 
 
@@ -183,8 +187,11 @@ contains
     ntsteps_inp = p % ntsteps
     ntsteps = p % ntsteps2
 
-    nfinal = p % npesfile_f
-    ninter = p % npesfile_n
+    ! add by O.Takahashi 2018/07/01
+!    nfinal = p % npesfile_f
+!    ninter = p % npesfile_n
+    nfinal = p % nfinal
+    ninter = p % ninter
     mu_SI = p % mu * const % u
     
     dvr_start = p % dvr_start_in * 1.0d-10
@@ -211,8 +218,13 @@ contains
     end do
     
     close(ifile)
+
     
-    allocate( E_i_inp(ntsteps_inp))
+    ! add by O.Takahashi 2018/07/01
+    allocate(time_inp(ntsteps_inp))
+    allocate(time_inp2(ntsteps_inp))
+
+    allocate(E_i_inp(ntsteps_inp))
     allocate(E_n_inp(ninter,ntsteps_inp))
     allocate(E_dyn_inp(ntsteps_inp))
     allocate(E_dyn2_inp(ntsteps_inp))
@@ -257,6 +269,10 @@ contains
 
       allocate(E_fc1(nfinal,ninter, ntsteps), &
            E_fc2(nfinal,ninter, ntsteps))
+      ! add by O.Takahashi 2018/07/04
+!      allocate(E_fn_corr(p % npesfile_n, p % npoints_in))
+      allocate(E_fn_corr(ninter, ntsteps))
+
     else
       write(6,*) "p % KH_states_mode should be either 'STATES' or 'ORBS'"
     end if
@@ -449,20 +465,47 @@ contains
       ! read trajectory file (this version reads all quantities every time step and interpolates the quantities of interest)
       !  
 
-      call read_one_sckh_res_traj(ntsteps_inp, nfinal, ninter, traj_files(traj), time_inp, &
-           time_inp2, E_i_inp,  E_n_inp, &
-           !E_IP1s, E_trans, &
-           E_f_inp, D_fn_inp(:,1,:,:), &
-           !E_XAS_inp, E_IP1s_XAS, E_trans_XAS, &
-           D_ni_inp(:,1,:),&
-           E_n0, &   ! reference state
-           E_fn_corr, &
-           !norbs_gs, nocc_gs, eps_gs, norbs_exc, nocc_exc, eps_exc,&
-           .false.)
-           !check_time)
-    
-      !     write(6,*) "traj ", traj, "out of ", npoints_x_mom_sampl
+      write(6,*) "traj ", traj, "out of ", ntraj
 
+
+      if ( index(upper(p % read_traj), "DEMON") .ne. 0 ) then
+
+        call read_one_sckh_res_traj(ntsteps_inp, nfinal, ninter, &
+             traj_files(traj), time_inp, &
+             time_inp2, E_i_inp,  E_n_inp, &
+             !E_IP1s, E_trans, &
+             E_f_inp, D_fn_inp(:,1,:,:), &
+             !E_XAS_inp, E_IP1s_XAS, E_trans_XAS, &
+             D_ni_inp(:,1,:),&
+             E_n0, &   ! reference state
+             E_fn_corr, &
+             !norbs_gs, nocc_gs, eps_gs, norbs_exc, nocc_exc, eps_exc,&
+             .false.)
+        !check_time)
+
+      else if ( index(upper(p % read_traj), "PES") .ne. 0 ) then
+
+        if (upper(p % KH_states_mode) .eq. "STATES") then
+
+          call read_one_sckh_res_PES_traj(ntsteps_inp, nfinal, ninter, &
+               traj_files(traj), time_inp, E_i_inp, E_n_inp, E_f_inp, &
+               D_ni_inp(:,1,:), D_fn_inp(:,1,:,:))
+          E_n0 = 0.0_wp
+
+        else if (upper(p % KH_states_mode) .eq. "ORBS") then
+
+          call read_one_sckh_res_PES_traj_orbs(ntsteps_inp, nfinal, ninter, &
+               traj_files(traj), time_inp, E_i_inp, E_n_inp, E_f_inp, &
+               E_fn_corr, D_ni_inp(:,1,:), D_fn_inp(:,1,:,:))
+          E_n0 = 0.0_wp
+
+        end if
+
+      else
+
+        write(6,*) "p % read_traj must include DEMON or PES"
+
+      end if
 
       ! this inside of traj loop
       if (traj .eq. 1) then
@@ -472,10 +515,19 @@ contains
           E_nf_mean = p % E_nf_mean
           E_ni_mean = p % E_ni_mean
         else
+          ! add by O.Takahashi 2018/07/03
+          ind = minloc(E_i_inp)
+!          E_i_min = E_i_inp(ind(1))
+
           write(6,*) "p % use_E_mean", p % use_E_mean
-          E_nf_mean =   E_n_inp(1,ind(1))+ E_n0(ind(1)) - E_f_inp(1,ind(1)) !E_n1(1,ind(1)) - E_fc1(1,1,ind(1))
-          E_ni_mean =   E_n_inp(1,ind(1))+ E_n0(ind(1)) - E_i_inp(ind(1))   !E_n1(1,ind(1)) - E_i1(ind(1))
+          ! modified by O.Takahashi 2018/07/10
+!          E_nf_mean =   E_n_inp(1,ind(1))+ E_n0(ind(1)) - E_f_inp(1,ind(1)) !E_n1(1,ind(1)) - E_fc1(1,1,ind(1))
+!          E_ni_mean =   E_n_inp(1,ind(1))+ E_n0(ind(1)) - E_i_inp(ind(1))   !E_n1(1,ind(1)) - E_i1(ind(1))
+          E_nf_mean = E_n_inp(1,ind(1)) - E_f_inp(1,ind(1)) !E_n1(1,ind(1)) - E_fc1(1,1,ind(1))
+          E_ni_mean = E_n_inp(1,ind(1)) - E_i_inp(ind(1))   !E_n1(1,ind(1)) - E_i1(ind(1))
+
         end if
+
         E_fi_mean = E_ni_mean -E_nf_mean
         
         write(6,*) "E_nf_mean", E_nf_mean
@@ -523,7 +575,8 @@ contains
         call spline_easy(time_inp, E_i_inp, ntsteps_inp, time, E_i1, ntsteps)
       
         !do n_e=1,ninter
-          call spline_easy(time_inp, E_n_inp(n_e,:) + E_n0, ntsteps_inp, time, E_n1(n_e,:), ntsteps)  
+!          call spline_easy(time_inp, E_n_inp(n_e,:) + E_n0, ntsteps_inp, time, E_n1(n_e,:), ntsteps)  
+          call spline_easy(time_inp, E_n_inp(n_e,:), ntsteps_inp, time, E_n1(n_e,:), ntsteps)  
         !end do
         
         ! options for dipole moments in XAS
@@ -549,7 +602,7 @@ contains
        if (upper(p % dipole_mode) .eq. "DIPOLE") then        
          do f_e=1,nfinal
            do m=1,3
-             call spline_easy(time_inp, D_fn_inp(f_e,1,:,m) , ntsteps_inp, time, D_fn1(f_e,1,:,m) , ntsteps)  
+             call spline_easy(time_inp, D_fn_inp(f_e,1,:,m) , ntsteps_inp, time, D_fn1(f_e,1,:,m) , ntsteps)
            end do
          end do
        else if(upper(p % dipole_mode) .eq. "FC") then
@@ -676,7 +729,8 @@ contains
 !      end do
       
     end do ! do n_e=1,ninter
-  end do ! do traj=1, npoints_x_mom_sampl
+
+  end do ! do traj = 1, ntraj
 
 !      ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
 !      do m1=1,3
@@ -701,6 +755,10 @@ contains
     lambda_ln = -1.0_wp * lambda_F + 4.0_wp  * lambda_G -1.0_wp * lambda_H
     lambda_cp = -2.0_wp * lambda_F + 3.0_wp * lambda_G + 3.0_wp * lambda_H
 
+    ! add by O.Takahashi 2018/07/11
+    ! write unbroadened spectrum (well, only lifetime and extra lifetime on omega' here)
+    call write_RIXS_map(omega_in, omega_out, lambda_lp, lambda_ln, lambda_cp, &
+         p % outfile, p % kh_print_stride)
 
     write(6,*) "Entering convolute_incoming, broadening ",  upper(p % broadening_func_inc)
     
@@ -733,94 +791,97 @@ contains
     
     write(6,*) "Done"
 
-    ! write spectra to individual files
-    do j=1, n_omega_in, p % kh_print_stride
-      
-      file="_sigma_"
-      write(string,'(F6.2)') omega_in(j)   
+    ! add by O.Takahashi 2018/07/11
+    call write_RIXS_spectra(omega_in, omega_out, lambda_lp, lambda_ln, lambda_cp, p % outfile, p %kh_print_stride)
 
-      file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
+ !    ! write spectra to individual files
+ !    do j=1, n_omega_in, p % kh_print_stride
       
-      ifile = get_free_handle()
-      open(ifile,file=file,status='unknown')
+ !      file="_sigma_"
+ !      write(string,'(F6.2)') omega_in(j)   
+
+ !      file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // trim(adjustl(string)) // ".dat"
       
-      do i=1, n_omega_out, p % kh_print_stride
+ !      ifile = get_free_handle()
+ !      open(ifile,file=file,status='unknown')
+      
+ !      do i=1, n_omega_out, p % kh_print_stride
         
-        write(ifile,'(4ES18.10)') omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
-      end do
+ !        write(ifile,'(4ES18.10)') omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+ !      end do
       
-      close(ifile) 
+ !      close(ifile) 
       
-   end do
+ !   end do
 
-   if(.true.) then
+ !   if(.true.) then
    
-    ! write spectra to file
-   file="_sigma_all"
-   !write(string,'(F6.2)') omega_in(j)   
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+ !    ! write spectra to file
+ !   file="_sigma_all"
+ !   !write(string,'(F6.2)') omega_in(j)   
+ !   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
    
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
+ !   ifile = get_free_handle()
+ !   open(ifile,file=file,status='unknown')
 
-   do j=1, n_omega_in, p % kh_print_stride
-     do i=1, n_omega_out, p % kh_print_stride
-       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
-     end do
-     write(ifile, *) 
-   end do
+ !   do j=1, n_omega_in, p % kh_print_stride
+ !     do i=1, n_omega_out, p % kh_print_stride
+ !       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+ !     end do
+ !     write(ifile, *) 
+ !   end do
    
-   close(ifile) 
+ !   close(ifile) 
 
 
-   ! write spectra to file
-   file="_sigma_all_nogrid"
-   !write(string,'(F6.2)') omega_in(j)   
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+ !   ! write spectra to file
+ !   file="_sigma_all_nogrid"
+ !   !write(string,'(F6.2)') omega_in(j)   
+ !   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
    
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
+ !   ifile = get_free_handle()
+ !   open(ifile,file=file,status='unknown')
 
-   do j=1, n_omega_in, p % kh_print_stride
-     do i=1, n_omega_out, p % kh_print_stride
-       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
-     end do
-     write(ifile, *) 
-     write(ifile, *) 
-   end do
+ !   do j=1, n_omega_in, p % kh_print_stride
+ !     do i=1, n_omega_out, p % kh_print_stride
+ !       write(ifile,'(5ES18.10)') omega_in(j), omega_out(i), lambda_lp(j,i), lambda_ln(j,i), lambda_cp(j,i)
+ !     end do
+ !     write(ifile, *) 
+ !     write(ifile, *) 
+ !   end do
    
-   close(ifile) 
+ !   close(ifile) 
 
-   ! write spectra summed over incoming frequencies
-   file="_nonres"
-   !write(string,'(F6.2)') omega_in(j)   
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+ !   ! write spectra summed over incoming frequencies
+ !   file="_nonres"
+ !   !write(string,'(F6.2)') omega_in(j)   
+ !   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
    
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
+ !   ifile = get_free_handle()
+ !   open(ifile,file=file,status='unknown')
 
-   do i=1, n_omega_out, p % kh_print_stride
-     write(ifile,'(5ES18.10)') omega_out(i), sum(lambda_lp(:,i)), sum(lambda_ln(:,i)), sum(lambda_cp(:,i))
-   end do
+ !   do i=1, n_omega_out, p % kh_print_stride
+ !     write(ifile,'(5ES18.10)') omega_out(i), sum(lambda_lp(:,i)), sum(lambda_ln(:,i)), sum(lambda_cp(:,i))
+ !   end do
    
-   close(ifile) 
+ !   close(ifile) 
 
-   ! write spectra summed over outgoing frequencies
-   file="_xas"
-   !write(string,'(F6.2)') omega_in(j)   
-   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
+ !   ! write spectra summed over outgoing frequencies
+ !   file="_xas"
+ !   !write(string,'(F6.2)') omega_in(j)   
+ !   file = trim(adjustl(p % outfile)) //  trim(adjustl(file)) // ".dat"
    
-   ifile = get_free_handle()
-   open(ifile,file=file,status='unknown')
+ !   ifile = get_free_handle()
+ !   open(ifile,file=file,status='unknown')
    
-   do i=1, n_omega_in, p % kh_print_stride
-     write(ifile,'(5ES18.10)') omega_in(i), sum(lambda_lp(i,:)), sum(lambda_ln(i,:)), sum(lambda_cp(i,:))
-   end do
+ !   do i=1, n_omega_in, p % kh_print_stride
+ !     write(ifile,'(5ES18.10)') omega_in(i), sum(lambda_lp(i,:)), sum(lambda_ln(i,:)), sum(lambda_cp(i,:))
+ !   end do
    
-   close(ifile) 
+ !   close(ifile) 
 
    
- end if! if(.false.) then
+ ! end if! if(.false.) then
    
     
  end subroutine calculate_SCKH_res_FC

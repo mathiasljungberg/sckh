@@ -109,6 +109,8 @@ module m_sckh_params_t
      ! for SCKH
      integer:: ntraj
      integer:: nfinal
+     ! add by O.Takahashi 2018/07/01
+     integer:: ninter
      character(80):: runmode_sckh
      logical:: use_mass_scaling
      real(wp):: mass_scaling
@@ -120,7 +122,11 @@ module m_sckh_params_t
 
      ! printing
      integer:: kh_print_stride
-     
+
+     ! add by O.Takahashi 2018/06/29
+     character(80) :: output
+     character(80) :: read_traj
+     integer:: dyn_state_on_n
      
   end type sckh_params_t
 
@@ -271,6 +277,9 @@ contains
 
     call init_parameter('nfinal',inp, 1, p % nfinal, iv)
 
+    ! add by O.Takahashi 2018/07/01
+    call init_parameter('ninter',inp, 1, p % ninter, iv)
+
     call init_parameter('runmode_sckh',inp,'nonresonant',p%runmode_sckh,iv)
 
     call init_parameter('use_mass_scaling',inp, .false.,p % use_mass_scaling,iv)
@@ -311,6 +320,16 @@ contains
     ! flag to use an additional dynamics file (pes_file_dyn)
     call init_parameter('use_dynamics_file',inp, .false., p % use_dynamics_file,iv)
     
+    ! add by O.Takahashi 2018/06/29
+    ! output things, trajectory, etc
+    call init_parameter('output', inp, "NONE", p % output,iv)
+
+    ! read trajectory from file, DEMON or PES
+    call init_parameter('read_traj', inp, "DEMON", p % read_traj, iv)
+
+    ! save dynamics state on intermediate states
+    call init_parameter('dyn_state_on_n', inp, 1, p % dyn_state_on_n, iv)
+
   end subroutine init_sckh_params_t
   
 end module m_sckh_params_t

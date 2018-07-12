@@ -372,7 +372,9 @@ contains
    ifile = get_free_handle()
    open(ifile, file="x_mom_sampl.txt", action='write')
    do i=1,npoints_x_mom_sampl
-     write(22,*) x_mom_sampl(i,1), x_mom_sampl(i,2)
+     ! modified by O.Takahashi 2018/06/29
+!     write(22,*) x_mom_sampl(i,1), x_mom_sampl(i,2)
+     write(ifile,*) x_mom_sampl(i,1), x_mom_sampl(i,2)
    end do
    close(ifile)
    
@@ -2599,6 +2601,10 @@ contains
       check_times =.true.
     end if
     
+    allocate(E_trans_XAS(ninter))
+    allocate(E_IP1s(ntsteps_inp))
+    allocate(E_trans(nfinal,ntsteps_inp))
+
     ifile = get_free_handle()
     open(ifile,file=traj_file,status='old')  
 
@@ -2607,25 +2613,22 @@ contains
     read(ifile,*) E_IP1s_XAS   ! 1s orbital energy
     read(ifile,*) dummy, ntrans ! number of x-ray transitions, should be the same number as the number of unocc states used
 
-    allocate(E_trans_XAS(ninter))
-
     !! check 
     !if ( ntrans .ne. ninter ) then
     !  write(6,*) "Error, ntrans != nfinal", ntrans, ninter
     !end if
     
-    do j =1,ninter
+    do j = 1 , ninter
       read(ifile,*) E_trans_XAS(j), D_in_inp(j,1), D_in_inp(j,2), D_in_inp(j,3)
     end do
 
     ! now read trajectory with XES and more stuff
-    do i=1,ntsteps_inp
+    do i = 1 , ntsteps_inp
 
       read(ifile,*) time_inp2(i)
       read(ifile,*) E_gs_inp(i)
       read(ifile,*) E_n0(i)
       read(ifile,*) E_IP1s(i)  
-
       ! XES
 
       read(ifile,*) dummy, ntrans
@@ -2635,19 +2638,51 @@ contains
       !  write(6,*) "Error, ntrans != nfinal", ntrans, nfinal
       !end if
 
-      do j =1,nfinal
+      do j = 1 , nfinal
         jj = j + ntrans-nfinal 
         read(ifile,*) E_trans(jj,i), D_fn_inp(jj,i,1), D_fn_inp(jj,i,2), D_fn_inp(jj,i,3)
       end do
 
       ! all orbital energies for the ground state
       read(ifile,*) norbs_gs, nocc_gs
+      ! add by O.Takahashi 2018/07/04
+      if ( i .eq. 1 ) then
+        allocate(eps_gs(norbs_gs,ntsteps_inp))
+        ! check
+        if ( norbs_gs .lt. nocc_gs ) then
+          write(6,*) "Error, norbs_gs should be larger than nocc_gs", &
+               norbs_gs, nocc_gs
+          stop
+        end if
+        if ( norbs_gs .lt. nocc_gs+ninter-1 ) then
+          write(6,*) "Error, norbs_gs should be larger than nocc_gs+ninter-1", &
+               norbs_gs, nocc_gs, ninter 
+          stop
+        end if
+      end if
+
       do j =1, norbs_gs
         read(ifile,*) eps_gs(j,i)
       end do
 
       ! all orbital energies for the excited state
       read(ifile,*) norbs_exc, nocc_exc
+      ! add by O.Takahashi 2018/07/04
+      if ( i .eq. 1 ) then
+        allocate(eps_exc(norbs_exc,ntsteps_inp))
+        ! check
+        if ( norbs_exc .lt. nocc_exc ) then
+          write(6,*) "Error, norbs_exc should be larger than nocc_exc", &
+               norbs_exc, nocc_exc
+          stop
+        end if
+        if ( norbs_exc .lt. nocc_exc+ninter-1 ) then
+          write(6,*) "Error, norbs_exc should be larger than nocc_exc+ninter-1", &
+               norbs_exc, nocc_exc, ninter 
+          stop
+        end if
+      end if
+
       do j =1, norbs_exc
         read(ifile,*) eps_exc(j,i)
       end do
@@ -2656,10 +2691,15 @@ contains
       E_f_inp(:,i) = E_gs_inp(i) - E_trans(:,i) + E_IP1s(i) * (const % eV / const % Hartree)
 
       ! corrections to the intermediate state E_n0 (note that we start at HOMO!)
-      E_n_inp(:,i) = eps_exc(nocc_exc:nocc_exc+ninter-1 ,i) -eps_exc(nocc_exc,i)
-      
+      ! modified by O.Takahashi 2018/07/10
+      !E_n_inp(:,i) = eps_exc(nocc_exc:nocc_exc+ninter-1 ,i) -eps_exc(nocc_exc,i)
+      E_n_inp(:,i) = E_n0(i) + eps_exc(nocc_exc:nocc_exc+ninter-1,i) - eps_exc(nocc_exc,i)
+      !E_n_inp(:,i) = E_n0(i) + (E_n0(i) - E_n0(1)) + E_trans_XAS(:) - E_trans_XAS(1)
+
       ! corrections to final state depending on the interemediate state
       E_fn_corr(:,i) = eps_gs(nocc_gs+1:nocc_gs+ninter,i)
+      ! modified by O.Takahashi 2018/07/10
+      !E_fn_corr(:,i) = (E_n0(i) - E_n0(1)) + E_trans_XAS(:) - E_trans_XAS(1)
       
       !check that time_inp(i) = time_inp2(i) 
       if(check_times) then
@@ -2671,9 +2711,14 @@ contains
     end do !i
 
     ! convert to eV units
+    ! modified by O.Takahashi 2018/07/09
+    E_gs_inp = E_gs_inp * const % hartree / const % eV
+    E_n0 = E_n0 * const % hartree / const % eV
+
     E_n_inp = E_n_inp * const % hartree / const % eV
     do j=1,nfinal 
       E_f_inp(j,:) = E_f_inp(j,:) * const % hartree / const % eV 
+      E_fn_corr(j,:) = E_fn_corr(j,:) * const % hartree / const % eV 
     end do
 
     close(ifile)
