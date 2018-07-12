@@ -1,0 +1,34 @@
+
+runmode SCKH
+runmode_sckh RESONANT
+
+KH_states_mode ORBS
+
+! files
+outfile spectrum_resonant
+traj_file_list trajectories.dat
+read_traj DEMON  ! DEMON or PES
+
+! frequencies
+omega_in_start 500  ! 520
+omega_in_end   600  ! 550
+n_omega_in     100
+omega_out_start 500   !517
+omega_out_end  600    !528
+n_omega_out    500
+
+gamma_FWHM 0.18
+gamma_inc_FWHM   0.9 !0.3
+gamma_instr_FWHM 0.3
+
+samplemode 1 
+delta_t 0.1
+ntsteps 256  ! 512
+ntsteps2 256 ! 512
+ntraj 3
+ninter 10
+nfinal 10
+
+!use_proj .true.
+!proj_file proj_file.txt
+
