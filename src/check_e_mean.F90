@@ -1,10 +1,8 @@
 program check_E_mean
-  use m_sckh_params_t, only: sckh_params_t
-  use m_sckh_params_t, only: init_sckh_params_t
+  use m_sckh_params_t, only: sckh_params_t, init_sckh_params_t
   use m_upper, only : upper
   use m_log, only : init_logs, ilog, log_timing_note
-  use m_SCKH_utils, only: read_one_sckh_traj
-  use m_SCKH_utils, only: read_one_sckh_res_traj
+  use m_SCKH_utils, only: read_one_sckh_traj, read_one_sckh_res_traj
   use m_check_E_mean, only: check_e_mean_nonresonant, check_e_mean_resonant
 
   implicit none

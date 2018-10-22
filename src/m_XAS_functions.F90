@@ -277,11 +277,13 @@ subroutine compute_XAS_spectrum(eig_i, eig_n, D_ni, omega_in, gamma, gamma_inc, 
 end subroutine compute_XAS_spectrum
 
 
-subroutine spectrum_XAS_nonadiabatic(eig_na, eig_i, c_na, D_fi, omega, sigma, sigma_states, gamma)
+!subroutine spectrum_XAS_nonadiabatic(eig_na, eig_i, c_na, D_fi, omega, sigma, sigma_states, gamma)
+subroutine spectrum_XAS_nonadiabatic(eig_na, eig_i, c_na, D_fi, omega, sigma, gamma)
   use m_precision, only: wp
   
   real(kind=wp), intent(in):: eig_na(:), eig_i(:), c_na(:,:,:), D_fi(:,:,:), omega(:)
-  real(kind=wp), intent(out):: sigma(:), sigma_states(:,:)
+  !real(kind=wp), intent(out):: sigma(:), sigma_states(:,:)
+  real(kind=wp), intent(out):: sigma(:)
   real(kind=wp),intent(in):: gamma
 
 

@@ -74,163 +74,163 @@ subroutine solve_non_adiabatic(eig_f, c_f, nac, eig_na, c_na)
 end subroutine solve_non_adiabatic
 
 
-subroutine calculate_dipoles_XAS(c_i, c_f, dipole, D_fi)
-  use m_precision, only: wp
+! subroutine calculate_dipoles_XAS(c_i, c_f, dipole, D_fi)
+!   use m_precision, only: wp
 
-  real(kind=wp), intent(in):: c_i(:,:), c_f(:,:,:), dipole(:,:,:)
-  real(kind=wp), intent(out)::  D_fi(:,:,:)
+!   real(kind=wp), intent(in):: c_i(:,:), c_f(:,:,:), dipole(:,:,:)
+!   real(kind=wp), intent(out)::  D_fi(:,:,:)
 
-  integer:: nstates, npesfile_f,i,j,l
+!   integer:: nstates, npesfile_f,i,j,l
 
-  nstates = size(c_i,2)
-  npesfile_f = size(c_f,1)
+!   nstates = size(c_i,2)
+!   npesfile_f = size(c_f,1)
 
-  !
-  ! calculate dipole matrix elements between states 
-  !
+!   !
+!   ! calculate dipole matrix elements between states 
+!   !
 
-  ! transitions from ground state to final states
-  do i=1,npesfile_f
-     do j=1,nstates ! final
-        do l=1,3
-           D_fi(i,j,l) = sum(dipole(i,:,l) * c_f(i,:,j) * c_i(:,1))   ! true dipole moment
-        end do
-     end do
-  end do
+!   ! transitions from ground state to final states
+!   do i=1,npesfile_f
+!      do j=1,nstates ! final
+!         do l=1,3
+!            D_fi(i,j,l) = sum(dipole(i,:,l) * c_f(i,:,j) * c_i(:,1))   ! true dipole moment
+!         end do
+!      end do
+!   end do
   
-  write(6,*) "Calculated dipole matrix elements"
+!   write(6,*) "Calculated dipole matrix elements"
 
-end subroutine calculate_dipoles_XAS
-
-
-subroutine spectrum_XAS(eig_f, eig_i, D_fi, omega, sigma, sigma_states, gamma)
-  use m_precision, only: wp
-
-  real(kind=wp), intent(in):: eig_f(:,:), eig_i(:), D_fi(:,:,:), omega(:)
-  real(kind=wp), intent(out):: sigma(:), sigma_states(:,:)
-  real(kind=wp),intent(in):: gamma
-
-  integer:: nstates, npesfile_f, n_omega, i,j,k,l,m
-  complex(kind=wp),allocatable:: F(:,:)
-  real(kind=wp):: norm
-
-  nstates = size(eig_f,2)
-  npesfile_f = size(eig_f,1)
-  n_omega = size(omega)
-
-  write(6,*) "n_omega", n_omega
-
-  allocate(F(n_omega, 3))
-
-  !
-  ! Fermi golden rule 
-  !
+! end subroutine calculate_dipoles_XAS
 
 
-  sigma = 0.0_wp
-  sigma_states = 0.0_wp
+! subroutine spectrum_XAS(eig_f, eig_i, D_fi, omega, sigma, sigma_states, gamma)
+!   use m_precision, only: wp
 
-  do j= 1,npesfile_f ! F
-     do l=1,nstates ! f_F
+!   real(kind=wp), intent(in):: eig_f(:,:), eig_i(:), D_fi(:,:,:), omega(:)
+!   real(kind=wp), intent(out):: sigma(:), sigma_states(:,:)
+!   real(kind=wp),intent(in):: gamma
 
-        F=0.0_wp        
-        do i =1, n_omega 
-           do m=1,3 ! polarization
+!   integer:: nstates, npesfile_f, n_omega, i,j,k,l,m
+!   complex(kind=wp),allocatable:: F(:,:)
+!   real(kind=wp):: norm
+
+!   nstates = size(eig_f,2)
+!   npesfile_f = size(eig_f,1)
+!   n_omega = size(omega)
+
+!   write(6,*) "n_omega", n_omega
+
+!   allocate(F(n_omega, 3))
+
+!   !
+!   ! Fermi golden rule 
+!   !
+
+
+!   sigma = 0.0_wp
+!   sigma_states = 0.0_wp
+
+!   do j= 1,npesfile_f ! F
+!      do l=1,nstates ! f_F
+
+!         F=0.0_wp        
+!         do i =1, n_omega 
+!            do m=1,3 ! polarization
               
-              F(i,m) = F(i,m) + D_fi(j,l ,m)   / ( omega(i) - &
-                   (eig_f(j,l) -eig_i(1)) + dcmplx(0,gamma) )
+!               F(i,m) = F(i,m) + D_fi(j,l ,m)   / ( omega(i) - &
+!                    (eig_f(j,l) -eig_i(1)) + dcmplx(0,gamma) )
 
-           end do
-        end do
+!            end do
+!         end do
         
-        !square F
-        sigma_states(j,:) = sigma_states(j,:)  + real(conjg(F(:,1))*F(:,1)) + real(conjg(F(:,2))*F(:,2)) &
-             + real(conjg(F(:,3))*F(:,3)) 
+!         !square F
+!         sigma_states(j,:) = sigma_states(j,:)  + real(conjg(F(:,1))*F(:,1)) + real(conjg(F(:,2))*F(:,2)) &
+!              + real(conjg(F(:,3))*F(:,3)) 
 
-     end do ! l
+!      end do ! l
      
-     sigma = sigma  + sigma_states(j,:)
+!      sigma = sigma  + sigma_states(j,:)
      
-  end do !j
+!   end do !j
   
-  write(6,*) "Calculated XAS spectrum"
+!   write(6,*) "Calculated XAS spectrum"
 
-  ! normalize spectrum
-  norm=sum(sigma) *(omega(2) -omega(1)) 
-  sigma = sigma/norm
+!   ! normalize spectrum
+!   norm=sum(sigma) *(omega(2) -omega(1)) 
+!   sigma = sigma/norm
   
-  do j= 1, npesfile_f
-     sigma_states(j,:) = sigma_states(j,:)/norm
-  end do
+!   do j= 1, npesfile_f
+!      sigma_states(j,:) = sigma_states(j,:)/norm
+!   end do
 
-  deallocate(F)
+!   deallocate(F)
 
-end subroutine spectrum_XAS
+! end subroutine spectrum_XAS
 
-subroutine spectrum_XAS_nonadiabatic(eig_na, eig_i, c_na, D_fi, omega, sigma, sigma_states, gamma)
-  use m_precision, only: wp
+! subroutine spectrum_XAS_nonadiabatic(eig_na, eig_i, c_na, D_fi, omega, sigma, sigma_states, gamma)
+!   use m_precision, only: wp
 
-  real(kind=wp), intent(in):: eig_na(:), eig_i(:), c_na(:,:,:), D_fi(:,:,:), omega(:)
-  real(kind=wp), intent(out):: sigma(:), sigma_states(:,:)
-  real(kind=wp),intent(in):: gamma
-
-
-  integer:: nstates, nstates_na, npesfile_f, n_omega, i,j,k,l,m
-  complex(kind=wp),allocatable:: F(:,:)
-  real(kind=wp):: norm
-
-  nstates = size(eig_i)
-  nstates_na = size(eig_na)
-  npesfile_f = size(D_fi,1)
-  n_omega = size(omega)
-
-  allocate(F(n_omega, 3))
+!   real(kind=wp), intent(in):: eig_na(:), eig_i(:), c_na(:,:,:), D_fi(:,:,:), omega(:)
+!   real(kind=wp), intent(out):: sigma(:), sigma_states(:,:)
+!   real(kind=wp),intent(in):: gamma
 
 
-  !
-  ! Fermi golden rule 
-  !
+!   integer:: nstates, nstates_na, npesfile_f, n_omega, i,j,k,l,m
+!   complex(kind=wp),allocatable:: F(:,:)
+!   real(kind=wp):: norm
 
-  write(6,*) "Computing nonadiabatic XAS spectrum", npesfile_f, nstates, nstates_na
+!   nstates = size(eig_i)
+!   nstates_na = size(eig_na)
+!   npesfile_f = size(D_fi,1)
+!   n_omega = size(omega)
 
-  sigma=0.0_wp
+!   allocate(F(n_omega, 3))
+
+
+!   !
+!   ! Fermi golden rule 
+!   !
+
+!   write(6,*) "Computing nonadiabatic XAS spectrum", npesfile_f, nstates, nstates_na
+
+!   sigma=0.0_wp
   
-  do j= 1,nstates_na ! F'
+!   do j= 1,nstates_na ! F'
      
-      do k= 1, npesfile_f ! F
-        do l=1, nstates ! f_F
+!       do k= 1, npesfile_f ! F
+!         do l=1, nstates ! f_F
 
-           F=0.0_wp         
-           do i =1, n_omega 
-              do m=1,3 ! polarization
+!            F=0.0_wp         
+!            do i =1, n_omega 
+!               do m=1,3 ! polarization
                  
-                 F(i,m) = F(i,m) + c_na(k,l,j) *  D_fi(k, l ,m)  / ( omega(i) - &
-                      (eig_na(j) -eig_i(1)) + dcmplx(0,gamma) )
+!                  F(i,m) = F(i,m) + c_na(k,l,j) *  D_fi(k, l ,m)  / ( omega(i) - &
+!                       (eig_na(j) -eig_i(1)) + dcmplx(0,gamma) )
                  
 
-              end do !i
-           end do ! m
+!               end do !i
+!            end do ! m
 
-           !square F
-           ! the summation is put here to avoid possible interference effects, not sure if they should be there or not
-           sigma = sigma  + real(conjg(F(:,1))*F(:,1)) + real(conjg(F(:,2))*F(:,2)) &
-                + real(conjg(F(:,3))*F(:,3)) 
+!            !square F
+!            ! the summation is put here to avoid possible interference effects, not sure if they should be there or not
+!            sigma = sigma  + real(conjg(F(:,1))*F(:,1)) + real(conjg(F(:,2))*F(:,2)) &
+!                 + real(conjg(F(:,3))*F(:,3)) 
 
            
-        end do ! l
-     end do ! k
+!         end do ! l
+!      end do ! k
 
-  end do !j
+!   end do !j
   
-  write(6,*) "Calculated spectrum"
+!   write(6,*) "Calculated spectrum"
 
-  ! normalize spectrum
-  norm=sum(sigma) *(omega(2) -omega(1)) 
-  sigma = sigma/norm
+!   ! normalize spectrum
+!   norm=sum(sigma) *(omega(2) -omega(1)) 
+!   sigma = sigma/norm
 
-  deallocate(F)
+!   deallocate(F)
  
-end subroutine spectrum_XAS_nonadiabatic
+! end subroutine spectrum_XAS_nonadiabatic
 
 subroutine calculate_dipoles_KH_nonres(c_i, c_n, c_f, dipole, D_ni, D_fn, D_fi)
   use m_precision, only: wp
