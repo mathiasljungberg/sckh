@@ -153,7 +153,19 @@ contains
 
       ! first time, compute the mean transition energy
       if (traj .eq. 1) then
-        E_nf_mean = sum(E_n(:)-  E_f(nfinal,:)) / max(1,size(E_n(:))) 
+
+        ! add my O.Takahashi 2018/10/22
+        if (p % use_E_mean) then
+          write(6,*) "p % use_E_mean", p % use_E_mean
+          E_nf_mean = p % E_nf_mean
+        else
+          write(6,*) "p % use_E_mean", p % use_E_mean
+
+          E_nf_mean = sum(E_n(:)-  E_f(nfinal,:)) / max(1,size(E_n(:))) 
+
+        end if
+
+        write(6,*) "E_nf_mean", E_nf_mean
         
         call get_omega_reordered_fftw(time_l2 * const % eV /  const % hbar, omega)
         omega =  omega + E_nf_mean !E_nf_mean - omega !omega - E_nf_mean

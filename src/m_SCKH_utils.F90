@@ -2566,11 +2566,13 @@ contains
 
   subroutine read_one_sckh_res_traj(ntsteps_inp, nfinal, ninter, traj_file, time_inp, &
        time_inp2, E_gs_inp, E_n_inp, &
-       !E_IP1s, E_trans,&
+       E_IP1s, E_trans, &
        E_f_inp, D_fn_inp, &
-       D_in_inp,&
+       !E_XAS_inp, E_IP1s_XAS, E_trans_XAS, &
+       D_in_inp, &
        E_n0, &
        E_fn_corr, &
+       !norbs_gs, nocc_gs, eps_gs, norbs_exc, nocc_exc, eps_exc,&
        check_times_in)
     use m_precision, only: wp
     use m_constants, only: const
@@ -2579,16 +2581,16 @@ contains
     integer, intent(in):: ntsteps_inp, nfinal, ninter
     character(*), intent(in):: traj_file
     real(kind=wp), intent(in):: time_inp(:)
-    real(kind=wp), intent(out)::  time_inp2(:), E_gs_inp(:),  E_n_inp(:,:)
+    real(kind=wp), intent(out):: time_inp2(:), E_gs_inp(:),  E_n_inp(:,:)
     real(kind=wp), intent(out):: E_f_inp(:,:), D_fn_inp(:,:,:)
     real(kind=wp), intent(out)::  D_in_inp(:,:)
     real(kind=wp), intent(out)::  E_n0(:)
-    real(wp), intent(out):: E_fn_corr(:,:)
+    real(kind=wp), intent(out):: E_fn_corr(:,:)
+    real(kind=wp), intent(out):: E_IP1s(:), E_trans(:,:)
     logical, intent(in), optional:: check_times_in
 
     real(kind=wp)::  E_XAS_inp, E_IP1s_XAS
-    real(kind=wp), allocatable:: E_IP1s(:), E_trans(:,:)
-    real(wp), allocatable:: E_trans_XAS(:)
+!    real(wp), allocatable:: E_trans_XAS(:)
     integer:: norbs_gs, nocc_gs, norbs_exc, nocc_exc
     real(kind=wp), allocatable::  eps_gs(:,:), eps_exc(:,:)
     integer:: ifile, i, j, ntrans, jj
@@ -2601,16 +2603,16 @@ contains
       check_times =.true.
     end if
     
-    allocate(E_trans_XAS(ninter))
-    allocate(E_IP1s(ntsteps_inp))
-    allocate(E_trans(nfinal,ntsteps_inp))
+!    allocate(E_trans_XAS(ninter))
+!    allocate(E_IP1s(ntsteps_inp))
+!    allocate(E_trans(nfinal,ntsteps_inp))
 
     ifile = get_free_handle()
     open(ifile,file=traj_file,status='old')  
 
     ! XAS for first time step
-    read(ifile,*) E_XAS_inp  ! total energy
-    read(ifile,*) E_IP1s_XAS   ! 1s orbital energy
+    read(ifile,*) dummy         ! E_XAS_inp  ! total energy
+    read(ifile,*) dummy         ! E_IP1s_XAS   ! 1s orbital energy
     read(ifile,*) dummy, ntrans ! number of x-ray transitions, should be the same number as the number of unocc states used
 
     !! check 
@@ -2619,7 +2621,8 @@ contains
     !end if
     
     do j = 1 , ninter
-      read(ifile,*) E_trans_XAS(j), D_in_inp(j,1), D_in_inp(j,2), D_in_inp(j,3)
+!      read(ifile,*) E_trans_XAS(j), D_in_inp(j,1), D_in_inp(j,2), D_in_inp(j,3)
+      read(ifile,*) dummy, D_in_inp(j,1), D_in_inp(j,2), D_in_inp(j,3)
     end do
 
     ! now read trajectory with XES and more stuff
@@ -2716,13 +2719,22 @@ contains
     E_n0 = E_n0 * const % hartree / const % eV
 
     E_n_inp = E_n_inp * const % hartree / const % eV
-    do j=1,nfinal 
+    do j = 1 , nfinal 
       E_f_inp(j,:) = E_f_inp(j,:) * const % hartree / const % eV 
+!      E_fn_corr(j,:) = E_fn_corr(j,:) * const % hartree / const % eV 
+    end do
+    do j = 1 , ninter
       E_fn_corr(j,:) = E_fn_corr(j,:) * const % hartree / const % eV 
     end do
 
     close(ifile)
     
+    ! add by O.Takahashi 2018/10/20
+!    deallocate(E_trans_XAS)
+    deallocate(eps_gs)
+    deallocate(eps_exc)
+
+
   end subroutine read_one_sckh_res_traj
 
 

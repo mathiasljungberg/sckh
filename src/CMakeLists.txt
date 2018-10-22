@@ -13,6 +13,7 @@ IF(CMAKE_Fortran_COMPILER MATCHES ifort)
   #SET(FFTW_LIB "-L/usr/lib -lfftw3 -lm")
 
    #SET(MKLROOT "/opt/intel/composer_xe_2013_sp1/mkl")
+   SET(MKLROOT "/opt/intel/mkl")
    SET(LAPACK_LIB " -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_sequential.a -Wl,--end-group -lpthread -lm")
 
    IF(USER_OS STREQUAL LinuxMint )
@@ -101,6 +102,8 @@ m_SCKH_resonant_PES_FC.F90
 m_SCKH_resonant.F90
 m_rixs_io.F90
 m_broaden_rixs.F90
+m_SCKH_resonant_PES_traj.F90
+m_check_e_mean.F90
 )
 
 SET(ALL_MODULES_F 
@@ -113,7 +116,7 @@ sffteu.f
 #add_subdirectory(morsefitting morsefitting)
 
 SET(EXECUTABLES
-vib_finite_diff wpd sckh_main test_crank_nicolson
+vib_finite_diff wpd sckh_main test_crank_nicolson check_e_mean
 )
 
 FOREACH(EXEC ${EXECUTABLES})
