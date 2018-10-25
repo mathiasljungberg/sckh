@@ -1,4 +1,7 @@
 module m_SCKH_resonant
+
+  !$ use omp_lib
+
   implicit none
 
 contains
@@ -129,10 +132,10 @@ contains
     integer:: m
     integer:: m1
     integer:: m2
-    integer:: m3
-    integer:: m4
+    !integer:: m3
+    !integer:: m4
     integer:: traj
-    integer:: traj2
+    !integer:: traj2
     integer:: n_e
     integer:: f_e
     integer:: fn_e
@@ -144,8 +147,9 @@ contains
     !complex(wp), allocatable::  F_if_t_omp(:,:,:,:)    
     !complex(wp), allocatable::  F_if_om_omp(:,:,:,:,:)
 
-    complex(wp), allocatable::  F_tmp(:,:,:,:)
-    complex(wp), allocatable::  F_tmp2(:,:,:,:)
+    !complex(wp), allocatable::  F_tmp(:,:,:,:)
+    !complex(wp), allocatable::  F_tmp2(:,:,:,:)
+    complex(wp), allocatable:: F_tmp_f(:,:,:,:,:)
 
     !complex(wp), allocatable::  F_if_omp(:,:,:,:)    
     !complex(wp), allocatable::  F_if_omp_tmp(:,:,:,:)    
@@ -427,9 +431,9 @@ contains
     allocate(sigma_tmp(n_omega_in, n_omega_out))
 
     !allocate(F_if_om_omp(nfinal_tot, n_omega_in, n_omega_out,3,3))
-    allocate(F_tmp(n_omega_in, n_omega_out,3,3))
-    allocate(F_tmp2(n_omega_in, n_omega_out,3,3))
-
+    !allocate(F_tmp(n_omega_in, n_omega_out,3,3))
+    !allocate(F_tmp2(n_omega_in, n_omega_out,3,3))
+    allocate(F_tmp_f(nfinal, n_omega_in, n_omega_out,3,3))
 
     ! add by O.Takahashi 2018/10/19
     ! count memory for allocated variables
@@ -447,7 +451,7 @@ contains
     memory = memory + 8 * size(omega_in)     ! n_omega_in
     memory = memory + 8 * size(omega_out)    ! n_omega_out
     memory = memory + 8 * size(lambda_F) * 7 ! n_omega_in*n_omega_out, others lambda_G, lambda_H, lambda_lp, lambda_ln, lambda_cp, sigma_tmp
-    memory = memory + 16 * size(F_tmp) * 2   ! n_omega_in*nomega_out*3*3
+    memory = memory + 16 * size(F_tmp_f)     ! nfinal*n_omega_in*nomega_out*3*3
 
     write(6,*) "Total amount of allocated memory is ", memory, " bytes, ", &
          memory/1000000, " M bytes"
@@ -577,6 +581,9 @@ contains
 
       end if !if (traj .eq. 1) then
     
+      ! a bit unnecessary splines but well...
+      call spline_easy(time_inp, E_i_inp, ntsteps_inp, time, E_i1, ntsteps)
+    
       ! new loop here over intermediate states i order to do separate dynamics
       do n_e=1,ninter
 
@@ -606,90 +613,91 @@ contains
       !  
       !end if ! if(upper(p % dynamics_mode .eq. "SEPARATE")) then
     
-      ! a bit unnecessary splines but well...
-      call spline_easy(time_inp, E_i_inp, ntsteps_inp, time, E_i1, ntsteps)
-    
       !do n_e = 1 , ninter
       !    call spline_easy(time_inp, E_n_inp(n_e,:) + E_n0, ntsteps_inp, time, E_n1(n_e,:), ntsteps)  
         call spline_easy(time_inp, E_n_inp(n_e,:), ntsteps_inp, time, E_n1(n_e,:), ntsteps)  
       !end do
       
-      ! options for dipole moments in XAS
-      if (upper(p % dipole_mode) .eq. "DIPOLE") then
+        ! options for dipole moments in XAS
+        if (upper(p % dipole_mode) .eq. "DIPOLE") then
         !do n_e = 1 , ninter
           do m = 1 , 3
           !  call spline_easy(time_inp, D_ni_inp(n_e,:,m) , ntsteps_inp, time, D_ni1(n_e,:,m) , ntsteps)  
             D_ni1(n_e,1,m) = D_ni_inp(n_e,1,m)
           end do
         !end do
-      else if(upper(p % dipole_mode) .eq. "FC") then
-        D_ni1 = 1.0_wp
-      else if(upper(p % dipole_mode) .eq. "DIPOLE_X0") then
-        do i=1, ntsteps_inp !p % nstates
-          D_ni1(:,i,:) = D_ni_inp(:,ind(1),:) 
-        end do
-      else
-        write(6,*) "p % dipole_mode must be DIPOLE, FC or DIPOLE_X0"
-        stop
-      end if
-
-      ! options for dipole moments in XES
-      if (upper(p % dipole_mode) .eq. "DIPOLE") then        
-        do f_e=1,nfinal
-          do m=1,3
-            call spline_easy(time_inp, D_fn_inp(f_e,1,:,m), ntsteps_inp, time, D_fn1(f_e,1,:,m), ntsteps)
+        else if(upper(p % dipole_mode) .eq. "FC") then
+          D_ni1 = 1.0_wp
+        else if(upper(p % dipole_mode) .eq. "DIPOLE_X0") then
+          do i=1 , ntsteps_inp !p % nstates
+            D_ni1(:,i,:) = D_ni_inp(:,ind(1),:) 
           end do
-        end do
-      else if(upper(p % dipole_mode) .eq. "FC") then
-        D_fn1 = 1.0_wp
-      else if(upper(p % dipole_mode) .eq. "DIPOLE_X0") then
-        do i=1, ntsteps_inp !p % nstates
-          D_fn1(:,1,i,:) = D_fn_inp(:,1,ind(1),:) 
-        end do
-      else
-        write(6,*) "p % dipole_mode must be DIPOLE, FC or DIPOLE_X0"
-        stop
-      end if
+        else
+          write(6,*) "p % dipole_mode must be DIPOLE, FC or DIPOLE_X0"
+          stop
+        end if
 
+        ! options for dipole moments in XES
+        if (upper(p % dipole_mode) .eq. "DIPOLE") then        
+          do f_e = 1 , nfinal
+            do m = 1 , 3
+              call spline_easy(time_inp, D_fn_inp(f_e,1,:,m), ntsteps_inp, time, D_fn1(f_e,1,:,m), ntsteps)
+            end do
+          end do
+        else if(upper(p % dipole_mode) .eq. "FC") then
+          D_fn1 = 1.0_wp
+        else if(upper(p % dipole_mode) .eq. "DIPOLE_X0") then
+          do i = 1 , ntsteps_inp !p % nstates
+            D_fn1(:,1,i,:) = D_fn_inp(:,1,ind(1),:) 
+          end do
+        else
+          write(6,*) "p % dipole_mode must be DIPOLE, FC or DIPOLE_X0"
+          stop
+        end if
 
-      ! new loop here over intermediate states i order to do separate dynamics
-      !do n_e=1,ninter
+        ! new loop here over intermediate states i order to do separate dynamics
+        !do n_e=1,ninter
 
-      !F_if_om_omp = 0.0_wp
+        !F_if_om_omp = 0.0_wp
+        F_tmp_f = 0.0_wp
     
         if (upper(p % KH_states_mode) .eq. "STATES") then
 
-          do f_e=1,nfinal
+          do f_e = 1 , nfinal
             call spline_easy(time_inp, E_f_inp(f_e,:), ntsteps_inp, time, E_fc1(f_e,1,:), ntsteps)
           end do
       
-          do f_e=1,nfinal
+!$OMP PARALLEL DO PRIVATE(f_e, m1, m2, E_ni, E_nf) REDUCTION(+:lambda_F,lambda_G,lambda_H)
+          do f_e = 1 , nfinal
 
-            F_tmp =0.0_wp
+            !F_tmp = 0.0_wp
         
           !do n_e=1,ninter
           
             !E_ni = E_n1(n_e,1)-E_i1(1) + (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
 
             if(p % include_ZPE) then
-              E_ni = E_n1(n_e,1)- (E_i_min + E_i_av)
+              E_ni = E_n1(n_e,1) - (E_i_min + E_i_av)
               !E_ni = E_n1(n_e,1)-E_i1(1) + (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
             else
-              E_ni = E_n1(n_e,1)-E_i1(1) 
+              E_ni = E_n1(n_e,1) - E_i1(1) 
               !E_ni = E_n1(n_e,1)-E_i1(1) + (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
             end if
           
-            E_nf = E_n1(n_e,1)- E_fc1(f_e,1,1)
+            E_nf = E_n1(n_e,1) - E_fc1(f_e,1,1)
           
             if(upper(p % sckh_alt_mode) .eq. "NORMAL") then
               call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
-                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+!                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp_f(f_e,:,:,:,:))
             else if (upper(p % sckh_alt_mode) .eq. "ALT") then
               call compute_F_FC_if_om_omp_alt(E_ni, E_nf, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
-                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+!                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp_f(f_e,:,:,:,:))
             else if (upper(p % sckh_alt_mode) .eq. "ALT2") then
               call compute_F_FC_if_om_omp_alt2(E_ni, E_nf, E_n1(n_e,:), E_fc1(f_e,1,:), E_ni_mean, E_nf_mean, E_fi_mean, &
-                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+!                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp_f(f_e,:,:,:,:))
             end if
             
             !write(6,*) "Here... 3"
@@ -700,61 +708,71 @@ contains
           
           !end do
         
-            ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
-            do m1=1,3
-              do m2=1,3
-                lambda_F(:, :) = lambda_F(:, :) +  real(conjg(F_tmp(:,:,m1,m1)) * F_tmp(:,:,m2,m2))
-                lambda_G(:, :) = lambda_G(:, :) +  real(conjg(F_tmp(:,:,m1,m2)) * F_tmp(:,:,m1,m2))
-                lambda_H(:, :) = lambda_H(:, :) +  real(conjg(F_tmp(:,:,m1,m2)) * F_tmp(:,:,m2,m1))
+          ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
+            do m1 = 1 , 3
+              do m2 = 1 , 3
+                !lambda_F(:,:) = lambda_F(:,:) + real(conjg(F_tmp(:,:,m1,m1)) * F_tmp(:,:,m2,m2))
+                !lambda_G(:,:) = lambda_G(:,:) + real(conjg(F_tmp(:,:,m1,m2)) * F_tmp(:,:,m1,m2))
+                !lambda_H(:,:) = lambda_H(:,:) + real(conjg(F_tmp(:,:,m1,m2)) * F_tmp(:,:,m2,m1))
+                lambda_F(:,:) = lambda_F(:,:) + real(conjg(F_tmp_f(f_e,:,:,m1,m1)) * F_tmp_f(f_e,:,:,m2,m2))
+                lambda_G(:,:) = lambda_G(:,:) + real(conjg(F_tmp_f(f_e,:,:,m1,m2)) * F_tmp_f(f_e,:,:,m1,m2))
+                lambda_H(:,:) = lambda_H(:,:) + real(conjg(F_tmp_f(f_e,:,:,m1,m2)) * F_tmp_f(f_e,:,:,m2,m1))
               end do
             end do
 
-          end do
+          end do ! do f_e=1,nfinal
+!$OMP END PARALLEL DO
       
         else if (upper(p % KH_states_mode) .eq. "ORBS") then
 
-          do f_e=1,nfinal
-          !do n_e=1,ninter
+!$OMP PARALLEL DO PRIVATE(f_e, fn_e, m1, m2, E_ni, E_nf) REDUCTION(+:lambda_F,lambda_G,lambda_H)
+          do f_e = 1 , nfinal
 
-            fn_e = ninter * (f_e -1) + n_e  
+            fn_e = ninter * (f_e - 1) + n_e  
 
             !write(6,*) "f_e, n_e ", f_e, n_e, " out of ", nfinal, ninter
           
             call spline_easy(time_inp, E_f_inp(f_e,:) + E_fn_corr(n_e,:), ntsteps_inp, time, E_fc1(f_e,n_e,:), ntsteps)  
           
             if(p % include_ZPE) then
-              E_ni = E_n1(n_e,1)- (E_i_min + E_i_av)
+              E_ni = E_n1(n_e,1) - (E_i_min + E_i_av)
             else
-              E_ni = E_n1(n_e,1)-E_i1(1) !+ (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
+              E_ni = E_n1(n_e,1) - E_i1(1) !+ (x_mom_sampl(traj,2) **2 / (2.0_wp*mu_SI)) / const % eV
             end if
 
-            E_nf = E_n1(n_e,1)- E_fc1(f_e,1,1)
+            E_nf = E_n1(n_e,1) - E_fc1(f_e,1,1)
           
             if(upper(p % sckh_alt_mode) .eq. "NORMAL") then
               call compute_F_FC_if_om_omp(E_ni, E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
-                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+!                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, time, gamma, gamma_R, F_tmp_f(f_e,:,:,:,:))
             else if (upper(p % sckh_alt_mode) .eq. "ALT") then
               call compute_F_FC_if_om_omp_alt(E_ni, E_nf,E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
-                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+!                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp_f(f_e,:,:,:,:))
             else if (upper(p % sckh_alt_mode) .eq. "ALT2") then
               call compute_F_FC_if_om_omp_alt2(E_ni, E_nf,E_n1(n_e,:), E_fc1(f_e,n_e,:), E_ni_mean, E_nf_mean, E_fi_mean, &
-                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+!                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp) !F_if_om_omp(:,om_in,:,:,:), gamma)
+                   D_fn1(f_e,1,:,:), D_ni1(n_e,1,:), omega_in, omega_out, time, gamma, gamma_R, F_tmp_f(f_e,:,:,:,:))
             end if
             
-              !write(6,*) "Here... 3"
+            !write(6,*) "Here... 3"
             !F_if_om_omp(fn_e,:,:,:,:) = F_if_om_omp(fn_e,:,:,:,:) + F_tmp(:,:,:,:)  
 
             ! perform spherical average according to J. Phys. B. 27, 4169 (1994)
-            do m1=1,3
-              do m2=1,3
-                lambda_F(:, :) = lambda_F(:, :) +  real(conjg(F_tmp(:,:,m1,m1)) * F_tmp(:,:,m2,m2))
-                lambda_G(:, :) = lambda_G(:, :) +  real(conjg(F_tmp(:,:,m1,m2)) * F_tmp(:,:,m1,m2))
-                lambda_H(:, :) = lambda_H(:, :) +  real(conjg(F_tmp(:,:,m1,m2)) * F_tmp(:,:,m2,m1))
+            do m1 = 1 , 3
+              do m2 = 1 , 3
+                !lambda_F(:,:) = lambda_F(:,:) + real(conjg(F_tmp(:,:,m1,m1)) * F_tmp(:,:,m2,m2))
+                !lambda_G(:,:) = lambda_G(:,:) + real(conjg(F_tmp(:,:,m1,m2)) * F_tmp(:,:,m1,m2))
+                !lambda_H(:,:) = lambda_H(:,:) + real(conjg(F_tmp(:,:,m1,m2)) * F_tmp(:,:,m2,m1))
+                lambda_F(:,:) = lambda_F(:,:) + real(conjg(F_tmp_f(f_e,:,:,m1,m1)) * F_tmp_f(f_e,:,:,m2,m2))
+                lambda_G(:,:) = lambda_G(:,:) + real(conjg(F_tmp_f(f_e,:,:,m1,m2)) * F_tmp_f(f_e,:,:,m1,m2))
+                lambda_H(:,:) = lambda_H(:,:) + real(conjg(F_tmp_f(f_e,:,:,m1,m2)) * F_tmp_f(f_e,:,:,m2,m1))
               end do
             end do
           
-          !end do
-          end do
+          end do ! do f_e=1,nfinal
+!$OMP END PARALLEL DO
       
         end if
     
@@ -893,8 +911,7 @@ contains
     ! deallocate(lambda_ln)
     ! deallocate(lambda_cp)
     ! deallocate(sigma_tmp)
-    ! deallocate(F_tmp)
-    ! deallocate(F_tmp2)
+    ! deallocate(F_tmp_f)
 
  end subroutine calculate_SCKH_res_FC
 

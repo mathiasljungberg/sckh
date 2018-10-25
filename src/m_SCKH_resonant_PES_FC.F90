@@ -1,5 +1,8 @@
 module m_SCKH_resonant_PES_FC
-  implicit none
+
+  !$ use omp_lib
+
+  implicit none 
 
 contains
 
@@ -1515,6 +1518,7 @@ end subroutine calculate_SCKH_res_PES_FC_old
    integer:: i_low
    real(wp):: i_low_weight
    
+
    n_omega_in = size(F_if_om_omp,1)
    n_omega_out = size(F_if_om_omp,2)
    
@@ -1532,7 +1536,7 @@ end subroutine calculate_SCKH_res_PES_FC_old
    
    call compute_efactor( E_n1(:), E_fc1(:), E_nf_mean, time, e_factor1(:), .true.)
    !call compute_efactor( E_n1(:), E_fc1(:), E_nf_mean, time, e_factor1(:), .false.)
-   
+
    F_if_om_omp = 0.0_wp
 
    call put_on_grid(omega_in, E_ni, i_low, i_low_weight )
@@ -1540,7 +1544,7 @@ end subroutine calculate_SCKH_res_PES_FC_old
    !write(6,*) "Here... 2"
 
    !write(6,*) e_factor1
-   
+
    do om_in= 1, n_omega_in
      do m1 =1, 3
        ! the factor of exp(-gamma * const % eV * time(:) / const % hbar) seems to belong here, but I must figure out why.
@@ -1556,7 +1560,7 @@ end subroutine calculate_SCKH_res_PES_FC_old
         !    D_fn1(:,m1), &
         !    F_tmp(:))
        call reorder_sigma_fftw_z(F_tmp(:))
-       
+     
        do m2 =1, 3
          !F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) / dcmplx(omega_in(om_in) - E_ni, gamma)
 
@@ -1565,10 +1569,11 @@ end subroutine calculate_SCKH_res_PES_FC_old
          F_if_om_omp(om_in,:,m1,m2) = F_if_om_omp(om_in,:,m1,m2) +  F_tmp(:) * D_ni1(m2) * &
               (1.0_wp -i_low_weight) / dcmplx(omega_in(om_in) - omega_in(i_low+1), gamma) 
        end do
-       
+
      end do
+       
    end do
-   
+
  end subroutine compute_F_FC_if_om_omp
 
 ! various failed attempts to approximate things

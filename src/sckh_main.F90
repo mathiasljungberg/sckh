@@ -1,4 +1,7 @@
 program sckh_main
+
+  !$ use omp_lib
+
   use m_sckh_params_t, only: sckh_params_t
   use m_sckh_params_t, only: init_sckh_params_t
   use m_upper, only : upper

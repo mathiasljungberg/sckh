@@ -7,24 +7,29 @@ IF(CMAKE_Fortran_COMPILER MATCHES ifort)
 
   MESSAGE(STATUS  "ifort compiler found")
 
-  SET(FLAGS "-O0 -warn all -g -CB")
+  #SET(FLAGS "-O0 -warn all -g -CB")
+  #SET(CMAKE_Fortran_FLAGS "-O0 -g -CB -traceback")
+  SET(FLAGS "-O3 -xHOST -ipo -no-prec-div -openmp")
+  SET(CMAKE_Fortran_FLAGS "-O3 -xHOST -ipo -no-prec-div -openmp")
   SET(INCDIR "-I/usr/include")
-  #SET(OMP_FLAGS "")
+  #SET(OMP_FLAGS "-openmp")
   #SET(FFTW_LIB "-L/usr/lib -lfftw3 -lm")
+  SET(FFTW_LIB "-L/usr/local/lib -lfftw3")
 
-   #SET(MKLROOT "/opt/intel/composer_xe_2013_sp1/mkl")
-   SET(MKLROOT "/opt/intel/mkl")
-   SET(LAPACK_LIB " -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_sequential.a -Wl,--end-group -lpthread -lm")
+  #SET(MKLROOT "/opt/intel/composer_xe_2013_sp1/mkl")
+  SET(MKLROOT "/opt/intel/mkl")
+  #SET(LAPACK_LIB " -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_sequential.a -Wl,--end-group -lpthread -lm")
+  SET(LAPACK_LIB " -L${MKLROOT}/lib/intel64 -lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lpthread")
 
-   IF(USER_OS STREQUAL LinuxMint )
+  IF(USER_OS STREQUAL LinuxMint )
 
-     SET(MKLROOT "/opt/intel/composer_xe_2013_sp1/mkl")
-     SET(INCDIR " -I${MKLROOT}/include")
+    SET(MKLROOT "/opt/intel/composer_xe_2013_sp1/mkl")
+    SET(INCDIR " -I${MKLROOT}/include")
     #SET(OMP_FLAGS "")
-     SET(FFTW_LIB "-L/usr/lib -lfftw3 -lm")
-     SET(LAPACK_LIB " -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_sequential.a -Wl,--end-group -lpthread -lm")
+    SET(FFTW_LIB "-L/usr/lib -lfftw3 -lm")
+    SET(LAPACK_LIB " -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_sequential.a -Wl,--end-group -lpthread -lm")
 
-   ENDIF(USER_OS STREQUAL LinuxMint)
+  ENDIF(USER_OS STREQUAL LinuxMint)
 
 ELSE(CMAKE_Fortran_COMPILER MATCHES gfortran)
 

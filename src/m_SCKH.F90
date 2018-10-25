@@ -1,4 +1,7 @@
 module m_SCKH
+
+  !$ use omp_lib
+
   implicit none
 
 contains

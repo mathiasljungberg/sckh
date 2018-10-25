@@ -1,5 +1,7 @@
 module m_SCKH_utils
 
+  !$ use omp_lib
+
   implicit none
   
 contains
@@ -737,20 +739,27 @@ contains
     complex(wp), dimension(:,:,:,:),intent(out) ::  F_if_omp
     real(wp), intent(in):: E_nf_mean, gamma
     
-    complex(wp), allocatable::  e_factor(:)
+    !complex(wp), allocatable::  e_factor(:)
+    complex(wp), allocatable::  e_factor_f(:,:)
     integer:: nfinal, f_e, ntsteps
 
     ntsteps = size(time)     
     
-    allocate(e_factor(ntsteps))
+    !allocate(e_factor(ntsteps))
 
     nfinal = size(E_f,1) 
+
+    allocate(e_factor_f(nfinal,ntsteps))
     
+!$OMP PARALLEL DO PRIVATE(f_e)
     do f_e =1,nfinal! final state 
       !call compute_F_ifn_omp(E_n, E_f(f_e,:), E_nf_mean, D_fn(f_e,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
-      call compute_efactor(E_n, E_f(f_e,:), E_nf_mean, time, e_factor, .true.)
-      call compute_F_ifn_omp(e_factor, D_fn(f_e,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
+      !call compute_efactor(E_n, E_f(f_e,:), E_nf_mean, time, e_factor, .true.)
+      !call compute_F_ifn_omp(e_factor, D_fn(f_e,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
+      call compute_efactor(E_n, E_f(f_e,:), E_nf_mean, time, e_factor_f(f_e,:), .true.)
+      call compute_F_ifn_omp(e_factor_f(f_e,:), D_fn(f_e,:,:), D_ni, time, F_if_omp(f_e,:,:,:), gamma)
     end do ! f_e
+!$OMP END PARALLEL DO
     
   end subroutine compute_F_if_omp
 
@@ -2636,14 +2645,13 @@ contains
 
       read(ifile,*) dummy, ntrans
 
-      !! check that
-      !if ( ntrans .ne. nfinal ) then
-      !  write(6,*) "Error, ntrans != nfinal", ntrans, nfinal
-      !end if
+      ! check that
+      if ( ntrans .ne. nfinal ) then
+        write(6,*) "Error, ntrans should be equal nfinal", ntrans, nfinal
+      end if
 
       do j = 1 , nfinal
-        jj = j + ntrans-nfinal 
-        read(ifile,*) E_trans(jj,i), D_fn_inp(jj,i,1), D_fn_inp(jj,i,2), D_fn_inp(jj,i,3)
+        read(ifile,*) E_trans(j,i), D_fn_inp(j,i,1), D_fn_inp(j,i,2), D_fn_inp(j,i,3)
       end do
 
       ! all orbital energies for the ground state
@@ -2657,8 +2665,8 @@ contains
                norbs_gs, nocc_gs
           stop
         end if
-        if ( norbs_gs .lt. nocc_gs+ninter-1 ) then
-          write(6,*) "Error, norbs_gs should be larger than nocc_gs+ninter-1", &
+        if ( norbs_gs .lt. nocc_gs+ninter ) then
+          write(6,*) "Error, norbs_gs should be larger than nocc_gs+ninter", &
                norbs_gs, nocc_gs, ninter 
           stop
         end if
