@@ -17,6 +17,7 @@ contains
     use m_io, only: get_free_handle
     use m_splines, only: spline_easy
     use m_splines, only: linspace
+    use m_upper, only : upper
     !use m_FFT, only: next_power_of_2
     !use m_KH_utils, only: compute_XES_nonres_elec 
 
@@ -148,12 +149,25 @@ contains
         call spline_easy( time_inp, E_f_inp(i,:), ntsteps_inp, time, E_f(i,:), ntsteps)  
       end do
 
-      do i=1,nfinal
-        do m=1,3
-          call spline_easy(time_inp, D_fn_inp(i,:,m), ntsteps_inp, time, D_fn(i,:,m) , ntsteps)  
+      ! options for dipole moments in XES
+      if (upper(p % dipole_mode) .eq. "DIPOLE") then        
+         do i=1,nfinal
+            do m=1,3
+               call spline_easy(time_inp, D_fn_inp(i,:,m), ntsteps_inp, time, D_fn(i,:,m) , ntsteps)  
+            end do
+         end do
+      else if(upper(p % dipole_mode) .eq. "FC") then
+        D_fn = 1.0_wp
+      else if(upper(p % dipole_mode) .eq. "DIPOLE_X0") then
+        do i=1, ntsteps !npoints_in !p % nstates
+          D_fn(:,i,:) = D_fn_inp(:,1,:) 
         end do
-      end do
+      else
+        write(6,*) "p % dipole_mode must be DIPOLE, FC or DIPOLE_X0"
+        stop
+      end if
 
+         
       ! first time, compute the mean transition energy
       if (traj .eq. 1) then
 

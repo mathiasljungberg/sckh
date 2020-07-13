@@ -52,6 +52,7 @@ ELSE(CMAKE_Fortran_COMPILER MATCHES gfortran)
 
     # gfortran/linux
     SET(FLAGS "-O0  -fbounds-check -ffree-line-length-none -fmax-errors=5")
+    SET(CMAKE_Fortran_FLAGS "-O0  -fbounds-check -ffree-line-length-none -fmax-errors=5")
     SET(INCDIR "-I/usr/include")
     SET(OMP_FLAGS "")
     SET(FFTW_LIB "-L/usr/lib -lfftw3 -lm")
