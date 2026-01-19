@@ -33,25 +33,49 @@ XAS_nonadiabatic  - XAS and XAS including nonadiabatic effects. Also attempt to 
 SCKH_resonant  - like SCKH but for the reoannt case
 
 
+Python modules
+==============
+
+The `src/python_scripts/` directory contains Python implementations:
+
+- `dynamics_1d/` - Classical dynamics on 1D PES with Fourier grid vibrational solver
+- `dynamics_2d.py` - 2D polynomial PES with spline interpolation
+
+
+Installation
+============
+
+```bash
+# Create virtual environment (using uv)
+uv venv
+source .venv/bin/activate
+
+# Install package in editable mode with dev dependencies
+uv pip install -e ".[dev]"
+```
+
+Or without uv:
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+The editable install (`-e`) means changes to the code are immediately available without reinstalling.
+
+
 Testing
 =======
 
 Python tests
 ------------
 
-The Python scripts in `src/python_scripts/` have pytest-based tests.
-
-To run the tests:
-
 ```bash
-# Install test dependencies (first time only)
-uv pip install pytest pytest-cov
-
 # Run all Python tests
-uv run pytest tests/test_dynamics_2d.py -v
+pytest tests/ -v
 
 # Run with coverage report
-uv run pytest tests/test_dynamics_2d.py --cov=python_scripts.dynamics_2d --cov-report=term
+pytest tests/ --cov=python_scripts --cov-report=term
 ```
 
 Fortran tests

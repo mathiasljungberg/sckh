@@ -36,16 +36,6 @@ if __name__ == "__main__":
     Z = ret.get('f')
     spl = RectBivariateSpline(x, y, Z, kx=3, ky=3)
 
-
-    # make sure spline and derivatives come out right at grid points
-    f_spl = spl(x,y, dx=0, dy=0)
-    assert(np.max(f_spl - ret.get('f')) < 1e-12)
-    f_spl = spl(x,y, dx=1, dy=0)
-    assert(np.max(f_spl - ret.get('df_dx')) < 1e-12)
-    f_spl = spl(x,y, dx=0, dy=1)
-    assert(np.max(f_spl - ret.get('df_dy')) < 1e-12)
-
-
     X, Y = np.meshgrid(x, y, indexing="ij")
 
     # --- Plot ---
@@ -84,15 +74,6 @@ if __name__ == "__main__":
                           coeffs_x=[1,2,3,4], 
                           coeffs_y=[1,2,3])
 
-    # make sure spline and derivatives come out right at finer grid points
-    f_spl = spl(xf,yf, dx=0, dy=0)
-    assert(np.max(f_spl - retf.get('f')) < 1e-12)
-    f_spl = spl(xf,yf, dx=1, dy=0)
-    assert(np.max(f_spl - retf.get('df_dx')) < 1e-12)
-    f_spl = spl(xf,yf, dx=0, dy=1)
-    assert(np.max(f_spl - retf.get('df_dy')) < 1e-12)
-
-    ssasda
 
     Xf, Yf = np.meshgrid(xf, yf, indexing="ij")
 
@@ -119,9 +100,5 @@ if __name__ == "__main__":
     ax2.set_title("Z = f(x) · dg(y)/dy")
     ax2.set_xlabel("x")
     ax2.set_ylabel("y")
-
-
-    #axs.plot(x, fx, '--o')
-    #axs.plot(x, dfx,'--o')
 
     plt.show()

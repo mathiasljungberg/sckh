@@ -7,3 +7,12 @@ htmlcov/
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Pytest
+.pytest_cache/
