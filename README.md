@@ -33,3 +33,30 @@ XAS_nonadiabatic  - XAS and XAS including nonadiabatic effects. Also attempt to 
 SCKH_resonant  - like SCKH but for the reoannt case
 
 
+Testing
+=======
+
+Python tests
+------------
+
+The Python scripts in `src/python_scripts/` have pytest-based tests.
+
+To run the tests:
+
+```bash
+# Install test dependencies (first time only)
+uv pip install pytest pytest-cov
+
+# Run all Python tests
+uv run pytest tests/test_dynamics_2d.py -v
+
+# Run with coverage report
+uv run pytest tests/test_dynamics_2d.py --cov=python_scripts.dynamics_2d --cov-report=term
+```
+
+Fortran tests
+-------------
+
+The Fortran test suite uses a custom test runner. See `tests/testsuite/README` for details.
+
+
