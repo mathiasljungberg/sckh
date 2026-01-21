@@ -198,6 +198,13 @@ class DynamicsRunner:
             self.config.sampling.mode,
         )
 
+        if verbose:
+            print(
+                "Sampled positions and momenta"
+            )
+            for x,p in zip(x_init, p_init):
+                print(f"{x}, {p}") 
+
         n_traj = len(x_init)
 
         # Run trajectories

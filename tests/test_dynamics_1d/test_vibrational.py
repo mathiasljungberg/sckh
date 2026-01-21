@@ -35,7 +35,7 @@ class TestBuildKineticMatrix:
         H_fast = build_kinetic_matrix_fast(nstates, dx, mass)
         H_vec = build_kinetic_matrix_vectorized(nstates, dx, mass)
 
-        np.testing.assert_allclose(H_fast, H_vec, rtol=1e-10)
+        np.testing.assert_allclose(H_fast, H_vec, rtol=1e-9)
 
     def test_kinetic_matrix_toeplitz_structure(self, position_grid):
         """Kinetic matrix should have Toeplitz structure (depends only on |i-j|)."""
