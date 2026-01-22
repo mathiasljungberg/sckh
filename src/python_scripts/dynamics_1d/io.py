@@ -1,11 +1,34 @@
-"""File I/O for PES and trajectory data."""
+"""File I/O for PES, trajectory, dipole, and spectrum data."""
 
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, TYPE_CHECKING
 
 import numpy as np
 
 from .constants import CONST
+
+if TYPE_CHECKING:
+    from .trajectory import TrajectoryResult
+
+
+def _loadtxt_fortran(filepath: Path) -> np.ndarray:
+    """Load text file with Fortran D-format exponent support.
+
+    Handles Fortran double-precision format where 'D' or 'd' is used
+    instead of 'E' for exponents (e.g., '-0.345376681424D-03').
+
+    Args:
+        filepath: Path to data file
+
+    Returns:
+        numpy array of floats
+    """
+    from io import StringIO
+
+    with open(filepath) as f:
+        text = f.read().replace('D', 'E').replace('d', 'e')
+
+    return np.loadtxt(StringIO(text))
 
 
 def read_pes_file(
@@ -24,7 +47,7 @@ def read_pes_file(
         x: Position array in meters (SI)
         E: Energy array in Joules (SI)
     """
-    data = np.loadtxt(filepath)
+    data = _loadtxt_fortran(filepath)
     x_raw = data[:, 0]
     E_raw = data[:, energy_column]  # 1-indexed energy column
 
@@ -55,7 +78,7 @@ def read_pes_file_raw(
         x: Position array in original units (typically Angstrom)
         E: Energy array in original units (typically Hartree)
     """
-    data = np.loadtxt(filepath)
+    data = _loadtxt_fortran(filepath)
     return data[:, 0], data[:, energy_column]
 
 
@@ -148,3 +171,138 @@ def write_eigenstate(
         data = np.column_stack([x_ang, psi])
 
     np.savetxt(filepath, data, header=header, fmt="%16.8E")
+
+
+def read_dipole_file(
+    filepath: Path,
+    units: str = "angstrom",
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Read dipole file with format: x d_x d_y d_z.
+
+    Args:
+        filepath: Path to dipole file
+        units: "angstrom" or "bohr" for x coordinate
+
+    Returns:
+        x: Position array in meters (SI)
+        d: Dipole array (n_points, 3) in atomic units
+    """
+    data = _loadtxt_fortran(filepath)
+
+    if data.ndim == 1:
+        raise ValueError(
+            f"Dipole file must have at least 4 columns (x, d_x, d_y, d_z), "
+            f"got 1D array"
+        )
+
+    if data.shape[1] < 4:
+        raise ValueError(
+            f"Dipole file must have at least 4 columns (x, d_x, d_y, d_z), "
+            f"got {data.shape[1]}"
+        )
+
+    x_raw = data[:, 0]
+    d = data[:, 1:4]  # d_x, d_y, d_z columns
+
+    # Convert x to SI units
+    if units.lower() == "angstrom":
+        x = x_raw * 1e-10  # Angstrom to meters
+    elif units.lower() == "bohr":
+        x = x_raw * CONST.bohr
+    else:
+        raise ValueError(f"Unknown units: {units}")
+
+    # Dipole is kept in atomic units (as in Fortran code)
+    return x, d
+
+
+def read_trajectory_file(filepath: Path) -> "TrajectoryResult":
+    """Read trajectory from file.
+
+    Expects format: time(s) x(m) v(m/s) or time(fs) x(Angstrom) v(Angstrom/fs).
+    Auto-detects units based on header or magnitude.
+
+    Args:
+        filepath: Path to trajectory file
+
+    Returns:
+        TrajectoryResult object
+    """
+    from .trajectory import TrajectoryResult
+
+    # Read header to detect units
+    with open(filepath) as f:
+        header = f.readline()
+
+    data = _loadtxt_fortran(filepath)
+
+    time = data[:, 0]
+    x = data[:, 1]
+    v = data[:, 2] if data.shape[1] > 2 else np.zeros_like(x)
+
+    # Detect and convert units
+    if "fs" in header.lower() or "angstrom" in header.lower():
+        # User units: fs and Angstrom
+        time = time * 1e-15  # fs to s
+        x = x * 1e-10  # Angstrom to m
+        v = v * 1e5  # Angstrom/fs to m/s
+    # else assume SI units
+
+    # Compute acceleration (not available from file, set to zero)
+    a = np.zeros_like(x)
+
+    return TrajectoryResult(
+        time=time,
+        x=x,
+        v=v,
+        a=a,
+        x0=x[0],
+        p0=0.0,  # Unknown from file
+    )
+
+
+def write_spectrum(
+    filepath: Path,
+    omega: np.ndarray,
+    sigma: np.ndarray,
+    header: Optional[str] = None,
+) -> None:
+    """Write spectrum to file in Fortran-compatible format.
+
+    Args:
+        filepath: Output file path
+        omega: Frequency array in eV
+        sigma: Cross-section array (same length as omega)
+        header: Optional header comment
+    """
+    if header is None:
+        header = "omega(eV)  sigma"
+
+    data = np.column_stack([omega, sigma])
+    np.savetxt(filepath, data, header=header, fmt="%16.6E", comments="# ")
+
+
+def write_spectrum_per_final(
+    filepath_base: Path,
+    omega: np.ndarray,
+    sigma_f: np.ndarray,
+) -> None:
+    """Write per-final-state spectra to files.
+
+    Creates files: {filepath_base}_final_1.dat, {filepath_base}_final_2.dat, etc.
+
+    Args:
+        filepath_base: Base path for output files (without extension)
+        omega: Frequency array in eV
+        sigma_f: Cross-section array (n_final, n_omega)
+    """
+    n_final = sigma_f.shape[0]
+
+    for j in range(n_final):
+        filepath = Path(f"{filepath_base}_final_{j + 1}.dat")
+        write_spectrum(
+            filepath,
+            omega,
+            sigma_f[j],
+            header=f"omega(eV)  sigma_f (final state {j + 1})",
+        )
