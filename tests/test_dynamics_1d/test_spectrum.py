@@ -312,3 +312,46 @@ class TestSpectrumConfigValidation:
 
         assert config.gamma_hwhm == 0.1
         assert config.gamma_fwhm == 0.2
+
+
+class TestFortranDFormat:
+    """Tests for Fortran D-format exponent support."""
+
+    def test_loadtxt_fortran_d_format(self):
+        """Test reading files with Fortran D-format exponents."""
+        from python_scripts.dynamics_1d.io import _loadtxt_fortran
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = Path(tmpdir) / "test.dat"
+            filepath.write_text("1.0  -0.345376681424D-03\n2.0  1.234567890123D+02\n")
+
+            data = _loadtxt_fortran(filepath)
+
+            np.testing.assert_allclose(data[0, 1], -0.345376681424e-03, rtol=1e-12)
+            np.testing.assert_allclose(data[1, 1], 1.234567890123e+02, rtol=1e-12)
+
+    def test_loadtxt_fortran_lowercase_d(self):
+        """Test reading files with lowercase d exponents."""
+        from python_scripts.dynamics_1d.io import _loadtxt_fortran
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = Path(tmpdir) / "test.dat"
+            filepath.write_text("1.0  -0.123456789d-05\n2.0  9.876543210d+01\n")
+
+            data = _loadtxt_fortran(filepath)
+
+            np.testing.assert_allclose(data[0, 1], -0.123456789e-05, rtol=1e-12)
+            np.testing.assert_allclose(data[1, 1], 9.876543210e+01, rtol=1e-12)
+
+    def test_loadtxt_fortran_standard_e_format(self):
+        """Test that standard E-format still works."""
+        from python_scripts.dynamics_1d.io import _loadtxt_fortran
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = Path(tmpdir) / "test.dat"
+            filepath.write_text("1.0  -1.5E-03\n2.0  2.5E+02\n")
+
+            data = _loadtxt_fortran(filepath)
+
+            np.testing.assert_allclose(data[0, 1], -1.5e-03, rtol=1e-12)
+            np.testing.assert_allclose(data[1, 1], 2.5e+02, rtol=1e-12)
