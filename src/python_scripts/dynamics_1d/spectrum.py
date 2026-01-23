@@ -13,6 +13,8 @@ import numpy as np
 from .constants import CONST
 from .dipole import Dipole1D, create_dipole_from_file, create_constant_dipole
 from .io import (
+    read_pes_file,
+    read_pes_file_raw,
     read_trajectory_file,
     write_spectrum,
     write_spectrum_per_final,
@@ -112,8 +114,8 @@ def compute_F_if(
         # FFT (backward = inverse, matches Fortran's fft_c2c_1d_backward)
         # Fortran FFTW backward is unnormalized IFFT * n
         # numpy.fft.ifft is normalized (divides by n), so we multiply by n
-        # Also multiply by dt to get the integral approximation
-        fft_result = np.fft.ifft(integrand) * nsteps * dt
+        # Note: Fortran doesn't multiply by dt, and it cancels in normalization
+        fft_result = np.fft.ifft(integrand) * nsteps
 
         # Reorder: FFT output is [0, 1, ..., n/2-1, -n/2, ..., -1]
         # We want [-n/2, ..., -1, 0, 1, ..., n/2-1] for physical frequencies
@@ -138,7 +140,8 @@ def get_frequency_grid(time: np.ndarray, E_mean: float) -> np.ndarray:
         Frequencies in eV, matching fftshift ordering
     """
     nsteps = len(time)
-    T = time[-1] - time[0] + (time[1] - time[0])  # Total time span
+    # Match Fortran: time_l = (ntsteps-1) * delta_t
+    T = time[-1] - time[0]
 
     # FFT frequencies in Hz
     # After fftshift: [-n/2, ..., -1, 0, 1, ..., n/2-1] * (1/T)
@@ -193,11 +196,28 @@ class SpectrumCalculator:
             self.config.dynamics.pes_dynamics, units=units
         )
 
-        # Load final state PES
-        self.pes_f = [
-            create_pes_from_file(path, units=units)
-            for path in self.config.spectrum.pes_final_list
-        ]
+        # Load final state PES with optional energy correction
+        if self.config.spectrum.pes_lp_corr:
+            # Apply energy shift so that first final state matches correction PES
+            # Following Fortran: shift = E_lp_corr - E_f(1,:)
+            x_corr, E_corr = read_pes_file(
+                self.config.spectrum.pes_lp_corr, units=units
+            )
+            x_f0, E_f0 = read_pes_file(
+                self.config.spectrum.pes_final_list[0], units=units
+            )
+            shift = E_corr - E_f0
+
+            self.pes_f = []
+            for path in self.config.spectrum.pes_final_list:
+                x, E = read_pes_file(path, units=units)
+                self.pes_f.append(PES1D(x=x, E=E + shift))
+        else:
+            # Load without energy correction
+            self.pes_f = [
+                create_pes_from_file(path, units=units)
+                for path in self.config.spectrum.pes_final_list
+            ]
 
         # Load dipole surfaces based on mode
         if self.config.spectrum.dipole_mode == "DIPOLE":
@@ -300,9 +320,14 @@ class SpectrumCalculator:
         self,
         trajectories: List[TrajectoryResult],
     ) -> float:
-        """Compute mean transition energy from first trajectory.
+        """Compute mean transition energy.
 
-        Following Fortran: E_mean = E_n(x_eq) - E_f[last](x_eq)
+        In "standard" mode: Finds the true equilibrium position x_eq from the
+        initial state PES and evaluates E_mean = E_n(x_eq) - E_f(x_eq).
+
+        In "fortran" mode: Uses minloc(E_i_inp) to find an index in the input
+        PES file, then uses that index into the trajectory arrays. This matches
+        Fortran's implementation for validation purposes.
 
         Args:
             trajectories: List of trajectories
@@ -313,6 +338,15 @@ class SpectrumCalculator:
         if not self._surfaces_loaded:
             self.load_surfaces()
 
+        mode = self.config.spectrum.compatibility_mode
+
+        if mode == "fortran":
+            return self._compute_E_mean_fortran(trajectories)
+        else:
+            return self._compute_E_mean_standard()
+
+    def _compute_E_mean_standard(self) -> float:
+        """Standard E_mean: evaluate at true equilibrium position."""
         # Find equilibrium position from initial state PES
         pes_i = create_pes_from_file(
             self.config.dynamics.pes_initial,
@@ -320,12 +354,36 @@ class SpectrumCalculator:
         )
         x_eq, _ = pes_i.find_minimum()
 
-        # Compute transition energy at equilibrium
-        E_n_eq = self.pes_n.energy(x_eq)
-        E_f_eq = self.pes_f[-1].energy(x_eq)  # Last final state
+        # Evaluate transition energy at equilibrium
+        E_n_at_eq = self.pes_n.energy(x_eq)
+        E_f_at_eq = self.pes_f[-1].energy(x_eq)  # Last final state
 
-        E_mean = (E_n_eq - E_f_eq) / CONST.eV  # Convert to eV
+        E_mean = (E_n_at_eq - E_f_at_eq) / CONST.eV  # Convert to eV
+        return E_mean
 
+    def _compute_E_mean_fortran(
+        self,
+        trajectories: List[TrajectoryResult],
+    ) -> float:
+        """Fortran-compatible E_mean: use minloc index into trajectory.
+
+        Following Fortran: E_mean = E_n(ind) - E_f[last](ind)
+        where ind = minloc(E_i_inp), i.e., the index of minimum energy
+        in the initial state PES file.
+        """
+        # Find minimum energy index in initial state PES (matching Fortran minloc)
+        _, E_i_raw = read_pes_file_raw(self.config.dynamics.pes_initial)
+        ind = int(np.argmin(E_i_raw))
+
+        # Use trajectory positions
+        x_traj = trajectories[0].x
+
+        # Get energies along trajectory at index ind
+        # (Fortran interpolates PES onto trajectory, then indexes with ind)
+        E_n_at_ind = self.pes_n.energy(x_traj[ind])
+        E_f_at_ind = self.pes_f[-1].energy(x_traj[ind])  # Last final state
+
+        E_mean = (E_n_at_ind - E_f_at_ind) / CONST.eV  # Convert to eV
         return E_mean
 
     def compute_spectrum(
@@ -412,8 +470,8 @@ class SpectrumCalculator:
         # Total cross-section
         sigma_tot = np.sum(sigma_f, axis=0)
 
-        # Normalize
-        T = time[-1] - time[0] + (time[1] - time[0])
+        # Normalize (match Fortran: time_l = (nsteps-1) * dt)
+        T = time[-1] - time[0]
         norm = np.sum(sigma_tot) * 2 * np.pi * CONST.hbar / (T * CONST.eV)
         if norm > 0:
             sigma_tot = sigma_tot / norm

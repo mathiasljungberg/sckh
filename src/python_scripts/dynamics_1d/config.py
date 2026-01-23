@@ -26,11 +26,21 @@ class TimeConfig:
 
 @dataclass
 class SamplingConfig:
-    """Initial condition sampling configuration."""
+    """Initial condition sampling configuration.
+
+    Attributes:
+        mode: Sampling mode (1=even, 2=random)
+        npoints_x: Number of position samples
+        npoints_mom: Number of momentum samples
+        compatibility_mode: Algorithm mode for sampling
+            - "standard": Proper CDF integration with linear interpolation
+            - "fortran": Match Fortran implementation (spline, cumsum, step-lookup)
+    """
 
     mode: int = 1  # 1=even, 2=random
     npoints_x: int = 10  # Number of position samples
     npoints_mom: int = 10  # Number of momentum samples
+    compatibility_mode: str = "standard"
 
 
 @dataclass
@@ -104,6 +114,7 @@ def save_config(config: DynamicsConfig, yaml_path: Path) -> None:
             "mode": config.sampling.mode,
             "npoints_x": config.sampling.npoints_x,
             "npoints_mom": config.sampling.npoints_mom,
+            "compatibility_mode": config.sampling.compatibility_mode,
         },
         "pes_initial": str(config.pes_initial),
         "pes_dynamics": str(config.pes_dynamics),

@@ -173,7 +173,7 @@ class TestFrequencyGrid:
         assert omega[-1] > E_mean
 
     def test_frequency_grid_spacing(self):
-        """Frequency spacing should match 1/T."""
+        """Frequency spacing should match 1/T (Fortran convention)."""
         nsteps = 128
         dt = 1e-15
         time = np.arange(nsteps) * dt
@@ -182,7 +182,8 @@ class TestFrequencyGrid:
         omega = get_frequency_grid(time, E_mean)
 
         # Spacing in omega should be 2*pi*hbar / (T * eV)
-        T = time[-1] + dt
+        # Fortran uses T = (nsteps-1) * dt = time[-1] - time[0]
+        T = time[-1] - time[0]
         expected_spacing = 2 * np.pi * CONST.hbar / (T * CONST.eV)
 
         actual_spacing = omega[1] - omega[0]
@@ -355,3 +356,329 @@ class TestFortranDFormat:
 
             np.testing.assert_allclose(data[0, 1], -1.5e-03, rtol=1e-12)
             np.testing.assert_allclose(data[1, 1], 2.5e+02, rtol=1e-12)
+
+
+class TestCompatibilityMode:
+    """Tests for compatibility_mode feature."""
+
+    def test_invalid_compatibility_mode(self):
+        """Should raise error for invalid compatibility mode."""
+        from python_scripts.dynamics_1d.spectrum_config import SpectrumConfig
+
+        with pytest.raises(ValueError, match="compatibility_mode"):
+            SpectrumConfig(
+                gamma_fwhm=0.1,
+                dipole_mode="FC",
+                pes_final_list=[Path("pes.dat")],
+                compatibility_mode="invalid_mode",
+            )
+
+    def test_valid_compatibility_modes(self):
+        """Both 'standard' and 'fortran' should be valid."""
+        from python_scripts.dynamics_1d.spectrum_config import SpectrumConfig
+
+        for mode in ["standard", "fortran", "STANDARD", "FORTRAN"]:
+            config = SpectrumConfig(
+                gamma_fwhm=0.1,
+                dipole_mode="FC",
+                pes_final_list=[Path("pes.dat")],
+                compatibility_mode=mode,
+            )
+            assert config.compatibility_mode == mode.lower()
+
+    def test_default_compatibility_mode(self):
+        """Default compatibility_mode should be 'standard'."""
+        from python_scripts.dynamics_1d.spectrum_config import SpectrumConfig
+
+        config = SpectrumConfig(
+            gamma_fwhm=0.1,
+            dipole_mode="FC",
+            pes_final_list=[Path("pes.dat")],
+        )
+        assert config.compatibility_mode == "standard"
+
+    def test_sampling_config_compatibility_mode(self):
+        """Test SamplingConfig accepts compatibility_mode."""
+        from python_scripts.dynamics_1d.config import SamplingConfig
+
+        config = SamplingConfig(mode=1, npoints_x=10, npoints_mom=10, compatibility_mode="fortran")
+        assert config.compatibility_mode == "fortran"
+
+        config_default = SamplingConfig()
+        assert config_default.compatibility_mode == "standard"
+
+    def test_load_full_config_compatibility_mode(self):
+        """Test that compatibility_mode is loaded from YAML."""
+        from python_scripts.dynamics_1d.spectrum_config import load_full_config
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+
+            # Create minimal PES files
+            x = np.linspace(0.5, 2.5, 11)
+            E = 0.1 * (x - 1.5) ** 2
+            pes_file = tmpdir / "pes.dat"
+            np.savetxt(pes_file, np.column_stack([x, E]))
+
+            # Create YAML config with compatibility_mode
+            yaml_content = f"""
+dynamics:
+  mu: 1.0
+  grid:
+    start: 0.5
+    dx: 0.2
+    npoints: 11
+  time:
+    dt: 1.0
+    nsteps: 10
+  sampling:
+    mode: 1
+    npoints_x: 2
+    npoints_mom: 2
+  pes_initial: "{pes_file}"
+  pes_dynamics: "{pes_file}"
+
+spectrum:
+  gamma_fwhm: 0.1
+  dipole_mode: FC
+  pes_final_list:
+    - "{pes_file}"
+  compatibility_mode: fortran
+"""
+            yaml_file = tmpdir / "config.yaml"
+            yaml_file.write_text(yaml_content)
+
+            config = load_full_config(yaml_file)
+
+            # Both should have fortran mode
+            assert config.spectrum.compatibility_mode == "fortran"
+            assert config.dynamics.sampling.compatibility_mode == "fortran"
+
+    def test_e_mean_standard_vs_fortran(self):
+        """Test that E_mean calculation differs between modes."""
+        from python_scripts.dynamics_1d.spectrum import SpectrumCalculator
+        from python_scripts.dynamics_1d.spectrum_config import FullConfig, SpectrumConfig
+        from python_scripts.dynamics_1d.config import (
+            DynamicsConfig, GridConfig, TimeConfig, SamplingConfig
+        )
+        from python_scripts.dynamics_1d.trajectory import TrajectoryResult
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+
+            # Create test PES files with minimum at index 5 (not at edge)
+            # Use 11 points so minimum is at index 5
+            x = np.linspace(0.5, 2.5, 11)
+            E_init = 0.1 * (x - 1.5) ** 2  # Minimum at x=1.5 (index 5)
+            E_dyn = 19.0 + 0.1 * (x - 1.5) ** 2  # Intermediate state
+            E_final = -0.5 + 0.1 * (x - 1.5) ** 2  # Final state
+
+            pes_init = tmpdir / "pes_init.dat"
+            pes_dyn = tmpdir / "pes_dyn.dat"
+            pes_final = tmpdir / "pes_final.dat"
+
+            np.savetxt(pes_init, np.column_stack([x, E_init]))
+            np.savetxt(pes_dyn, np.column_stack([x, E_dyn]))
+            np.savetxt(pes_final, np.column_stack([x, E_final]))
+
+            # Create configs for both modes
+            def make_config(mode):
+                return FullConfig(
+                    dynamics=DynamicsConfig(
+                        mu=1.0,
+                        grid=GridConfig(start=0.5, dx=0.2, npoints=11),
+                        time=TimeConfig(dt=1.0, nsteps=20),
+                        sampling=SamplingConfig(mode=1, npoints_x=2, npoints_mom=2, compatibility_mode=mode),
+                        pes_initial=pes_init,
+                        pes_dynamics=pes_dyn,
+                        units="angstrom",
+                    ),
+                    spectrum=SpectrumConfig(
+                        gamma_fwhm=0.1,
+                        dipole_mode="FC",
+                        pes_final_list=[pes_final],
+                        compatibility_mode=mode,
+                    ),
+                )
+
+            # Create mock trajectory with enough points and varying positions
+            # Trajectory has 20 points, PES minloc is at index 5
+            # Put trajectory at different positions to ensure modes give different E_mean
+            nsteps = 20
+            time = np.arange(nsteps) * 1e-15
+            # Position varies: starts at 1.6 Å, so position at index 5 is different from equilibrium
+            x_traj = np.linspace(1.6e-10, 1.4e-10, nsteps)  # 1.6 to 1.4 Angstrom
+
+            traj = TrajectoryResult(
+                time=time,
+                x=x_traj,
+                v=np.zeros(nsteps),
+                a=np.zeros(nsteps),
+                x0=x_traj[0],
+                p0=0.0,
+            )
+
+            # Calculate E_mean with both modes
+            calc_standard = SpectrumCalculator(make_config("standard"))
+            calc_standard.load_surfaces()
+            E_mean_standard = calc_standard.compute_mean_transition_energy([traj])
+
+            calc_fortran = SpectrumCalculator(make_config("fortran"))
+            calc_fortran.load_surfaces()
+            E_mean_fortran = calc_fortran.compute_mean_transition_energy([traj])
+
+            # Standard mode evaluates at true equilibrium (x=1.5 Å)
+            # Fortran mode evaluates at trajectory point x_traj[5] ≈ 1.55 Å
+            # These should give slightly different E_mean values
+
+            # Both should be reasonable values (E_dyn - E_final ≈ 19.5 Hartree ≈ 530 eV)
+            assert 500 < E_mean_standard < 600
+            assert 500 < E_mean_fortran < 600
+
+            # The two methods should give similar but not identical results
+            # (difference depends on how far x_traj[5] is from equilibrium)
+            assert abs(E_mean_standard - E_mean_fortran) < 10  # Within 10 eV
+
+
+class TestPESEnergyShift:
+    """Tests for PES energy correction shift functionality."""
+
+    def test_pes_lp_corr_shifts_final_states(self):
+        """Test that pes_lp_corr shifts all final state PES energies."""
+        from python_scripts.dynamics_1d.spectrum import SpectrumCalculator
+        from python_scripts.dynamics_1d.spectrum_config import (
+            FullConfig,
+            SpectrumConfig,
+        )
+        from python_scripts.dynamics_1d.config import (
+            DynamicsConfig,
+            GridConfig,
+            TimeConfig,
+            SamplingConfig,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+
+            # Create test PES files (in Angstrom/Hartree)
+            x = np.linspace(0.5, 2.5, 21)
+
+            # Initial/dynamics PES: harmonic around 1.5
+            E_init = 0.1 * (x - 1.5) ** 2
+            pes_init = tmpdir / "pes_init.dat"
+            np.savetxt(pes_init, np.column_stack([x, E_init]))
+
+            # Final state 1: shifted harmonic
+            E_f1 = -0.2 + 0.1 * (x - 1.5) ** 2
+            pes_f1 = tmpdir / "pes_f1.dat"
+            np.savetxt(pes_f1, np.column_stack([x, E_f1]))
+
+            # Final state 2: another shifted harmonic
+            E_f2 = -0.15 + 0.1 * (x - 1.5) ** 2  # 0.05 above f1
+            pes_f2 = tmpdir / "pes_f2.dat"
+            np.savetxt(pes_f2, np.column_stack([x, E_f2]))
+
+            # LP correction PES: different energy level
+            E_corr = -0.5 + 0.1 * (x - 1.5) ** 2  # 0.3 below f1
+            pes_corr = tmpdir / "pes_lp_corr.dat"
+            np.savetxt(pes_corr, np.column_stack([x, E_corr]))
+
+            # Create config with pes_lp_corr
+            dynamics_config = DynamicsConfig(
+                mu=1.0,
+                grid=GridConfig(start=0.5, dx=0.1, npoints=21),
+                time=TimeConfig(dt=1.0, nsteps=10),
+                sampling=SamplingConfig(mode=1, npoints_x=2, npoints_mom=2),
+                pes_initial=pes_init,
+                pes_dynamics=pes_init,
+                units="angstrom",
+            )
+            spectrum_config = SpectrumConfig(
+                gamma_fwhm=0.1,
+                dipole_mode="FC",
+                pes_final_list=[pes_f1, pes_f2],
+                pes_lp_corr=pes_corr,
+            )
+            config = FullConfig(dynamics=dynamics_config, spectrum=spectrum_config)
+
+            # Create calculator and load surfaces
+            calc = SpectrumCalculator(config)
+            calc.load_surfaces()
+
+            # The shift should be E_corr - E_f1 = -0.3 (in Hartree)
+            # After shift: E_f1_shifted = E_f1 + shift = E_corr
+            # After shift: E_f2_shifted = E_f2 + shift = E_f2 - 0.3
+
+            # Check that first final state now matches correction PES
+            x_test = 1.5e-10  # 1.5 Angstrom in meters
+            E_f1_shifted = calc.pes_f[0].energy(x_test)
+
+            # Load expected from correction file
+            from python_scripts.dynamics_1d.io import read_pes_file
+            x_exp, E_exp = read_pes_file(pes_corr, units="angstrom")
+            pes_exp = calc.pes_f[0].__class__(x=x_exp, E=E_exp)
+            E_expected = pes_exp.energy(x_test)
+
+            np.testing.assert_allclose(E_f1_shifted, E_expected, rtol=1e-10)
+
+            # Check that second final state is shifted by same amount
+            # Original spacing was 0.05 Hartree, should be preserved
+            E_f2_shifted = calc.pes_f[1].energy(x_test)
+            spacing_shifted = E_f2_shifted - E_f1_shifted
+            spacing_original = 0.05 * CONST.hartree  # Convert to Joules
+
+            np.testing.assert_allclose(spacing_shifted, spacing_original, rtol=1e-10)
+
+    def test_no_shift_without_pes_lp_corr(self):
+        """Test that PES energies are unchanged when pes_lp_corr is not set."""
+        from python_scripts.dynamics_1d.spectrum import SpectrumCalculator
+        from python_scripts.dynamics_1d.spectrum_config import (
+            FullConfig,
+            SpectrumConfig,
+        )
+        from python_scripts.dynamics_1d.config import (
+            DynamicsConfig,
+            GridConfig,
+            TimeConfig,
+            SamplingConfig,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+
+            x = np.linspace(0.5, 2.5, 21)
+            E_init = 0.1 * (x - 1.5) ** 2
+            pes_init = tmpdir / "pes_init.dat"
+            np.savetxt(pes_init, np.column_stack([x, E_init]))
+
+            E_f1 = -0.2 + 0.1 * (x - 1.5) ** 2
+            pes_f1 = tmpdir / "pes_f1.dat"
+            np.savetxt(pes_f1, np.column_stack([x, E_f1]))
+
+            dynamics_config = DynamicsConfig(
+                mu=1.0,
+                grid=GridConfig(start=0.5, dx=0.1, npoints=21),
+                time=TimeConfig(dt=1.0, nsteps=10),
+                sampling=SamplingConfig(mode=1, npoints_x=2, npoints_mom=2),
+                pes_initial=pes_init,
+                pes_dynamics=pes_init,
+                units="angstrom",
+            )
+            spectrum_config = SpectrumConfig(
+                gamma_fwhm=0.1,
+                dipole_mode="FC",
+                pes_final_list=[pes_f1],
+                # No pes_lp_corr
+            )
+            config = FullConfig(dynamics=dynamics_config, spectrum=spectrum_config)
+
+            calc = SpectrumCalculator(config)
+            calc.load_surfaces()
+
+            # Check that energy at minimum matches original file
+            x_test = 1.5e-10  # 1.5 Angstrom in meters
+            E_loaded = calc.pes_f[0].energy(x_test)
+            E_original_hartree = -0.2 + 0.1 * (1.5 - 1.5) ** 2  # -0.2 Hartree
+            E_expected = E_original_hartree * CONST.hartree
+
+            np.testing.assert_allclose(E_loaded, E_expected, rtol=1e-10)

@@ -196,6 +196,7 @@ class DynamicsRunner:
             self.config.sampling.npoints_x,
             self.config.sampling.npoints_mom,
             self.config.sampling.mode,
+            compatibility_mode=self.config.sampling.compatibility_mode,
         )
 
         if verbose:

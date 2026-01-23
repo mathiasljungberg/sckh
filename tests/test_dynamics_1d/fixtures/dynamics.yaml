@@ -1,0 +1,40 @@
+dynamics:
+  mu: 1.0078825  # u
+  grid:
+    start: 0.5   # Angstrom
+    dx: 0.025
+    npoints: 77
+  time:
+    dt: 0.1      # fs
+    nsteps: 512
+  sampling:
+    mode: 1
+    npoints_x: 10
+    npoints_mom: 10
+  pes_initial: "test_energy_tot.dat" 
+  pes_dynamics: "test_energy_tot_exc.dat"
+
+
+spectrum:
+  gamma_fwhm: 0.18                 # Lifetime broadening FWHM (eV)
+  dipole_mode: "DIPOLE"            # "DIPOLE", "FC", or "DIPOLE_X0"
+  pes_final_list:                  # Final state PES files
+    - "pesfile_9.dat"
+    - "pesfile_8.dat"
+    - "pesfile_7.dat"
+    - "pesfile_6.dat"
+    - "pesfile_5.dat"
+    - "pesfile_4.dat"
+  dipole_final_list:               # Dipole files (one per final state)
+    - "dipolefile_9.dat"
+    - "dipolefile_8.dat"
+    - "dipolefile_7.dat"
+    - "dipolefile_6.dat"
+    - "dipolefile_5.dat"
+    - "dipolefile_4.dat"
+  #dipole_initial: "dipole_i.dat"   # Optional: initial state dipole
+  # trajectory_files:              # Optional: pre-computed trajectories
+  #   - "traj_0000.dat"
+  #   - "traj_0001.dat"
+  pes_lp_corr: "test_lp_lp_energy.dat"  # Optional
+  compatibility_mode: fortran  # or "standard" (default)

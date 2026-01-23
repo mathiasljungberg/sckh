@@ -21,6 +21,13 @@ class SpectrumConfig:
         dipole_final_list: List of dipole file paths (one per final state)
         dipole_initial: Optional initial state dipole file (for D_ni)
         trajectory_files: Optional list of pre-computed trajectory files
+        pes_lp_corr: Optional PES file for energy correction. When provided, all
+                     final state PES energies are shifted so that the first final
+                     state matches this PES (e.g., lone-pair corrected energies).
+        compatibility_mode: Algorithm mode for numerical methods.
+            - "standard": Use best-practice algorithms (proper CDF integration,
+              direct equilibrium position lookup for E_mean)
+            - "fortran": Match Fortran implementation exactly (for validation)
     """
 
     gamma_fwhm: float  # eV
@@ -29,6 +36,8 @@ class SpectrumConfig:
     dipole_final_list: List[Path] = field(default_factory=list)
     dipole_initial: Optional[Path] = None
     trajectory_files: Optional[List[Path]] = None
+    pes_lp_corr: Optional[Path] = None
+    compatibility_mode: str = "standard"
 
     def __post_init__(self):
         """Validate configuration."""
@@ -38,6 +47,14 @@ class SpectrumConfig:
                 f"dipole_mode must be one of {valid_modes}, got {self.dipole_mode}"
             )
         self.dipole_mode = self.dipole_mode.upper()
+
+        valid_compat_modes = ["standard", "fortran"]
+        if self.compatibility_mode.lower() not in valid_compat_modes:
+            raise ValueError(
+                f"compatibility_mode must be one of {valid_compat_modes}, "
+                f"got {self.compatibility_mode}"
+            )
+        self.compatibility_mode = self.compatibility_mode.lower()
 
         if self.dipole_mode == "DIPOLE" and len(self.dipole_final_list) == 0:
             raise ValueError(
@@ -109,19 +126,30 @@ def load_full_config(yaml_path: Path) -> FullConfig:
 
     # Parse dynamics config
     dyn_data = data["dynamics"]
+    spec_data = data["spectrum"]
+
+    # Get compatibility_mode - spectrum setting takes precedence, then dynamics sampling
+    compat_mode = spec_data.get(
+        "compatibility_mode",
+        dyn_data.get("sampling", {}).get("compatibility_mode", "standard")
+    )
+
+    # Build sampling config with unified compatibility_mode
+    sampling_data = dyn_data.get("sampling", {})
+    sampling_data["compatibility_mode"] = compat_mode
+
     dynamics_config = DynamicsConfig(
         mu=dyn_data["mu"],
         grid=GridConfig(**dyn_data["grid"]),
         time=TimeConfig(**dyn_data["time"]),
-        sampling=SamplingConfig(**dyn_data.get("sampling", {})),
+        sampling=SamplingConfig(**sampling_data),
         pes_initial=Path(dyn_data["pes_initial"]),
         pes_dynamics=Path(dyn_data["pes_dynamics"]),
         units=dyn_data.get("units", "angstrom"),
         outfile=dyn_data.get("outfile", "dynamics_out"),
     )
 
-    # Parse spectrum config
-    spec_data = data["spectrum"]
+    # Parse spectrum config (spec_data already defined above)
     spectrum_config = SpectrumConfig(
         gamma_fwhm=spec_data["gamma_fwhm"],
         dipole_mode=spec_data.get("dipole_mode", "DIPOLE"),
@@ -137,6 +165,12 @@ def load_full_config(yaml_path: Path) -> FullConfig:
             if spec_data.get("trajectory_files")
             else None
         ),
+        pes_lp_corr=(
+            Path(spec_data["pes_lp_corr"])
+            if spec_data.get("pes_lp_corr")
+            else None
+        ),
+        compatibility_mode=compat_mode,
     )
 
     return FullConfig(dynamics=dynamics_config, spectrum=spectrum_config)
@@ -176,6 +210,7 @@ def save_full_config(config: FullConfig, yaml_path: Path) -> None:
             "dipole_mode": config.spectrum.dipole_mode,
             "pes_final_list": [str(p) for p in config.spectrum.pes_final_list],
             "dipole_final_list": [str(p) for p in config.spectrum.dipole_final_list],
+            "compatibility_mode": config.spectrum.compatibility_mode,
         },
     }
 
@@ -186,6 +221,9 @@ def save_full_config(config: FullConfig, yaml_path: Path) -> None:
         data["spectrum"]["trajectory_files"] = [
             str(p) for p in config.spectrum.trajectory_files
         ]
+
+    if config.spectrum.pes_lp_corr:
+        data["spectrum"]["pes_lp_corr"] = str(config.spectrum.pes_lp_corr)
 
     with open(yaml_path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)

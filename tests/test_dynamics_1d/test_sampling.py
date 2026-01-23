@@ -58,14 +58,14 @@ class TestSampleEven:
         within_one_sigma = np.sum(np.abs(x_samples) < sigma) / len(x_samples)
         assert within_one_sigma > 0.5  # Should be close to 0.68
 
-    def test_even_distribution_in_cdf_space(self, position_grid, gaussian_wavefunction):
-        """Samples should be evenly spaced in CDF space."""
+    def test_even_distribution_in_cdf_space_standard(self, position_grid, gaussian_wavefunction):
+        """Standard mode: samples should be evenly spaced in CDF space."""
         psi_squared = np.abs(gaussian_wavefunction) ** 2
         n_samples = 10
 
-        x_samples = sample_even(position_grid, psi_squared, n_samples)
+        x_samples = sample_even(position_grid, psi_squared, n_samples, mode="standard")
 
-        # Compute CDF values at sample points
+        # Compute CDF values at sample points using coarse grid (standard mode)
         dx = position_grid[1] - position_grid[0]
         cdf = np.cumsum(psi_squared) * dx
         cdf_norm = cdf / cdf[-1]
@@ -76,6 +76,34 @@ class TestSampleEven:
         # Should be evenly spaced: 0.05, 0.15, 0.25, ..., 0.95 for n=10
         expected_cdf = (np.arange(n_samples) + 0.5) / n_samples
         np.testing.assert_allclose(cdf_at_samples, expected_cdf, rtol=1e-2)
+
+    def test_even_distribution_in_cdf_space_fortran(self, position_grid, gaussian_wavefunction):
+        """Fortran mode: samples should be approximately evenly spaced in CDF space.
+
+        Note: The Fortran-matching algorithm uses spline interpolation to a fine
+        grid and step-function lookup, so CDF spacing isn't mathematically perfect
+        when evaluated on the original grid.
+        """
+        psi_squared = np.abs(gaussian_wavefunction) ** 2
+        n_samples = 10
+
+        x_samples = sample_even(position_grid, psi_squared, n_samples, mode="fortran")
+
+        # Compute CDF values at sample points using same fine grid as algorithm
+        from scipy.interpolate import CubicSpline
+        x_fine = np.linspace(position_grid[0], position_grid[-1], 10000)
+        spline = CubicSpline(position_grid, psi_squared, bc_type='natural')
+        psi2_fine = np.abs(spline(x_fine))
+        cdf_fine = np.cumsum(psi2_fine)
+        cdf_norm = cdf_fine / cdf_fine[-1]
+
+        # Interpolate to get CDF at sample points
+        cdf_at_samples = np.interp(x_samples, x_fine, cdf_norm)
+
+        # Should be approximately evenly spaced: 0.05, 0.15, 0.25, ..., 0.95 for n=10
+        expected_cdf = (np.arange(n_samples) + 0.5) / n_samples
+        # Relaxed tolerance due to step-function lookup
+        np.testing.assert_allclose(cdf_at_samples, expected_cdf, rtol=0.05)
 
 
 class TestSampleRandom:

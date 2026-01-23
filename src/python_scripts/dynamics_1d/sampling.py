@@ -12,6 +12,7 @@ def sample_even(
     x: np.ndarray,
     psi_squared: np.ndarray,
     n_samples: int,
+    mode: str = "standard",
 ) -> np.ndarray:
     """Sample positions evenly from |ψ|² distribution using inverse CDF.
 
@@ -22,21 +23,71 @@ def sample_even(
         x: Position grid (m)
         psi_squared: |ψ|² probability density
         n_samples: Number of samples to generate
+        mode: Algorithm mode
+            - "standard": Proper trapezoidal CDF integration with linear interpolation
+            - "fortran": Match Fortran (spline to 10000 pts, cumsum, step-function lookup)
 
     Returns:
         x_samples: Sampled positions (m)
     """
+    if mode == "fortran":
+        return _sample_even_fortran(x, psi_squared, n_samples)
+    else:
+        return _sample_even_standard(x, psi_squared, n_samples)
+
+
+def _sample_even_standard(
+    x: np.ndarray,
+    psi_squared: np.ndarray,
+    n_samples: int,
+) -> np.ndarray:
+    """Standard implementation using proper CDF integration.
+
+    Uses trapezoidal integration for CDF and linear interpolation
+    for inverse CDF lookup.
+    """
     dx = x[1] - x[0]
 
-    # Compute CDF
+    # Compute proper CDF using trapezoidal integration
     cdf = np.cumsum(psi_squared) * dx
-    cdf_norm = cdf / cdf[-1]  # Normalize to [0, 1]
+    cdf_norm = cdf / cdf[-1]
 
     # Target CDF values at center of each interval
     target_cdf = (np.arange(n_samples) + 0.5) / n_samples
 
-    # Interpolate to find x values (inverse CDF)
+    # Linear interpolation for inverse CDF
     x_samples = np.interp(target_cdf, cdf_norm, x)
+
+    return x_samples
+
+
+def _sample_even_fortran(
+    x: np.ndarray,
+    psi_squared: np.ndarray,
+    n_samples: int,
+) -> np.ndarray:
+    """Fortran-compatible implementation.
+
+    Matches Fortran's sample_even: splines to fine grid (10000 points),
+    uses cumsum without dx, and step-function lookup for inverse CDF.
+    """
+    # Spline to fine grid (matching Fortran's npoints_new=10000)
+    npoints_fine = 10000
+    x_fine = np.linspace(x[0], x[-1], npoints_fine)
+    spline = CubicSpline(x, psi_squared, bc_type='natural')
+    psi2_fine = np.abs(spline(x_fine))  # safeguard against negative from spline
+
+    # Compute cumulative sum (no dx, matching Fortran)
+    cdf = np.cumsum(psi2_fine)
+
+    # Target CDF values at center of each interval
+    target_cdf = (np.arange(n_samples) + 0.5) * cdf[-1] / n_samples
+
+    # Step-function lookup (matching Fortran's loop)
+    # Find largest index where cdf <= target
+    indices = np.searchsorted(cdf, target_cdf, side='right') - 1
+    indices = np.clip(indices, 0, npoints_fine - 1)
+    x_samples = x_fine[indices]
 
     return x_samples
 
@@ -114,6 +165,7 @@ def sample_momenta(
     n_samples: int,
     mode: int = 1,
     rng: Optional[np.random.Generator] = None,
+    compatibility_mode: str = "standard",
 ) -> np.ndarray:
     """Sample momenta from momentum-space wavefunction via FFT.
 
@@ -123,6 +175,7 @@ def sample_momenta(
         n_samples: Number of momentum samples
         mode: 1=even, 2=random
         rng: Random number generator (for mode=2)
+        compatibility_mode: "standard" or "fortran" for algorithm choice
 
     Returns:
         p_samples: Sampled momenta (kg*m/s)
@@ -131,7 +184,7 @@ def sample_momenta(
 
     # Sample using chosen method
     if mode == 1:
-        p_samples = sample_even(p, psi_p_squared, n_samples)
+        p_samples = sample_even(p, psi_p_squared, n_samples, mode=compatibility_mode)
     else:
         p_samples = sample_random(p, psi_p_squared, n_samples, rng)
 
@@ -145,6 +198,7 @@ def create_initial_conditions(
     n_p: int,
     mode: int = 1,
     rng: Optional[np.random.Generator] = None,
+    compatibility_mode: str = "standard",
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Create all (x, p) initial condition pairs.
 
@@ -161,6 +215,7 @@ def create_initial_conditions(
         n_p: Number of momentum samples
         mode: Sampling mode (1=even, 2=random)
         rng: Random number generator (for mode=2)
+        compatibility_mode: "standard" or "fortran" for algorithm choice
 
     Returns:
         x_samples: Array of initial positions
@@ -170,8 +225,8 @@ def create_initial_conditions(
 
     if mode == 1:
         # Even sampling: all combinations of x and p
-        x_samp = sample_even(x, psi_squared, n_x)
-        p_samp = sample_momenta(x, psi, n_p, mode=1)
+        x_samp = sample_even(x, psi_squared, n_x, mode=compatibility_mode)
+        p_samp = sample_momenta(x, psi, n_p, mode=1, compatibility_mode=compatibility_mode)
 
         # Create all combinations
         x_mesh, p_mesh = np.meshgrid(x_samp, p_samp)
