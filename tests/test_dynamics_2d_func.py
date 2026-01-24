@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from scipy.interpolate import RectBivariateSpline
 
-from python_scripts.dynamics_2d import poly_on_grid, product_poly_2d
+from python_scripts.dynamics_2d_func import poly_on_grid, product_poly_2d
 
 
 # Fixtures for common test data
