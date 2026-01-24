@@ -7,6 +7,7 @@ from typing import List, Optional
 import numpy as np
 
 from .config import DynamicsConfig
+from .spectrum_config import FullConfig
 from .constants import CONST
 from .integrators import run_trajectory
 from .io import write_trajectory, write_distribution, write_eigenstate
@@ -32,10 +33,11 @@ class EnsembleResult:
     """Result from ensemble of trajectories."""
 
     trajectories: List[TrajectoryResult]
-    config: DynamicsConfig
+    config: DynamicsConfig  # Dynamics config (convenience access)
     ground_state_energy: float  # Ground state eigenvalue (J)
     x_grid: np.ndarray  # Position grid used
     psi_ground: np.ndarray  # Ground state wavefunction
+    full_config: Optional[FullConfig] = None  # Full config
 
     @property
     def n_trajectories(self) -> int:
@@ -84,43 +86,47 @@ class DynamicsRunner:
     """Main class for running classical dynamics simulations.
 
     Usage:
-        config = load_config("dynamics.yaml")
+        config = load_full_config("dynamics.yaml")
         runner = DynamicsRunner(config)
         result = runner.run()
     """
 
-    def __init__(self, config: DynamicsConfig):
-        self.config = config
+    def __init__(self, config: FullConfig):
+        self.full_config = config
+        self.config = config.dynamics
+
+        # Use dynamics config for setup
+        dyn = self.config
 
         # Convert mass to SI
-        self.mass_SI = config.mu * CONST.u
+        self.mass_SI = dyn.mu * CONST.u
 
         # Convert time step to SI
-        self.dt_SI = config.time.dt * 1e-15  # fs to seconds
+        self.dt_SI = dyn.time.dt * 1e-15  # fs to seconds
 
         # Build position grid in SI units
-        if config.units.lower() == "angstrom":
-            grid_start_SI = config.grid.start * 1e-10
-            dx_SI = config.grid.dx * 1e-10
-        elif config.units.lower() == "bohr":
-            grid_start_SI = config.grid.start * CONST.bohr
-            dx_SI = config.grid.dx * CONST.bohr
+        if dyn.units.lower() == "angstrom":
+            grid_start_SI = dyn.grid.start * 1e-10
+            dx_SI = dyn.grid.dx * 1e-10
+        elif dyn.units.lower() == "bohr":
+            grid_start_SI = dyn.grid.start * CONST.bohr
+            dx_SI = dyn.grid.dx * CONST.bohr
         else:
-            raise ValueError(f"Unknown units: {config.units}")
+            raise ValueError(f"Unknown units: {dyn.units}")
 
-        self.x_grid = grid_start_SI + np.arange(config.grid.npoints) * dx_SI
+        self.x_grid = grid_start_SI + np.arange(dyn.grid.npoints) * dx_SI
         self.dx_SI = dx_SI
 
         # Load PES for dynamics
         self.pes = create_pes_from_file(
-            config.pes_dynamics,
-            units=config.units,
+            dyn.pes_dynamics,
+            units=dyn.units,
         )
 
         # Load initial state PES for vibrational problem
         self.pes_initial = create_pes_from_file(
-            config.pes_initial,
-            units=config.units,
+            dyn.pes_initial,
+            units=dyn.units,
         )
 
         # Placeholder for ground state
@@ -238,6 +244,7 @@ class DynamicsRunner:
             ground_state_energy=self._eigenvalue_ground,
             x_grid=self.x_grid,
             psi_ground=self._psi_ground,
+            full_config=self.full_config,
         )
 
     def save_results(

@@ -60,7 +60,7 @@ class TestFortranCompatibility:
     def test_spectrum_matches_fortran_reference(self, config_fortran_mode, fortran_reference):
         """Test that Python (fortran mode) matches Fortran output."""
         # Run dynamics
-        runner = trajectory.DynamicsRunner(config_fortran_mode.dynamics)
+        runner = trajectory.DynamicsRunner(config_fortran_mode)
         result_dyn = runner.run(verbose=False)
 
         # Compute spectrum
@@ -130,7 +130,7 @@ class TestFortranCompatibility:
 
     def test_e_mean_matches_expected(self, config_fortran_mode):
         """Test that E_mean is computed correctly."""
-        runner = trajectory.DynamicsRunner(config_fortran_mode.dynamics)
+        runner = trajectory.DynamicsRunner(config_fortran_mode)
         result_dyn = runner.run(verbose=False)
 
         calculator = SpectrumCalculator(config_fortran_mode)
@@ -142,7 +142,7 @@ class TestFortranCompatibility:
 
     def test_number_of_trajectories(self, config_fortran_mode):
         """Test that correct number of trajectories is generated."""
-        runner = trajectory.DynamicsRunner(config_fortran_mode.dynamics)
+        runner = trajectory.DynamicsRunner(config_fortran_mode)
         result_dyn = runner.run(verbose=False)
 
         expected_n_traj = (
@@ -153,7 +153,7 @@ class TestFortranCompatibility:
 
     def test_trajectory_length(self, config_fortran_mode):
         """Test that trajectories have correct number of time steps."""
-        runner = trajectory.DynamicsRunner(config_fortran_mode.dynamics)
+        runner = trajectory.DynamicsRunner(config_fortran_mode)
         result_dyn = runner.run(verbose=False)
 
         expected_nsteps = config_fortran_mode.dynamics.time.nsteps
@@ -185,7 +185,7 @@ class TestStandardVsFortranMode:
         results = {}
 
         for mode, config in configs.items():
-            runner = trajectory.DynamicsRunner(config.dynamics)
+            runner = trajectory.DynamicsRunner(config)
             result_dyn = runner.run(verbose=False)
 
             calculator = SpectrumCalculator(config)
@@ -211,7 +211,7 @@ class TestStandardVsFortranMode:
         results = {}
 
         for mode, config in configs.items():
-            runner = trajectory.DynamicsRunner(config.dynamics)
+            runner = trajectory.DynamicsRunner(config)
             result_dyn = runner.run(verbose=False)
 
             calculator = SpectrumCalculator(config)

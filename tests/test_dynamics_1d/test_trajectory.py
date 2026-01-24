@@ -16,6 +16,7 @@ from python_scripts.dynamics_1d.config import (
     TimeConfig,
     SamplingConfig,
 )
+from python_scripts.dynamics_1d.spectrum_config import FullConfig, SpectrumConfig
 from python_scripts.dynamics_1d.pes import create_harmonic_pes
 from python_scripts.dynamics_1d.vibrational import solve_vibrational
 from python_scripts.dynamics_1d.constants import CONST
@@ -37,7 +38,7 @@ def harmonic_config(tmp_path):
     pes_file = tmp_path / "harmonic_pes.dat"
     np.savetxt(pes_file, np.column_stack([x_ang, E_hartree]))
 
-    return DynamicsConfig(
+    dynamics_config = DynamicsConfig(
         mu=1.0,  # 1 amu
         grid=GridConfig(start=0.5, dx=0.025 / 1.5, npoints=77),
         time=TimeConfig(dt=0.5, nsteps=100),
@@ -47,6 +48,15 @@ def harmonic_config(tmp_path):
         units="angstrom",
         outfile="test_dynamics",
     )
+
+    # Minimal spectrum config (not used in dynamics tests)
+    spectrum_config = SpectrumConfig(
+        gamma_fwhm=0.1,
+        dipole_mode="FC",
+        pes_final_list=[pes_file],
+    )
+
+    return FullConfig(dynamics=dynamics_config, spectrum=spectrum_config)
 
 
 class TestTrajectoryResult:

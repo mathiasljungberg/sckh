@@ -16,3 +16,7 @@ build/
 
 # Pytest
 .pytest_cache/
+
+# fortran mod files
+*.mod
+

@@ -40,7 +40,7 @@ def main():
     # Run dynamics
     print("\n" + "-" * 60)
     print("Running classical trajectory dynamics...")
-    runner = dyn.trajectory.DynamicsRunner(config.dynamics)
+    runner = dyn.trajectory.DynamicsRunner(config)
     result_dyn = runner.run(verbose=False)
     print(f"  Generated {len(result_dyn.trajectories)} trajectories")
 
