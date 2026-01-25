@@ -142,11 +142,15 @@ class TestDynamicsRunner2D:
             X1, X2 = np.meshgrid(x1, x2, indexing="ij")
             E_2d = 0.5 * k1 * X1**2 + 0.5 * k2 * X2**2
             pes_2d_path = tmpdir / "pes_2d.dat"
-            write_pes_file_2d(pes_2d_path, x1, x2, E_2d, units="angstrom")
+            write_pes_file_2d(
+                pes_2d_path, x1, x2, E_2d, position_units="angstrom"
+            )
 
             # Create 2D PES file for initial state (same as dynamics for test)
             pes_initial_path = tmpdir / "pes_initial_2d.dat"
-            write_pes_file_2d(pes_initial_path, x1, x2, E_2d, units="angstrom")
+            write_pes_file_2d(
+                pes_initial_path, x1, x2, E_2d, position_units="angstrom"
+            )
 
             yield {
                 "dir": tmpdir,
@@ -168,7 +172,7 @@ class TestDynamicsRunner2D:
                 ),
                 pes_dynamics=temp_pes_files["pes_2d"],
                 pes_initial=temp_pes_files["pes_initial"],
-                units="angstrom",
+                position_units="angstrom",
             )
         )
 
@@ -195,7 +199,7 @@ class TestDynamicsRunner2D:
                 ),
                 pes_dynamics=temp_pes_files["pes_2d"],
                 pes_initial=temp_pes_files["pes_initial"],
-                units="angstrom",
+                position_units="angstrom",
             )
         )
 
@@ -229,7 +233,7 @@ class TestDynamicsRunner2D:
                 ),
                 pes_dynamics=temp_pes_files["pes_2d"],
                 pes_initial=temp_pes_files["pes_initial"],
-                units="angstrom",
+                position_units="angstrom",
             )
         )
 
@@ -264,7 +268,7 @@ class TestDynamicsRunner2D:
                 ),
                 pes_dynamics=temp_pes_files["pes_2d"],
                 pes_initial=temp_pes_files["pes_initial"],
-                units="angstrom",
+                position_units="angstrom",
             )
         )
 

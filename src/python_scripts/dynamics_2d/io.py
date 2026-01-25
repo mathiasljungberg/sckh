@@ -32,28 +32,127 @@ def _loadtxt_fortran(filepath: Path) -> np.ndarray:
     return np.loadtxt(StringIO(text))
 
 
+def _validate_index_ordering(
+    x1_raw: np.ndarray,
+    x2_raw: np.ndarray,
+    x1_unique: np.ndarray,
+    x2_unique: np.ndarray,
+    index_order: str,
+) -> None:
+    """Validate that raw data follows the expected index ordering.
+
+    Creates the expected coordinate arrays from the outer product of
+    x1_unique and x2_unique, then compares with the actual raw data.
+
+    Args:
+        x1_raw: Raw x1 coordinates from file
+        x2_raw: Raw x2 coordinates from file
+        x1_unique: Unique x1 values (sorted)
+        x2_unique: Unique x2 values (sorted)
+        index_order: "C" or "F" for index ordering
+
+    Raises:
+        ValueError: If data ordering doesn't match the specified index_order
+    """
+    # Create expected coordinate arrays based on index ordering
+    X1_grid, X2_grid = np.meshgrid(x1_unique, x2_unique, indexing="ij")
+
+    if index_order.upper() == "C":
+        # C order: x2 varies fastest (row-major)
+        x1_expected = X1_grid.flatten(order="C")
+        x2_expected = X2_grid.flatten(order="C")
+    elif index_order.upper() == "F":
+        # F order: x1 varies fastest (column-major)
+        x1_expected = X1_grid.flatten(order="F")
+        x2_expected = X2_grid.flatten(order="F")
+    else:
+        raise ValueError(f"index_order must be 'C' or 'F', got {index_order}")
+
+    # Compare with actual raw data
+    if not (np.allclose(x1_raw, x1_expected) and np.allclose(x2_raw, x2_expected)):
+        # Determine the likely correct ordering for helpful error message
+        if index_order.upper() == "C":
+            suggestion = "F"
+        else:
+            suggestion = "C"
+
+        raise ValueError(
+            f"Index ordering mismatch: Data does not match expected {index_order} "
+            f"order (x2 fast for 'C', x1 fast for 'F'). "
+            f"Try index_order='{suggestion}' instead."
+        )
+
+
 def read_pes_file_2d(
     filepath: Path,
-    units: str = "angstrom",
+    position_units: str = "angstrom",
+    energy_units: str = "hartree",
+    index_order: str = "C",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Read 2D PES file.
+    """Read 2D PES file with unit conversion.
 
     Expected format:
         x1  x2  E
         ...
 
-    Where x1 and x2 are coordinates and E is energy. The file should
-    contain data on a regular grid with x1 varying slowest and x2
-    varying fastest.
+    Where x1 and x2 are coordinates and E is energy.
 
     Args:
         filepath: Path to PES file
-        units: "angstrom" or "bohr" for coordinates
+        position_units: "angstrom" or "bohr" for coordinates
+        energy_units: "hartree" or "ev" for energy
+        index_order: "C" (x2 fast) or "F" (x1 fast) for data ordering
 
     Returns:
         x1: Unique x1 grid values (SI: meters)
         x2: Unique x2 grid values (SI: meters)
         E: Energy on 2D grid (SI: Joules), shape (n_x1, n_x2)
+
+    Raises:
+        ValueError: If position_units, energy_units, or index_order are invalid
+    """
+    # Read raw data
+    x1_raw, x2_raw, E_raw = read_pes_file_2d_raw(filepath, index_order)
+
+    # Convert position units
+    if position_units.lower() == "angstrom":
+        x1 = x1_raw * 1e-10
+        x2 = x2_raw * 1e-10
+    elif position_units.lower() == "bohr":
+        x1 = x1_raw * CONST.bohr
+        x2 = x2_raw * CONST.bohr
+    else:
+        raise ValueError(f"Unknown position units: {position_units}")
+
+    # Convert energy units
+    if energy_units.lower() == "hartree":
+        E = E_raw * CONST.hartree  # Hartree to Joules
+    elif energy_units.lower() == "ev":
+        E = E_raw * CONST.eV  # eV to Joules
+    else:
+        raise ValueError(f"Unknown energy units: {energy_units}")
+
+    return x1, x2, E
+
+
+def read_pes_file_2d_raw(
+    filepath: Path,
+    index_order: str = "C",
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Read 2D PES file without unit conversion.
+
+    Args:
+        filepath: Path to PES file
+        index_order: "C" (x2 fast) or "F" (x1 fast) for data ordering
+
+    Returns:
+        x1: Unique x1 grid values in original units
+        x2: Unique x2 grid values in original units
+        E: Energy on 2D grid in original units, shape (n_x1, n_x2)
+
+    Raises:
+        ValueError: If index_order is not "C" or "F", or if data layout
+                    doesn't match the specified ordering
     """
     data = _loadtxt_fortran(filepath)
 
@@ -64,55 +163,22 @@ def read_pes_file_2d(
     # Get unique grid values
     x1_unique = np.unique(x1_raw)
     x2_unique = np.unique(x2_raw)
-
     n_x1 = len(x1_unique)
     n_x2 = len(x2_unique)
 
-    # Reshape energy to 2D grid
-    # Assume data is ordered with x2 varying fastest (row-major for fixed x1)
-    E_2d = E_raw.reshape((n_x1, n_x2))
+    # Validate that the data ordering matches the specified index_order
+    # This must be done BEFORE reshaping
+    _validate_index_ordering(x1_raw, x2_raw, x1_unique, x2_unique, index_order)
 
-    # Convert to SI units
-    if units.lower() == "angstrom":
-        x1 = x1_unique * 1e-10  # Angstrom to meters
-        x2 = x2_unique * 1e-10
-    elif units.lower() == "bohr":
-        x1 = x1_unique * CONST.bohr
-        x2 = x2_unique * CONST.bohr
+    # Reshape according to index order
+    if index_order.upper() == "C":
+        # x2 varies fastest (C-style, row-major)
+        E_2d = E_raw.reshape((n_x1, n_x2), order="C")
+    elif index_order.upper() == "F":
+        # x1 varies fastest (Fortran-style, column-major)
+        E_2d = E_raw.reshape((n_x1, n_x2), order="F")
     else:
-        raise ValueError(f"Unknown units: {units}")
-
-    E = E_2d * CONST.hartree  # Hartree to Joules
-
-    return x1, x2, E
-
-
-def read_pes_file_2d_raw(
-    filepath: Path,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Read 2D PES file without unit conversion.
-
-    Args:
-        filepath: Path to PES file
-
-    Returns:
-        x1: Unique x1 grid values in original units
-        x2: Unique x2 grid values in original units
-        E: Energy on 2D grid in original units, shape (n_x1, n_x2)
-    """
-    data = _loadtxt_fortran(filepath)
-
-    x1_raw = data[:, 0]
-    x2_raw = data[:, 1]
-    E_raw = data[:, 2]
-
-    x1_unique = np.unique(x1_raw)
-    x2_unique = np.unique(x2_raw)
-
-    n_x1 = len(x1_unique)
-    n_x2 = len(x2_unique)
-
-    E_2d = E_raw.reshape((n_x1, n_x2))
+        raise ValueError(f"index_order must be 'C' or 'F', got {index_order}")
 
     return x1_unique, x2_unique, E_2d
 
@@ -228,7 +294,9 @@ def write_pes_file_2d(
     x1: np.ndarray,
     x2: np.ndarray,
     E: np.ndarray,
-    units: str = "angstrom",
+    position_units: str = "angstrom",
+    energy_units: str = "hartree",
+    index_order: str = "C",
 ) -> None:
     """Write 2D PES to file.
 
@@ -237,25 +305,45 @@ def write_pes_file_2d(
         x1: Grid points for x1 (SI: meters)
         x2: Grid points for x2 (SI: meters)
         E: Energy on 2D grid (SI: Joules), shape (len(x1), len(x2))
-        units: "angstrom" or "bohr" for output coordinates
+        position_units: "angstrom" or "bohr" for output coordinates
+        energy_units: "hartree" or "ev" for output energy
+        index_order: "C" (x2 fast) or "F" (x1 fast) for data ordering
+
+    Raises:
+        ValueError: If position_units, energy_units, or index_order are invalid
     """
-    if units.lower() == "angstrom":
-        x1_out = x1 * 1e10  # m to Angstrom
+    # Convert from SI to output units
+    if position_units.lower() == "angstrom":
+        x1_out = x1 * 1e10
         x2_out = x2 * 1e10
-    elif units.lower() == "bohr":
+    elif position_units.lower() == "bohr":
         x1_out = x1 / CONST.bohr
         x2_out = x2 / CONST.bohr
     else:
-        raise ValueError(f"Unknown units: {units}")
+        raise ValueError(f"Unknown position units: {position_units}")
 
-    E_out = E / CONST.hartree  # J to Hartree
+    if energy_units.lower() == "hartree":
+        E_out = E / CONST.hartree
+    elif energy_units.lower() == "ev":
+        E_out = E / CONST.eV
+    else:
+        raise ValueError(f"Unknown energy units: {energy_units}")
 
-    # Create output array with x1, x2, E columns
+    # Create output array with proper ordering
     rows = []
-    for i, x1_val in enumerate(x1_out):
-        for j, x2_val in enumerate(x2_out):
-            rows.append([x1_val, x2_val, E_out[i, j]])
+    if index_order.upper() == "C":
+        # x2 varies fastest
+        for i in range(len(x1_out)):
+            for j in range(len(x2_out)):
+                rows.append([x1_out[i], x2_out[j], E_out[i, j]])
+    elif index_order.upper() == "F":
+        # x1 varies fastest
+        for j in range(len(x2_out)):
+            for i in range(len(x1_out)):
+                rows.append([x1_out[i], x2_out[j], E_out[i, j]])
+    else:
+        raise ValueError(f"index_order must be 'C' or 'F', got {index_order}")
 
     data = np.array(rows)
-    header = f"# x1({units}) x2({units}) E(Hartree)"
+    header = f"# x1({position_units}) x2({position_units}) E({energy_units})"
     np.savetxt(filepath, data, header=header, fmt="%16.8E")

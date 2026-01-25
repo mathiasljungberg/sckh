@@ -235,20 +235,24 @@ class PES2D:
 
 def create_pes_from_file_2d(
     filepath: Path,
-    units: str = "angstrom",
+    position_units: str = "angstrom",
+    energy_units: str = "hartree",
+    index_order: str = "C",
 ) -> PES2D:
     """Factory function to create PES2D from file.
 
     Args:
         filepath: Path to 2D PES file
-        units: "angstrom" or "bohr" for coordinates
+        position_units: "angstrom" or "bohr" for coordinates
+        energy_units: "hartree" or "ev" for energy
+        index_order: "C" (x2 fast) or "F" (x1 fast) for data ordering
 
     Returns:
         PES2D object with spline interpolation
     """
     from .io import read_pes_file_2d
 
-    x1, x2, E = read_pes_file_2d(filepath, units)
+    x1, x2, E = read_pes_file_2d(filepath, position_units, energy_units, index_order)
     return PES2D(x1=x1, x2=x2, E=E)
 
 

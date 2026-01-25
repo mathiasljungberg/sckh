@@ -78,7 +78,9 @@ class DynamicsConfig2D:
     pes_initial: Path  # 2D PES for initial state (sliced at equilibrium)
 
     # Optional
-    units: str = "angstrom"  # "angstrom" or "bohr"
+    position_units: str = "angstrom"  # "angstrom" or "bohr" for positions
+    energy_units: str = "hartree"  # "hartree" or "ev" for energy
+    index_order: str = "C"  # "C" (x2 fast) or "F" (x1 fast) for data ordering
     outfile: str = "dynamics_2d_out"  # Output file basename
 
 
@@ -112,6 +114,9 @@ def load_config(yaml_path: Path) -> FullConfig2D:
           sampling: {mode: 1, npoints_x1: 10, npoints_x2: 10, npoints_p1: 10, npoints_p2: 10}
           pes_initial: "pes_initial_2d.dat"
           pes_dynamics: "pes_intermediate_2d.dat"
+          position_units: "angstrom"  # Optional, default "angstrom"
+          energy_units: "hartree"     # Optional, default "hartree"
+          index_order: "C"            # Optional, default "C"
     """
     with open(yaml_path) as f:
         data = yaml.safe_load(f)
@@ -127,7 +132,9 @@ def load_config(yaml_path: Path) -> FullConfig2D:
         sampling=SamplingConfig2D(**dyn_data.get("sampling", {})),
         pes_dynamics=Path(dyn_data["pes_dynamics"]),
         pes_initial=Path(dyn_data["pes_initial"]),
-        units=dyn_data.get("units", "angstrom"),
+        position_units=dyn_data.get("position_units", "angstrom"),
+        energy_units=dyn_data.get("energy_units", "hartree"),
+        index_order=dyn_data.get("index_order", "C"),
         outfile=dyn_data.get("outfile", "dynamics_2d_out"),
     )
 
@@ -169,7 +176,9 @@ def save_config(config: FullConfig2D, yaml_path: Path) -> None:
             },
             "pes_dynamics": str(dyn.pes_dynamics),
             "pes_initial": str(dyn.pes_initial),
-            "units": dyn.units,
+            "position_units": dyn.position_units,
+            "energy_units": dyn.energy_units,
+            "index_order": dyn.index_order,
             "outfile": dyn.outfile,
         },
     }

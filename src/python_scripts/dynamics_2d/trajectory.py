@@ -130,12 +130,12 @@ class DynamicsRunner2D:
         self.dt_SI = self.config.time.dt * 1e-15  # fs to seconds
 
         # Build position grids in SI units
-        if self.config.units.lower() == "angstrom":
+        if self.config.position_units.lower() == "angstrom":
             conv_factor = 1e-10
-        elif self.config.units.lower() == "bohr":
+        elif self.config.position_units.lower() == "bohr":
             conv_factor = CONST.bohr
         else:
-            raise ValueError(f"Unknown units: {self.config.units}")
+            raise ValueError(f"Unknown position units: {self.config.position_units}")
 
         self.x1_grid = (
             self.config.grid_x1.start
@@ -152,13 +152,17 @@ class DynamicsRunner2D:
         # Load 2D PES for dynamics
         self.pes = create_pes_from_file_2d(
             self.config.pes_dynamics,
-            units=self.config.units,
+            position_units=self.config.position_units,
+            energy_units=self.config.energy_units,
+            index_order=self.config.index_order,
         )
 
         # Load 2D PES for initial state
         self.pes_initial = create_pes_from_file_2d(
             self.config.pes_initial,
-            units=self.config.units,
+            position_units=self.config.position_units,
+            energy_units=self.config.energy_units,
+            index_order=self.config.index_order,
         )
 
         # Placeholder for ground state and equilibrium
