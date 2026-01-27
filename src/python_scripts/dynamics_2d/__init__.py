@@ -13,11 +13,13 @@ from .config import (
     TimeConfig,
     SamplingConfig2D,
     DynamicsConfig2D,
+    SpectrumConfig2D,
     FullConfig2D,
     load_config,
     save_config,
 )
 from .pes import PES2D, create_pes_from_file_2d, create_harmonic_pes_2d
+from .dipole import Dipole2D, create_dipole_from_file_2d, create_constant_dipole_2d
 from .vibrational import solve_product_ground_state
 from .sampling import create_initial_conditions_2d
 from .integrators import velocity_verlet_step_2d, run_trajectory_2d
@@ -26,10 +28,14 @@ from .trajectory import (
     EnsembleResult2D,
     DynamicsRunner2D,
 )
-from .io import read_pes_file_2d
+from .spectrum import SpectrumCalculator2D
+from .io import read_pes_file_2d, read_dipole_file_2d
 
 # Re-export constants from dynamics_1d
 from python_scripts.dynamics_1d.constants import CONST
+
+# Re-export SpectrumResult from dynamics_1d (same format for 1D and 2D)
+from python_scripts.dynamics_1d.spectrum import SpectrumResult
 
 __all__ = [
     # Constants
@@ -39,6 +45,7 @@ __all__ = [
     "TimeConfig",
     "SamplingConfig2D",
     "DynamicsConfig2D",
+    "SpectrumConfig2D",
     "FullConfig2D",
     "load_config",
     "save_config",
@@ -46,6 +53,10 @@ __all__ = [
     "PES2D",
     "create_pes_from_file_2d",
     "create_harmonic_pes_2d",
+    # Dipole
+    "Dipole2D",
+    "create_dipole_from_file_2d",
+    "create_constant_dipole_2d",
     # Vibrational
     "solve_product_ground_state",
     # Sampling
@@ -57,6 +68,10 @@ __all__ = [
     "TrajectoryResult2D",
     "EnsembleResult2D",
     "DynamicsRunner2D",
+    # Spectrum
+    "SpectrumCalculator2D",
+    "SpectrumResult",
     # I/O
     "read_pes_file_2d",
+    "read_dipole_file_2d",
 ]

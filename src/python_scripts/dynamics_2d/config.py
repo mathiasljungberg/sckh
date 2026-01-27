@@ -1,7 +1,8 @@
 """Configuration management for 2D dynamics with YAML support."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import List, Optional
 
 import yaml
 
@@ -85,6 +86,40 @@ class DynamicsConfig2D:
 
 
 @dataclass
+class SpectrumConfig2D:
+    """Configuration for 2D spectrum calculation.
+
+    Attributes:
+        gamma_fwhm: Broadening full-width at half-maximum in eV
+        dipole_mode: "DIPOLE", "FC", or "DIPOLE_X0"
+        pes_final_list: List of paths to final state PES files
+        dipole_final_list: List of paths to final state dipole files
+        pes_intermediate: Optional path to intermediate PES (if different from dynamics)
+        pes_lp_corr: Optional path to energy correction PES
+        dipole_initial: Optional path to initial state dipole
+        trajectory_files: Optional list of pre-computed trajectory files
+        compatibility_mode: "standard" or "fortran"
+        dipole_components: Number of dipole components in file (1 or 3)
+    """
+
+    gamma_fwhm: float  # Broadening FWHM in eV
+    dipole_mode: str = "DIPOLE"  # "DIPOLE", "FC", or "DIPOLE_X0"
+    pes_final_list: List[Path] = field(default_factory=list)
+    dipole_final_list: List[Path] = field(default_factory=list)
+    pes_intermediate: Optional[Path] = None
+    pes_lp_corr: Optional[Path] = None
+    dipole_initial: Optional[Path] = None
+    trajectory_files: Optional[List[Path]] = None
+    compatibility_mode: str = "standard"
+    dipole_components: int = 3  # 1 or 3
+
+    @property
+    def gamma_hwhm(self) -> float:
+        """Convert FWHM to HWHM (half-width at half-maximum)."""
+        return self.gamma_fwhm / 2.0
+
+
+@dataclass
 class FullConfig2D:
     """Combined configuration for 2D dynamics.
 
@@ -93,6 +128,7 @@ class FullConfig2D:
     """
 
     dynamics2d: DynamicsConfig2D
+    spectrum: Optional[SpectrumConfig2D] = None
 
 
 def load_config(yaml_path: Path) -> FullConfig2D:
@@ -102,7 +138,7 @@ def load_config(yaml_path: Path) -> FullConfig2D:
         yaml_path: Path to YAML configuration file
 
     Returns:
-        FullConfig2D object with dynamics2d parameters
+        FullConfig2D object with dynamics2d and optional spectrum parameters
 
     Example YAML format:
         dynamics2d:
@@ -117,6 +153,17 @@ def load_config(yaml_path: Path) -> FullConfig2D:
           position_units: "angstrom"  # Optional, default "angstrom"
           energy_units: "hartree"     # Optional, default "hartree"
           index_order: "C"            # Optional, default "C"
+
+        spectrum:  # Optional
+          gamma_fwhm: 0.18
+          dipole_mode: "DIPOLE"
+          pes_final_list:
+            - "pes_final_1_2d.dat"
+            - "pes_final_2_2d.dat"
+          dipole_final_list:
+            - "dipole_1_2d.dat"
+            - "dipole_2_2d.dat"
+          compatibility_mode: "standard"
     """
     with open(yaml_path) as f:
         data = yaml.safe_load(f)
@@ -138,7 +185,30 @@ def load_config(yaml_path: Path) -> FullConfig2D:
         outfile=dyn_data.get("outfile", "dynamics_2d_out"),
     )
 
-    return FullConfig2D(dynamics2d=dynamics_config)
+    # Parse optional spectrum config
+    spectrum_config = None
+    if "spectrum" in data:
+        spec_data = data["spectrum"]
+        spectrum_config = SpectrumConfig2D(
+            gamma_fwhm=spec_data["gamma_fwhm"],
+            dipole_mode=spec_data.get("dipole_mode", "DIPOLE"),
+            pes_final_list=[
+                Path(p) for p in spec_data.get("pes_final_list", [])
+            ],
+            dipole_final_list=[
+                Path(p) for p in spec_data.get("dipole_final_list", [])
+            ],
+            pes_intermediate=Path(spec_data["pes_intermediate"]) if spec_data.get("pes_intermediate") else None,
+            pes_lp_corr=Path(spec_data["pes_lp_corr"]) if spec_data.get("pes_lp_corr") else None,
+            dipole_initial=Path(spec_data["dipole_initial"]) if spec_data.get("dipole_initial") else None,
+            trajectory_files=[
+                Path(p) for p in spec_data.get("trajectory_files", [])
+            ] if spec_data.get("trajectory_files") else None,
+            compatibility_mode=spec_data.get("compatibility_mode", "standard"),
+            dipole_components=spec_data.get("dipole_components", 3),
+        )
+
+    return FullConfig2D(dynamics2d=dynamics_config, spectrum=spectrum_config)
 
 
 def save_config(config: FullConfig2D, yaml_path: Path) -> None:
@@ -182,6 +252,26 @@ def save_config(config: FullConfig2D, yaml_path: Path) -> None:
             "outfile": dyn.outfile,
         },
     }
+
+    # Add spectrum config if present
+    if config.spectrum is not None:
+        spec = config.spectrum
+        data["spectrum"] = {
+            "gamma_fwhm": spec.gamma_fwhm,
+            "dipole_mode": spec.dipole_mode,
+            "pes_final_list": [str(p) for p in spec.pes_final_list],
+            "dipole_final_list": [str(p) for p in spec.dipole_final_list],
+            "compatibility_mode": spec.compatibility_mode,
+            "dipole_components": spec.dipole_components,
+        }
+        if spec.pes_intermediate:
+            data["spectrum"]["pes_intermediate"] = str(spec.pes_intermediate)
+        if spec.pes_lp_corr:
+            data["spectrum"]["pes_lp_corr"] = str(spec.pes_lp_corr)
+        if spec.dipole_initial:
+            data["spectrum"]["dipole_initial"] = str(spec.dipole_initial)
+        if spec.trajectory_files:
+            data["spectrum"]["trajectory_files"] = [str(p) for p in spec.trajectory_files]
 
     with open(yaml_path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
