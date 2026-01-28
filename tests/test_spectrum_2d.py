@@ -15,6 +15,7 @@ from python_scripts.dynamics_2d import (
     SpectrumConfig2D,
     SpectrumCalculator2D,
     DynamicsConfig2D,
+    FullConfig2D,
     GridConfig2D,
     TimeConfig,
     SamplingConfig2D,
@@ -336,13 +337,19 @@ class TestSpectrumCalculator2D:
             dipole_final_list=[tmp_path / "dipole_2d.dat"],
         )
 
-        return dynamics_config, spectrum_config, tmp_path
+        # Create full config
+        full_config = FullConfig2D(
+            dynamics2d=dynamics_config,
+            spectrum=spectrum_config,
+        )
+
+        return full_config, tmp_path
 
     def test_load_surfaces(self, harmonic_setup):
         """Test loading PES and dipole surfaces."""
-        dynamics_config, spectrum_config, _ = harmonic_setup
+        full_config, _ = harmonic_setup
 
-        calc = SpectrumCalculator2D(dynamics_config, spectrum_config)
+        calc = SpectrumCalculator2D(full_config)
         calc.load_surfaces()
 
         assert calc.pes_n is not None
@@ -351,9 +358,9 @@ class TestSpectrumCalculator2D:
 
     def test_interpolate_along_trajectory(self, harmonic_setup):
         """Test interpolation of energies and dipoles along trajectory."""
-        dynamics_config, spectrum_config, _ = harmonic_setup
+        full_config, _ = harmonic_setup
 
-        calc = SpectrumCalculator2D(dynamics_config, spectrum_config)
+        calc = SpectrumCalculator2D(full_config)
         calc.load_surfaces()
 
         # Create a simple trajectory
@@ -382,9 +389,9 @@ class TestSpectrumCalculator2D:
 
     def test_compute_mean_transition_energy(self, harmonic_setup):
         """Test mean transition energy calculation."""
-        dynamics_config, spectrum_config, _ = harmonic_setup
+        full_config, _ = harmonic_setup
 
-        calc = SpectrumCalculator2D(dynamics_config, spectrum_config)
+        calc = SpectrumCalculator2D(full_config)
         calc.load_surfaces()
 
         # Create dummy trajectory
@@ -406,9 +413,9 @@ class TestSpectrumCalculator2D:
 
     def test_compute_spectrum(self, harmonic_setup):
         """Test full spectrum calculation."""
-        dynamics_config, spectrum_config, tmp_path = harmonic_setup
+        full_config, tmp_path = harmonic_setup
 
-        calc = SpectrumCalculator2D(dynamics_config, spectrum_config)
+        calc = SpectrumCalculator2D(full_config)
         calc.load_surfaces()
 
         # Create simple trajectories
@@ -438,9 +445,9 @@ class TestSpectrumCalculator2D:
 
     def test_save_results(self, harmonic_setup):
         """Test saving spectrum results."""
-        dynamics_config, spectrum_config, tmp_path = harmonic_setup
+        full_config, tmp_path = harmonic_setup
 
-        calc = SpectrumCalculator2D(dynamics_config, spectrum_config)
+        calc = SpectrumCalculator2D(full_config)
         calc.load_surfaces()
 
         # Create simple trajectory
@@ -459,7 +466,7 @@ class TestSpectrumCalculator2D:
         calc.save_results(result, tmp_path / "output")
 
         # Check files exist
-        assert (tmp_path / "output" / f"{dynamics_config.outfile}_sigma.dat").exists()
+        assert (tmp_path / "output" / f"{full_config.dynamics2d.outfile}_sigma.dat").exists()
 
 
 class TestDipoleModes:
@@ -515,7 +522,8 @@ class TestDipoleModes:
             dipole_final_list=[],  # Not needed for FC mode
         )
 
-        calc = SpectrumCalculator2D(dynamics_config, spectrum_config)
+        full_config = FullConfig2D(dynamics2d=dynamics_config, spectrum=spectrum_config)
+        calc = SpectrumCalculator2D(full_config)
         calc.load_surfaces()
 
         assert len(calc.dipoles) == 1
@@ -534,7 +542,8 @@ class TestDipoleModes:
             dipole_final_list=[tmp_path / "dipole.dat"],
         )
 
-        calc = SpectrumCalculator2D(dynamics_config, spectrum_config)
+        full_config = FullConfig2D(dynamics2d=dynamics_config, spectrum=spectrum_config)
+        calc = SpectrumCalculator2D(full_config)
         calc.load_surfaces()
 
         assert len(calc.dipoles) == 1
@@ -555,7 +564,8 @@ class TestDipoleModes:
             dipole_final_list=[tmp_path / "dipole.dat"],
         )
 
-        calc = SpectrumCalculator2D(dynamics_config, spectrum_config)
+        full_config = FullConfig2D(dynamics2d=dynamics_config, spectrum=spectrum_config)
+        calc = SpectrumCalculator2D(full_config)
         calc.load_surfaces()
 
         # Create trajectory away from equilibrium
