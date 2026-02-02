@@ -9,12 +9,12 @@ def numint_trapz(*args) :
   try : 
     import scipy.integrate
     if len(args)==1 :
-      return scipy.integrate.trapz(args[0])
+      return scipy.integrate.trapezoid(args[0])
     elif  len(args)==2 :
-      return scipy.integrate.trapz(args[0], args[1])
+      return scipy.integrate.trapezoid(args[0], args[1])
     else :
-      print('numint_trapz: first 2 arguments will be used with scipy.integrate.trapz!')
-      return scipy.integrate.trapz(args[0], args[1])
+      print('numint_trapz: first 2 arguments will be used with scipy.integrate.trapezoid!')
+      return scipy.integrate.trapezoid(args[0], args[1])
   
   except  ImportError : 
     if len(args)==1 :
