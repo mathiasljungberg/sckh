@@ -5,7 +5,10 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from python_scripts.kh_1d.config import GridConfig, BroadeningConfig, FrequencyGridConfig, KHConfig
+from python_scripts.kh_1d.config import (
+    GridConfig, BroadeningConfig, FrequencyGridConfig, KHConfig,
+    load_config, save_config,
+)
 from python_scripts.kh_1d.spectrum import KHCalculator, KHResult, VibrationalState
 from python_scripts.dynamics_1d.constants import CONST
 
@@ -355,3 +358,237 @@ class TestKHResultIO:
         for j in range(3):
             filepath = tmp_path / f"test_spectrum_states_{j + 1}.dat"
             assert filepath.exists()
+
+
+class TestYAMLConfig:
+    """Tests for YAML config loading and saving."""
+
+    def _make_config(self, tmp_path):
+        """Create a KHConfig for testing."""
+        return KHConfig(
+            mu=1.0078825,
+            grid=GridConfig(start=0.5, dx=0.025, npoints=77),
+            broadening=BroadeningConfig(gamma_fwhm=0.3),
+            frequency=FrequencyGridConfig(omega_start=517, omega_end=528, n_omega=1000),
+            pes_initial=Path("pes_initial.dat"),
+            pes_intermediate=Path("pes_intermediate.dat"),
+            pes_final_list=[Path("pesfile_9.dat"), Path("pesfile_8.dat")],
+            dipole_final_list=[Path("dipolefile_9.dat"), Path("dipolefile_8.dat")],
+            dipole_mode="FC",
+            n_vib_states=20,
+            pes_lp_corr=None,
+            energy_column_initial=1,
+            energy_column_intermediate=1,
+            energy_column_final=1,
+        )
+
+    def test_save_and_load_roundtrip(self, tmp_path):
+        """save_config then load_config should reproduce the original config."""
+        original = self._make_config(tmp_path)
+        yaml_path = tmp_path / "config.yaml"
+
+        save_config(original, yaml_path)
+        loaded = load_config(yaml_path)
+
+        assert loaded.mu == original.mu
+        assert loaded.grid.start == original.grid.start
+        assert loaded.grid.dx == original.grid.dx
+        assert loaded.grid.npoints == original.grid.npoints
+        assert loaded.broadening.gamma_fwhm == original.broadening.gamma_fwhm
+        assert loaded.frequency.omega_start == original.frequency.omega_start
+        assert loaded.frequency.omega_end == original.frequency.omega_end
+        assert loaded.frequency.n_omega == original.frequency.n_omega
+        assert loaded.pes_initial == original.pes_initial
+        assert loaded.pes_intermediate == original.pes_intermediate
+        assert loaded.pes_final_list == original.pes_final_list
+        assert loaded.dipole_final_list == original.dipole_final_list
+        assert loaded.dipole_mode == original.dipole_mode
+        assert loaded.n_vib_states == original.n_vib_states
+        assert loaded.pes_lp_corr == original.pes_lp_corr
+        assert loaded.energy_column_initial == original.energy_column_initial
+        assert loaded.energy_column_intermediate == original.energy_column_intermediate
+        assert loaded.energy_column_final == original.energy_column_final
+
+    def test_roundtrip_with_pes_lp_corr(self, tmp_path):
+        """Round-trip with pes_lp_corr set."""
+        config = self._make_config(tmp_path)
+        config.pes_lp_corr = Path("corr_pes.dat")
+
+        yaml_path = tmp_path / "config_lp.yaml"
+        save_config(config, yaml_path)
+        loaded = load_config(yaml_path)
+
+        assert loaded.pes_lp_corr == Path("corr_pes.dat")
+
+    def test_load_without_optional_fields(self, tmp_path):
+        """Loading YAML without optional fields should use defaults."""
+        yaml_path = tmp_path / "minimal.yaml"
+        yaml_path.write_text("""\
+kh_1d:
+  mu: 1.0
+  grid:
+    start: 0.5
+    dx: 0.025
+    npoints: 77
+  broadening:
+    gamma_fwhm: 0.3
+  frequency:
+    omega_start: 517
+    omega_end: 528
+    n_omega: 100
+  pes_initial: "a.dat"
+  pes_intermediate: "b.dat"
+  pes_final_list:
+    - "c.dat"
+  dipole_final_list:
+    - "d.dat"
+""")
+        config = load_config(yaml_path)
+        assert config.dipole_mode == "FC"
+        assert config.n_vib_states is None
+        assert config.pes_lp_corr is None
+        assert config.energy_column_initial == 1
+
+
+class TestLPCorrection:
+    """Tests for pes_lp_corr energy correction."""
+
+    @pytest.fixture
+    def harmonic_files_with_corr(self, tmp_path):
+        """Create PES/dipole files plus a correction PES."""
+        npoints = 77
+        x_start = 0.5
+        dx = 0.025
+        x = np.array([x_start + i * dx for i in range(npoints)])
+
+        k_au = 0.5
+        x0_initial = 0.96
+        x0_intermediate = 1.00
+        x0_final = 0.98
+
+        # Initial
+        E_initial = 0.5 * k_au * ((x - x0_initial) / (CONST.bohr * 1e10)) ** 2
+        pes_i_file = tmp_path / "pes_initial.dat"
+        np.savetxt(pes_i_file, np.column_stack([x, E_initial]))
+
+        # Intermediate
+        E_offset = 530.0 / CONST.hartree2eV
+        E_intermediate = E_offset + 0.5 * k_au * ((x - x0_intermediate) / (CONST.bohr * 1e10)) ** 2
+        pes_n_file = tmp_path / "pes_intermediate.dat"
+        np.savetxt(pes_n_file, np.column_stack([x, E_intermediate]))
+
+        # Final state
+        E_final_offset = 5.0 / CONST.hartree2eV
+        E_final = E_final_offset + 0.5 * k_au * ((x - x0_final) / (CONST.bohr * 1e10)) ** 2
+        pes_f_file = tmp_path / "pes_final.dat"
+        np.savetxt(pes_f_file, np.column_stack([x, E_final]))
+
+        # Correction PES: same shape but shifted by 0.1 Hartree
+        energy_shift = 0.1  # Hartree
+        E_corr = E_final + energy_shift
+        pes_corr_file = tmp_path / "pes_lp_corr.dat"
+        np.savetxt(pes_corr_file, np.column_stack([x, E_corr]))
+
+        # Dipole
+        dipole = np.zeros((npoints, 4))
+        dipole[:, 0] = x
+        dipole[:, 3] = 0.05
+        dipole_file = tmp_path / "dipole.dat"
+        np.savetxt(dipole_file, dipole)
+
+        return {
+            "pes_initial": pes_i_file,
+            "pes_intermediate": pes_n_file,
+            "pes_final": pes_f_file,
+            "pes_corr": pes_corr_file,
+            "dipole": dipole_file,
+            "grid": (x_start, dx, npoints),
+            "energy_shift_hartree": energy_shift,
+        }
+
+    def test_lp_correction_shifts_eigenvalues(self, harmonic_files_with_corr):
+        """LP correction should shift final state eigenvalues."""
+        files = harmonic_files_with_corr
+        x_start, dx, npoints = files["grid"]
+
+        # Without correction
+        config_no_corr = KHConfig(
+            mu=1.0078825,
+            grid=GridConfig(start=x_start, dx=dx, npoints=npoints),
+            broadening=BroadeningConfig(gamma_fwhm=0.3),
+            frequency=FrequencyGridConfig(omega_start=520, omega_end=530, n_omega=11),
+            pes_initial=files["pes_initial"],
+            pes_intermediate=files["pes_intermediate"],
+            pes_final_list=[files["pes_final"]],
+            dipole_final_list=[files["dipole"]],
+            n_vib_states=5,
+        )
+
+        calc_no_corr = KHCalculator(config_no_corr)
+        calc_no_corr.load_surfaces()
+        calc_no_corr.solve_vibrational_problem()
+        E_no_corr = calc_no_corr._vib_f_list[0].eigenvalues_eV
+
+        # With correction
+        config_corr = KHConfig(
+            mu=1.0078825,
+            grid=GridConfig(start=x_start, dx=dx, npoints=npoints),
+            broadening=BroadeningConfig(gamma_fwhm=0.3),
+            frequency=FrequencyGridConfig(omega_start=520, omega_end=530, n_omega=11),
+            pes_initial=files["pes_initial"],
+            pes_intermediate=files["pes_intermediate"],
+            pes_final_list=[files["pes_final"]],
+            dipole_final_list=[files["dipole"]],
+            pes_lp_corr=files["pes_corr"],
+            n_vib_states=5,
+        )
+
+        calc_corr = KHCalculator(config_corr)
+        calc_corr.load_surfaces()
+        calc_corr.solve_vibrational_problem()
+        E_corr = calc_corr._vib_f_list[0].eigenvalues_eV
+
+        # Eigenvalues should be shifted by the energy correction
+        shift_eV = files["energy_shift_hartree"] * CONST.hartree2eV
+        np.testing.assert_allclose(E_corr - E_no_corr, shift_eV, rtol=1e-6)
+
+    def test_lp_correction_shifts_spectrum(self, harmonic_files_with_corr):
+        """LP correction should shift the spectrum peak position."""
+        files = harmonic_files_with_corr
+        x_start, dx, npoints = files["grid"]
+
+        # Without correction
+        config_no_corr = KHConfig(
+            mu=1.0078825,
+            grid=GridConfig(start=x_start, dx=dx, npoints=npoints),
+            broadening=BroadeningConfig(gamma_fwhm=0.3),
+            frequency=FrequencyGridConfig(omega_start=518, omega_end=530, n_omega=1001),
+            pes_initial=files["pes_initial"],
+            pes_intermediate=files["pes_intermediate"],
+            pes_final_list=[files["pes_final"]],
+            dipole_final_list=[files["dipole"]],
+            n_vib_states=10,
+        )
+        result_no_corr = KHCalculator(config_no_corr).run()
+        peak_no_corr = result_no_corr.omega[np.argmax(result_no_corr.sigma_tot)]
+
+        # With correction
+        config_corr = KHConfig(
+            mu=1.0078825,
+            grid=GridConfig(start=x_start, dx=dx, npoints=npoints),
+            broadening=BroadeningConfig(gamma_fwhm=0.3),
+            frequency=FrequencyGridConfig(omega_start=518, omega_end=530, n_omega=1001),
+            pes_initial=files["pes_initial"],
+            pes_intermediate=files["pes_intermediate"],
+            pes_final_list=[files["pes_final"]],
+            dipole_final_list=[files["dipole"]],
+            pes_lp_corr=files["pes_corr"],
+            n_vib_states=10,
+        )
+        result_corr = KHCalculator(config_corr).run()
+        peak_corr = result_corr.omega[np.argmax(result_corr.sigma_tot)]
+
+        # Peak should shift to lower energy (final state shifted up ->
+        # emission energy = E_n - E_f decreases)
+        shift_eV = files["energy_shift_hartree"] * CONST.hartree2eV
+        assert abs((peak_no_corr - peak_corr) - shift_eV) < 0.2

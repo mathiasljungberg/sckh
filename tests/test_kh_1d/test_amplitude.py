@@ -6,11 +6,14 @@ from pathlib import Path
 
 from python_scripts.kh_1d.amplitude import (
     compute_amplitude_F_res,
+    compute_amplitude_F_res_loop,
     compute_amplitude_F_nonres,
+    compute_amplitude_F_nonres_loop,
     compute_amplitude_F,
     compute_cross_section_from_F,
     compute_XES_nonres,
     compute_XES_per_final_state,
+    compute_XES_per_final_state_loop,
 )
 
 
@@ -263,3 +266,57 @@ class TestAmplitudeSumRules:
         )
 
         np.testing.assert_allclose(F_total, F_nonres, rtol=1e-10)
+
+
+class TestVectorizedMatchesLoop:
+    """Verify vectorized amplitude functions match loop-based reference."""
+
+    def test_amplitude_res_vectorized_matches_loop(self):
+        """Vectorized resonant amplitude should match loop version."""
+        np.random.seed(42)
+        E_i = 0.0
+        E_n = np.array([518.0, 520.0, 522.0, 523.5])
+        E_f = 0.5
+        gamma = 0.15
+        D_ni = np.random.randn(4, 3)
+        D_fn = np.random.randn(4, 3)
+
+        for omega in [519.0, 520.0, 521.5, 525.0]:
+            F_vec = compute_amplitude_F_res(E_i, E_n, E_f, D_ni, D_fn, omega, gamma)
+            F_loop = compute_amplitude_F_res_loop(E_i, E_n, E_f, D_ni, D_fn, omega, gamma)
+            np.testing.assert_allclose(F_vec, F_loop, rtol=1e-12)
+
+    def test_amplitude_nonres_vectorized_matches_loop(self):
+        """Vectorized non-resonant amplitude should match loop version."""
+        np.random.seed(43)
+        E_i = 0.0
+        E_n = np.array([518.0, 520.0, 522.0])
+        E_f = 0.5
+        gamma = 0.15
+        D_ni = np.random.randn(3, 3)
+        D_fn = np.random.randn(3, 3)
+
+        for omega in [0.0, 100.0, 519.0]:
+            F_vec = compute_amplitude_F_nonres(E_i, E_n, E_f, D_ni, D_fn, omega, gamma)
+            F_loop = compute_amplitude_F_nonres_loop(E_i, E_n, E_f, D_ni, D_fn, omega, gamma)
+            np.testing.assert_allclose(F_vec, F_loop, rtol=1e-12)
+
+    def test_xes_per_final_state_vectorized_matches_loop(self):
+        """Vectorized per-final-state XES should match loop version."""
+        np.random.seed(44)
+        E_i = 0.0
+        E_n = np.array([520.0, 521.0, 522.0])
+        E_f = np.array([0.0, 0.2, 0.4])
+        gamma = 0.15
+        D_ni = np.random.randn(3, 3)
+        D_fn = np.random.randn(3, 3, 3)  # (n_f, n_n, 3)
+        omega_grid = np.linspace(517, 525, 201)
+
+        sigma_vec = compute_XES_per_final_state(
+            E_i, E_n, E_f, D_ni, D_fn, omega_grid, gamma
+        )
+        sigma_loop = compute_XES_per_final_state_loop(
+            E_i, E_n, E_f, D_ni, D_fn, omega_grid, gamma
+        )
+
+        np.testing.assert_allclose(sigma_vec, sigma_loop, rtol=1e-10)

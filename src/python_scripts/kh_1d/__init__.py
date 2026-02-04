@@ -27,22 +27,29 @@ from .config import (
     BroadeningConfig,
     FrequencyGridConfig,
     KHConfig,
+    load_config,
+    save_config,
 )
 from .dipole_matrix import (
     compute_fc_overlap,
     compute_dipole_overlap,
     compute_transition_dipoles_fc,
+    compute_transition_dipoles_fc_loop,
     compute_transition_dipoles_full,
+    compute_transition_dipoles_full_loop,
     compute_dipole_matrix_elements,
 )
 from .amplitude import (
     compute_amplitude_F_res,
+    compute_amplitude_F_res_loop,
     compute_amplitude_F_nonres,
+    compute_amplitude_F_nonres_loop,
     compute_amplitude_F,
     compute_cross_section_from_F,
     compute_XES_nonres,
     compute_XES_nonres_vectorized,
     compute_XES_per_final_state,
+    compute_XES_per_final_state_loop,
 )
 from .spectrum import (
     VibrationalState,
@@ -56,20 +63,27 @@ __all__ = [
     "BroadeningConfig",
     "FrequencyGridConfig",
     "KHConfig",
+    "load_config",
+    "save_config",
     # Dipole matrix
     "compute_fc_overlap",
     "compute_dipole_overlap",
     "compute_transition_dipoles_fc",
+    "compute_transition_dipoles_fc_loop",
     "compute_transition_dipoles_full",
+    "compute_transition_dipoles_full_loop",
     "compute_dipole_matrix_elements",
     # Amplitude
     "compute_amplitude_F_res",
+    "compute_amplitude_F_res_loop",
     "compute_amplitude_F_nonres",
+    "compute_amplitude_F_nonres_loop",
     "compute_amplitude_F",
     "compute_cross_section_from_F",
     "compute_XES_nonres",
     "compute_XES_nonres_vectorized",
     "compute_XES_per_final_state",
+    "compute_XES_per_final_state_loop",
     # Spectrum
     "VibrationalState",
     "KHResult",

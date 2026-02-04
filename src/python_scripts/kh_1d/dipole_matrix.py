@@ -55,18 +55,12 @@ def compute_dipole_overlap(
     return np.sum(integrand, axis=0) * dx
 
 
-def compute_transition_dipoles_fc(
+def compute_transition_dipoles_fc_loop(
     vib_i: np.ndarray,
     vib_n: np.ndarray,
     dx: float,
 ) -> np.ndarray:
-    """Compute FC overlaps between initial and intermediate vibrational states.
-
-    In Franck-Condon approximation, the dipole matrix element is proportional
-    to the overlap integral: D_ni ~ <psi_n|psi_i>
-
-    For the constant dipole FC approximation, we use overlap as transition
-    strength and assume a constant dipole direction (z-axis).
+    """Loop-based FC overlaps (reference implementation).
 
     Args:
         vib_i: Initial state eigenvectors, shape (npoints, n_states_i)
@@ -88,15 +82,34 @@ def compute_transition_dipoles_fc(
     return overlaps
 
 
-def compute_transition_dipoles_full(
+def compute_transition_dipoles_fc(
+    vib_i: np.ndarray,
+    vib_n: np.ndarray,
+    dx: float,
+) -> np.ndarray:
+    """Compute FC overlaps between initial and intermediate vibrational states.
+
+    Vectorized version using matrix multiply.
+
+    Args:
+        vib_i: Initial state eigenvectors, shape (npoints, n_states_i)
+        vib_n: Intermediate state eigenvectors, shape (npoints, n_states_n)
+        dx: Grid spacing in meters
+
+    Returns:
+        FC overlaps, shape (n_states_n, n_states_i)
+    """
+    # overlaps[n, i] = sum_x vib_n[x, n] * vib_i[x, i] * dx
+    return (vib_n.T @ vib_i) * dx
+
+
+def compute_transition_dipoles_full_loop(
     vib_a: np.ndarray,
     vib_b: np.ndarray,
     dipole: np.ndarray,
     dx: float,
 ) -> np.ndarray:
-    """Compute full dipole matrix elements between vibrational states.
-
-    D_{ab} = <psi_a|d|psi_b>
+    """Loop-based full dipole matrix elements (reference implementation).
 
     Args:
         vib_a: First set of eigenvectors, shape (npoints, n_states_a)
@@ -117,6 +130,28 @@ def compute_transition_dipoles_full(
             D[a, b, :] = compute_dipole_overlap(vib_a[:, a], vib_b[:, b], dipole, dx)
 
     return D
+
+
+def compute_transition_dipoles_full(
+    vib_a: np.ndarray,
+    vib_b: np.ndarray,
+    dipole: np.ndarray,
+    dx: float,
+) -> np.ndarray:
+    """Compute full dipole matrix elements between vibrational states.
+
+    Vectorized version using einsum: D[a,b,m] = sum_x vib_a[x,a] * vib_b[x,b] * dipole[x,m] * dx
+
+    Args:
+        vib_a: First set of eigenvectors, shape (npoints, n_states_a)
+        vib_b: Second set of eigenvectors, shape (npoints, n_states_b)
+        dipole: Dipole moment on grid, shape (npoints, 3)
+        dx: Grid spacing in meters
+
+    Returns:
+        Dipole matrix elements, shape (n_states_a, n_states_b, 3)
+    """
+    return np.einsum('xa,xb,xm->abm', vib_a, vib_b, dipole) * dx
 
 
 def compute_dipole_matrix_elements(

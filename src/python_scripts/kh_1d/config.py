@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
+import yaml
+
 
 @dataclass
 class GridConfig:
@@ -93,6 +95,7 @@ class KHConfig:
     dipole_final_list: List[Path]
     dipole_mode: str = "FC"
     n_vib_states: Optional[int] = None
+    pes_lp_corr: Optional[Path] = None
     energy_column_initial: int = 1
     energy_column_intermediate: int = 1
     energy_column_final: int = 1
@@ -103,6 +106,8 @@ class KHConfig:
         self.pes_intermediate = Path(self.pes_intermediate)
         self.pes_final_list = [Path(p) for p in self.pes_final_list]
         self.dipole_final_list = [Path(p) for p in self.dipole_final_list]
+        if self.pes_lp_corr is not None:
+            self.pes_lp_corr = Path(self.pes_lp_corr)
 
         # Validate dipole mode
         valid_modes = ("FC", "DIPOLE", "DIPOLE_X0")
@@ -123,3 +128,75 @@ class KHConfig:
     def n_final_states(self) -> int:
         """Number of final electronic states."""
         return len(self.pes_final_list)
+
+
+def load_config(yaml_path: Path) -> KHConfig:
+    """Load KH configuration from YAML file.
+
+    Args:
+        yaml_path: Path to YAML configuration file
+
+    Returns:
+        KHConfig object with all parameters
+    """
+    with open(yaml_path) as f:
+        raw = yaml.safe_load(f)
+
+    data = raw.get("kh_1d", raw)
+
+    return KHConfig(
+        mu=data["mu"],
+        grid=GridConfig(**data["grid"]),
+        broadening=BroadeningConfig(**data["broadening"]),
+        frequency=FrequencyGridConfig(**data["frequency"]),
+        pes_initial=Path(data["pes_initial"]),
+        pes_intermediate=Path(data["pes_intermediate"]),
+        pes_final_list=[Path(p) for p in data["pes_final_list"]],
+        dipole_final_list=[Path(p) for p in data["dipole_final_list"]],
+        dipole_mode=data.get("dipole_mode", "FC"),
+        n_vib_states=data.get("n_vib_states"),
+        pes_lp_corr=Path(data["pes_lp_corr"]) if data.get("pes_lp_corr") else None,
+        energy_column_initial=data.get("energy_column_initial", 1),
+        energy_column_intermediate=data.get("energy_column_intermediate", 1),
+        energy_column_final=data.get("energy_column_final", 1),
+    )
+
+
+def save_config(config: KHConfig, yaml_path: Path) -> None:
+    """Save KH configuration to YAML file.
+
+    Args:
+        config: KHConfig object
+        yaml_path: Path to output YAML file
+    """
+    data = {
+        "kh_1d": {
+            "mu": config.mu,
+            "grid": {
+                "start": config.grid.start,
+                "dx": config.grid.dx,
+                "npoints": config.grid.npoints,
+            },
+            "broadening": {
+                "gamma_fwhm": config.broadening.gamma_fwhm,
+            },
+            "frequency": {
+                "omega_start": config.frequency.omega_start,
+                "omega_end": config.frequency.omega_end,
+                "n_omega": config.frequency.n_omega,
+            },
+            "pes_initial": str(config.pes_initial),
+            "pes_intermediate": str(config.pes_intermediate),
+            "pes_final_list": [str(p) for p in config.pes_final_list],
+            "dipole_final_list": [str(p) for p in config.dipole_final_list],
+            "dipole_mode": config.dipole_mode,
+            "n_vib_states": config.n_vib_states,
+            "pes_lp_corr": str(config.pes_lp_corr) if config.pes_lp_corr else None,
+            "energy_column_initial": config.energy_column_initial,
+            "energy_column_intermediate": config.energy_column_intermediate,
+            "energy_column_final": config.energy_column_final,
+        }
+    }
+
+    with open(yaml_path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)

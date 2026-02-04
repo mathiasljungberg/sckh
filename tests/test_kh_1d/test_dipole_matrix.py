@@ -8,7 +8,9 @@ from python_scripts.kh_1d.dipole_matrix import (
     compute_fc_overlap,
     compute_dipole_overlap,
     compute_transition_dipoles_fc,
+    compute_transition_dipoles_fc_loop,
     compute_transition_dipoles_full,
+    compute_transition_dipoles_full_loop,
     compute_dipole_matrix_elements,
 )
 from python_scripts.dynamics_1d.vibrational import solve_vibrational
@@ -227,3 +229,44 @@ class TestDipoleMatrixElements:
 
         # D_fn should also be the same for constant dipole
         np.testing.assert_allclose(D_fn_fc, D_fn_dip, rtol=1e-10)
+
+
+class TestVectorizedMatchesLoop:
+    """Verify that vectorized implementations match loop-based reference."""
+
+    def test_fc_vectorized_matches_loop(self, harmonic_grid, hydrogen_mass):
+        """Vectorized FC overlaps should match loop version."""
+        x, dx = harmonic_grid
+        k = 500.0
+
+        pes1 = create_harmonic_pes(x, x0=0.96e-10, k=k)
+        pes2 = create_harmonic_pes(x, x0=1.00e-10, k=k)
+
+        _, vec1 = solve_vibrational(x, pes1.energy(x), hydrogen_mass, n_states=8)
+        _, vec2 = solve_vibrational(x, pes2.energy(x), hydrogen_mass, n_states=10)
+
+        result_vec = compute_transition_dipoles_fc(vec1, vec2, dx)
+        result_loop = compute_transition_dipoles_fc_loop(vec1, vec2, dx)
+
+        np.testing.assert_allclose(result_vec, result_loop, rtol=1e-9)
+
+    def test_full_dipole_vectorized_matches_loop(self, harmonic_grid, hydrogen_mass):
+        """Vectorized full dipole matrix should match loop version."""
+        x, dx = harmonic_grid
+        k = 500.0
+
+        pes1 = create_harmonic_pes(x, x0=0.96e-10, k=k)
+        pes2 = create_harmonic_pes(x, x0=1.00e-10, k=k)
+
+        _, vec1 = solve_vibrational(x, pes1.energy(x), hydrogen_mass, n_states=5)
+        _, vec2 = solve_vibrational(x, pes2.energy(x), hydrogen_mass, n_states=7)
+
+        # Non-trivial dipole
+        dipole = np.zeros((len(x), 3))
+        dipole[:, 0] = x * 1e10  # x-component
+        dipole[:, 2] = 1.0  # z-component
+
+        result_vec = compute_transition_dipoles_full(vec1, vec2, dipole, dx)
+        result_loop = compute_transition_dipoles_full_loop(vec1, vec2, dipole, dx)
+
+        np.testing.assert_allclose(result_vec, result_loop, rtol=1e-12)

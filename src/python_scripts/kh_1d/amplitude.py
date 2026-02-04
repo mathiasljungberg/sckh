@@ -9,6 +9,92 @@ Based on src/m_KH_utils.F90:1108-1185.
 import numpy as np
 
 
+# ---------------------------------------------------------------------------
+# Loop-based reference implementations
+# ---------------------------------------------------------------------------
+
+def compute_amplitude_F_res_loop(
+    E_i: float,
+    E_n: np.ndarray,
+    E_f: float,
+    D_ni: np.ndarray,
+    D_fn: np.ndarray,
+    omega: float,
+    gamma: float,
+) -> np.ndarray:
+    """Loop-based resonant KH amplitude (reference implementation)."""
+    n_states_n = len(E_n)
+    F = np.zeros((3, 3), dtype=complex)
+
+    for n in range(n_states_n):
+        denom = omega - (E_n[n] - E_f) + 1j * gamma
+        for m1 in range(3):
+            for m2 in range(3):
+                F[m1, m2] += D_fn[n, m1] * D_ni[n, m2] / denom
+
+    return F
+
+
+def compute_amplitude_F_nonres_loop(
+    E_i: float,
+    E_n: np.ndarray,
+    E_f: float,
+    D_ni: np.ndarray,
+    D_fn: np.ndarray,
+    omega: float,
+    gamma: float,
+) -> np.ndarray:
+    """Loop-based non-resonant KH amplitude (reference implementation)."""
+    n_states_n = len(E_n)
+    F = np.zeros((3, 3), dtype=complex)
+
+    for n in range(n_states_n):
+        denom = omega + (E_n[n] - E_i)
+        if abs(denom) < 1e-12:
+            continue
+        for m1 in range(3):
+            for m2 in range(3):
+                F[m1, m2] -= D_fn[n, m1] * D_ni[n, m2] / denom
+
+    return F
+
+
+def compute_XES_per_final_state_loop(
+    E_i: float,
+    E_n: np.ndarray,
+    E_f: np.ndarray,
+    D_ni: np.ndarray,
+    D_fn: np.ndarray,
+    omega_grid: np.ndarray,
+    gamma: float,
+) -> np.ndarray:
+    """Loop-based per-final-state XES spectrum (reference implementation)."""
+    n_omega = len(omega_grid)
+    n_states_f = len(E_f)
+    n_states_n = len(E_n)
+
+    sigma_f = np.zeros((n_states_f, n_omega))
+
+    for f in range(n_states_f):
+        for i_omega in range(n_omega):
+            omega = omega_grid[i_omega]
+
+            F = np.zeros((3, 3), dtype=complex)
+            for n in range(n_states_n):
+                denom = omega - (E_n[n] - E_f[f]) + 1j * gamma
+                for m1 in range(3):
+                    for m2 in range(3):
+                        F[m1, m2] += D_fn[f, n, m1] * D_ni[n, m2] / denom
+
+            sigma_f[f, i_omega] = np.sum(np.abs(F) ** 2)
+
+    return sigma_f
+
+
+# ---------------------------------------------------------------------------
+# Vectorized implementations
+# ---------------------------------------------------------------------------
+
 def compute_amplitude_F_res(
     E_i: float,
     E_n: np.ndarray,
@@ -22,9 +108,6 @@ def compute_amplitude_F_res(
 
     F_{m1,m2}(omega) = sum_n [D_fn^{m1} * D_ni^{m2}] / [omega - (E_n - E_f) + i*gamma]
 
-    This is the resonant contribution where the emitted photon energy
-    matches the intermediate-to-final transition energy.
-
     Args:
         E_i: Initial state energy (eV) - not used in resonant term
         E_n: Intermediate state energies (eV), shape (n_states_n,)
@@ -37,18 +120,11 @@ def compute_amplitude_F_res(
     Returns:
         F: Scattering amplitude (3, 3) complex array
     """
-    n_states_n = len(E_n)
-    F = np.zeros((3, 3), dtype=complex)
-
-    for n in range(n_states_n):
-        # Denominator: omega - (E_n - E_f) + i*gamma
-        denom = omega - (E_n[n] - E_f) + 1j * gamma
-
-        # F(m1, m2) += D_fn(m1) * D_ni(m2) / denom
-        for m1 in range(3):
-            for m2 in range(3):
-                F[m1, m2] += D_fn[n, m1] * D_ni[n, m2] / denom
-
+    # denom shape: (n_states_n,)
+    denom = omega - (E_n - E_f) + 1j * gamma
+    weights = 1.0 / denom  # (n_states_n,)
+    # F[m1, m2] = sum_n weights[n] * D_fn[n, m1] * D_ni[n, m2]
+    F = np.einsum('n,nm,np->mp', weights, D_fn, D_ni)
     return F
 
 
@@ -65,8 +141,6 @@ def compute_amplitude_F_nonres(
 
     F_{m1,m2}(omega) = -sum_n [D_fn^{m1} * D_ni^{m2}] / [omega + (E_n - E_i)]
 
-    This is the non-resonant contribution (no imaginary part in denominator).
-
     Args:
         E_i: Initial state energy (eV)
         E_n: Intermediate state energies (eV), shape (n_states_n,)
@@ -79,22 +153,12 @@ def compute_amplitude_F_nonres(
     Returns:
         F: Scattering amplitude (3, 3) complex array
     """
-    n_states_n = len(E_n)
-    F = np.zeros((3, 3), dtype=complex)
-
-    for n in range(n_states_n):
-        # Denominator: omega + (E_n - E_i)
-        denom = omega + (E_n[n] - E_i)
-
-        # Avoid division by zero
-        if abs(denom) < 1e-12:
-            continue
-
-        # F(m1, m2) -= D_fn(m1) * D_ni(m2) / denom
-        for m1 in range(3):
-            for m2 in range(3):
-                F[m1, m2] -= D_fn[n, m1] * D_ni[n, m2] / denom
-
+    denom = omega + (E_n - E_i)
+    # Mask out near-zero denominators
+    mask = np.abs(denom) >= 1e-12
+    weights = np.zeros_like(denom, dtype=complex)
+    weights[mask] = -1.0 / denom[mask]
+    F = np.einsum('n,nm,np->mp', weights, D_fn, D_ni)
     return F
 
 
@@ -143,16 +207,12 @@ def compute_cross_section_from_F(F: np.ndarray) -> float:
 
     sigma = sum_{m1,m2} |F_{m1,m2}|^2
 
-    For unpolarized light, we sum over all polarization components.
-    Alternatively, can use trace of |F|^2 matrix.
-
     Args:
         F: Scattering amplitude (3, 3) complex array
 
     Returns:
         Cross-section (arbitrary units)
     """
-    # Sum over all components: |F|^2
     return np.sum(np.abs(F) ** 2)
 
 
@@ -169,8 +229,6 @@ def compute_XES_nonres(
 
     sigma(omega) = sum_f |F_f(omega)|^2
 
-    where the sum is over final vibrational states.
-
     Args:
         E_i: Initial state energy (eV) - single vibrational ground state
         E_n: Intermediate state energies (eV), shape (n_states_n,)
@@ -183,24 +241,11 @@ def compute_XES_nonres(
     Returns:
         sigma: Cross-section array, shape (n_omega,)
     """
-    n_omega = len(omega_grid)
-    n_states_f = len(E_f)
-    sigma = np.zeros(n_omega)
-
-    for i_omega, omega in enumerate(omega_grid):
-        for f in range(n_states_f):
-            # Get dipoles for this final vibrational state
-            D_fn_f = D_fn[f, :, :]  # Shape: (n_states_n, 3)
-
-            # Compute amplitude for this final state
-            F = compute_amplitude_F_res(
-                E_i, E_n, E_f[f], D_ni, D_fn_f, omega, gamma
-            )
-
-            # Add to cross-section
-            sigma[i_omega] += compute_cross_section_from_F(F)
-
-    return sigma
+    # Use per-final-state and sum
+    sigma_f = compute_XES_per_final_state(
+        E_i, E_n, E_f, D_ni, D_fn, omega_grid, gamma
+    )
+    return np.sum(sigma_f, axis=0)
 
 
 def compute_XES_nonres_vectorized(
@@ -214,7 +259,7 @@ def compute_XES_nonres_vectorized(
 ) -> np.ndarray:
     """Vectorized non-resonant XES spectrum computation.
 
-    More efficient implementation using numpy broadcasting.
+    Alias for compute_XES_nonres (now always vectorized).
 
     Args:
         E_i: Initial state energy (eV)
@@ -228,34 +273,7 @@ def compute_XES_nonres_vectorized(
     Returns:
         sigma: Cross-section array, shape (n_omega,)
     """
-    n_omega = len(omega_grid)
-    n_states_n = len(E_n)
-    n_states_f = len(E_f)
-
-    sigma = np.zeros(n_omega)
-
-    # For each final vibrational state
-    for f in range(n_states_f):
-        # For each frequency point
-        for i_omega in range(n_omega):
-            omega = omega_grid[i_omega]
-
-            # Compute scattering amplitude for this (omega, f) pair
-            F = np.zeros((3, 3), dtype=complex)
-
-            for n in range(n_states_n):
-                # Resonant denominator
-                denom = omega - (E_n[n] - E_f[f]) + 1j * gamma
-
-                # Outer product of dipole vectors
-                for m1 in range(3):
-                    for m2 in range(3):
-                        F[m1, m2] += D_fn[f, n, m1] * D_ni[n, m2] / denom
-
-            # Add |F|^2 to cross-section
-            sigma[i_omega] += np.sum(np.abs(F) ** 2)
-
-    return sigma
+    return compute_XES_nonres(E_i, E_n, E_f, D_ni, D_fn, omega_grid, gamma)
 
 
 def compute_XES_per_final_state(
@@ -268,6 +286,8 @@ def compute_XES_per_final_state(
     gamma: float,
 ) -> np.ndarray:
     """Compute XES spectrum resolved by final vibrational state.
+
+    Vectorized over the omega grid for each final state.
 
     Args:
         E_i: Initial state energy (eV)
@@ -283,21 +303,17 @@ def compute_XES_per_final_state(
     """
     n_omega = len(omega_grid)
     n_states_f = len(E_f)
-    n_states_n = len(E_n)
 
     sigma_f = np.zeros((n_states_f, n_omega))
 
     for f in range(n_states_f):
-        for i_omega in range(n_omega):
-            omega = omega_grid[i_omega]
-
-            F = np.zeros((3, 3), dtype=complex)
-            for n in range(n_states_n):
-                denom = omega - (E_n[n] - E_f[f]) + 1j * gamma
-                for m1 in range(3):
-                    for m2 in range(3):
-                        F[m1, m2] += D_fn[f, n, m1] * D_ni[n, m2] / denom
-
-            sigma_f[f, i_omega] = np.sum(np.abs(F) ** 2)
+        # denom shape: (n_omega, n_states_n)
+        denom = omega_grid[:, None] - (E_n[None, :] - E_f[f]) + 1j * gamma
+        # weights shape: (n_omega, n_states_n)
+        weights = 1.0 / denom
+        # F[omega, m1, m2] = sum_n weights[omega, n] * D_fn[f, n, m1] * D_ni[n, m2]
+        F = np.einsum('on,nm,np->omp', weights, D_fn[f], D_ni)
+        # sigma_f[f, omega] = sum_{m1,m2} |F|^2
+        sigma_f[f, :] = np.sum(np.abs(F) ** 2, axis=(1, 2))
 
     return sigma_f

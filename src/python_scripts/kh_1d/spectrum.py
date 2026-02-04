@@ -14,6 +14,7 @@ from python_scripts.dynamics_1d.constants import CONST
 from python_scripts.dynamics_1d.pes import PES1D, create_pes_from_file
 from python_scripts.dynamics_1d.dipole import Dipole1D, create_dipole_from_file
 from python_scripts.dynamics_1d.vibrational import solve_vibrational
+from python_scripts.dynamics_1d.io import read_pes_file
 
 from .config import KHConfig
 from .dipole_matrix import compute_dipole_matrix_elements
@@ -161,16 +162,38 @@ class KHCalculator:
             energy_column=cfg.energy_column_intermediate,
         )
 
-        # Load final state PES and dipole files
+        # Load final state PES with optional LP energy correction
         self._pes_f_list = []
         self._dipole_f_list = []
 
-        for pes_path, dipole_path in zip(cfg.pes_final_list, cfg.dipole_final_list):
-            pes_f = create_pes_from_file(
-                pes_path, units="angstrom", energy_column=cfg.energy_column_final
+        if cfg.pes_lp_corr:
+            # Apply energy shift so that first final state matches correction PES
+            x_corr, E_corr = read_pes_file(
+                cfg.pes_lp_corr, units="angstrom",
+                energy_column=cfg.energy_column_final,
             )
-            self._pes_f_list.append(pes_f)
+            x_f0, E_f0 = read_pes_file(
+                cfg.pes_final_list[0], units="angstrom",
+                energy_column=cfg.energy_column_final,
+            )
+            shift = E_corr - E_f0
 
+            for pes_path in cfg.pes_final_list:
+                x, E = read_pes_file(
+                    pes_path, units="angstrom",
+                    energy_column=cfg.energy_column_final,
+                )
+                self._pes_f_list.append(PES1D(x=x, E=E + shift))
+        else:
+            for pes_path in cfg.pes_final_list:
+                pes_f = create_pes_from_file(
+                    pes_path, units="angstrom",
+                    energy_column=cfg.energy_column_final,
+                )
+                self._pes_f_list.append(pes_f)
+
+        # Load dipole files
+        for dipole_path in cfg.dipole_final_list:
             dipole_f = create_dipole_from_file(dipole_path, units="angstrom")
             self._dipole_f_list.append(dipole_f)
 
