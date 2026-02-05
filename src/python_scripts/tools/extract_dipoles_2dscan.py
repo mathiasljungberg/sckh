@@ -33,12 +33,12 @@ def parse_header(lines, idx=0):
     return nx, ny, dx, x0, y0, idx + 4
 
 
-def parse_2dscan(filepath):
+def parse_2dscan(filepath, grid_in_input=False):
     """Parse a .2dscan file and extract all data.
 
     Args:
         filepath: Path to the .2dscan file
-
+        grid_in_input: read current grid point first           
     Returns:
         nx, ny: Grid dimensions
         dx: Step size
@@ -68,6 +68,8 @@ def parse_2dscan(filepath):
     for j in range(ny):
         for i in range(nx):
             # Read 3 energy lines
+            if grid_in_input: 
+                idx += 1 # just skip this line     
             ground_energies[j, i] = float(lines[idx].strip())
             excited_energies[j, i] = float(lines[idx + 1].strip())
             binding_energies[j, i] = float(lines[idx + 2].strip())
@@ -90,7 +92,7 @@ def parse_2dscan(filepath):
 
             # Read transition data
             for k in range(n_trans):
-                trans_data = lines[idx].split()
+                trans_data = lines[idx].replace('D', 'E').replace('d', 'e').split()
                 transition_energies[j, i, k] = float(trans_data[0])
                 dipoles[j, i, k, 0] = float(trans_data[1])  # μx
                 dipoles[j, i, k, 1] = float(trans_data[2])  # μy
@@ -132,6 +134,55 @@ def write_dipole_files(nx, ny, dx, x0, y0, dipoles, output_dir, prefix):
                             f"{dipoles[j, i, k, 1]:13.8f}  "
                             f"{dipoles[j, i, k, 2]:13.8f}\n")
         print(f"Written: {filename}")
+
+
+def write_pes_files(nx, ny, dx, x0, y0, ground_energies, excited_energies,
+                    transition_energies, output_dir, prefix):
+    """Write PES (Potential Energy Surface) files.
+
+    Writes three types of PES files:
+    - tmpGS.pes.dat: Ground state energies
+    - tmpCH.pes.dat: Core hole (excited state) energies
+    - {prefix}{k+1:03d}.pes.dat: Valence hole PES (excited - transition energy)
+
+    Args:
+        nx, ny: Grid dimensions
+        dx: Step size
+        x0, y0: Initial position
+        ground_energies: Array [ny, nx]
+        excited_energies: Array [ny, nx]
+        transition_energies: Array [ny, nx, n_trans]
+        output_dir: Directory for output files
+        prefix: File prefix for VH files (e.g., 'tmpVH')
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    n_trans = transition_energies.shape[2]
+
+    # Compute grid coordinates
+    x = x0 + np.arange(nx) * dx
+    y = y0 + np.arange(ny) * dx
+
+    def _write_pes(filename, energies_2d):
+        with open(filename, 'w') as f:
+            for j in range(ny):
+                for i in range(nx):
+                    f.write(f"  {x[i]:11.6f}  {y[j]:11.6f}  "
+                            f"{energies_2d[j, i]:13.8f}\n")
+        print(f"Written: {filename}")
+
+    # Ground state PES
+    _write_pes(output_dir / "tmpGS.pes.dat", ground_energies)
+
+    # Core hole PES
+    _write_pes(output_dir / "tmpCH.pes.dat", excited_energies)
+
+    # Valence hole PES for each transition
+    for k in range(n_trans):
+        filename = output_dir / f"{prefix}{k+1:03d}.pes.dat"
+        vh_energies = excited_energies - transition_energies[:, :, k]
+        _write_pes(filename, vh_energies)
 
 
 def verify_with_osc_files(nx, ny, dx, x0, y0, transition_energies, dipoles,
@@ -245,7 +296,8 @@ Example:
                         help='Only verify, do not write dipole files')
     parser.add_argument('--tolerance', '-t', type=float, default=1e-4,
                         help='Relative tolerance for verification (default: 1e-4)')
-
+    parser.add_argument('--grid-in-input', action='store_true',
+                        help='read the current grid point first for each geomerty')
     args = parser.parse_args()
 
     input_file = Path(args.input_file)
@@ -255,7 +307,7 @@ Example:
 
     print(f"Parsing {input_file}...")
     (nx, ny, dx, x0, y0, ground_energies, excited_energies,
-     binding_energies, transition_energies, dipoles) = parse_2dscan(input_file)
+     binding_energies, transition_energies, dipoles) = parse_2dscan(input_file, args.grid_in_input)
 
     n_trans = dipoles.shape[2]
     print(f"Grid: {nx} x {ny}, step: {dx}")
@@ -278,6 +330,11 @@ Example:
         print(f"\nWriting dipole files to {args.output_dir}...")
         write_dipole_files(nx, ny, dx, x0, y0, dipoles, args.output_dir, args.prefix)
         print(f"\nWrote {n_trans} dipole files")
+
+        print(f"\nWriting PES files to {args.output_dir}...")
+        write_pes_files(nx, ny, dx, x0, y0, ground_energies, excited_energies,
+                        transition_energies, args.output_dir, args.prefix)
+        print(f"\nWrote PES files (GS, CH, {n_trans} VH)")
 
 
 if __name__ == '__main__':
