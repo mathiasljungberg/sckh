@@ -267,36 +267,65 @@ def read_pes_file_2d_raw(
 def read_dipole_file_2d_raw(
     filepath: Path,
     index_order: str = "C",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, str]:
+    dipole_components: int = 3,
+    return_resolved_order: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, np.ndarray, str]:
     """Read 2D dipole file without unit conversion.
 
-    Expected format:
-        x1  x2  mu_x  mu_y  mu_z
+    Args:
+        filepath: Path to dipole file
+        index_order: "C", "F", or "auto" for data ordering
+        dipole_components: Number of dipole components in file (1 or 3)
+        return_resolved_order: Return inferred/resolved ordering if True
+
+    Returns:
+        x1: Unique x1 grid values in original units
+        x2: Unique x2 grid values in original units
+        d: Dipole on 2D grid in original units, shape (n_x1, n_x2, 3)
+        resolved_order: Optional inferred/resolved order ("C" or "F")
     """
-    return read_surface_file_2d_raw(
-        filepath,
-        value_columns=[2, 3, 4],
-        index_order=index_order,
-    )
+    if dipole_components not in (1, 3):
+        raise ValueError(f"dipole_components must be 1 or 3, got {dipole_components}")
+
+    if dipole_components == 3:
+        x1_unique, x2_unique, values, resolved_order = read_surface_file_2d_raw(
+            filepath,
+            value_columns=[2, 3, 4],
+            index_order=index_order,
+        )
+        d_2d = np.transpose(values, (1, 2, 0))
+    else:
+        x1_unique, x2_unique, values, resolved_order = read_surface_file_2d_raw(
+            filepath,
+            value_columns=[2],
+            index_order=index_order,
+        )
+        d_2d = np.zeros((len(x1_unique), len(x2_unique), 3))
+        d_2d[:, :, 2] = np.sqrt(values[0])
+
+    if return_resolved_order:
+        return x1_unique, x2_unique, d_2d, resolved_order
+    return x1_unique, x2_unique, d_2d
 
 
 def read_dipole_file_2d(
     filepath: Path,
     position_units: str = "angstrom",
     index_order: str = "C",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, str]:
-    """Read 2D dipole file with position unit conversion.
-
-    Returns:
-        x1: Unique x1 grid values (SI: meters)
-        x2: Unique x2 grid values (SI: meters)
-        dipole: Dipole components, shape (3, n_x1, n_x2)
-        resolved_order: Inferred/resolved order ("C" or "F")
-    """
-    x1_raw, x2_raw, dipole, resolved_order = read_dipole_file_2d_raw(
+    dipole_components: int = 3,
+    return_resolved_order: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, np.ndarray, str]:
+    """Read 2D dipole file with position unit conversion."""
+    raw = read_dipole_file_2d_raw(
         filepath,
         index_order=index_order,
+        dipole_components=dipole_components,
+        return_resolved_order=return_resolved_order,
     )
+    if return_resolved_order:
+        x1_raw, x2_raw, d_raw, resolved_order = raw
+    else:
+        x1_raw, x2_raw, d_raw = raw
 
     if position_units.lower() == "angstrom":
         x1 = x1_raw * 1e-10
@@ -307,7 +336,9 @@ def read_dipole_file_2d(
     else:
         raise ValueError(f"Unknown position units: {position_units}")
 
-    return x1, x2, dipole, resolved_order
+    if return_resolved_order:
+        return x1, x2, d_raw, resolved_order
+    return x1, x2, d_raw
 
 
 def write_trajectory_2d(
@@ -469,141 +500,6 @@ def write_ground_state_2d(
         data = np.column_stack([x1_padded, psi1_padded, x2_padded, psi2_padded])
 
     np.savetxt(filepath, data, header=header, fmt="%16.8E")
-
-
-def read_dipole_file_2d(
-    filepath: Path,
-    position_units: str = "angstrom",
-    index_order: str = "C",
-    dipole_components: int = 3,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Read 2D dipole file with unit conversion.
-
-    Expected format for 3 components:
-        x1  x2  d_x  d_y  d_z
-        ...
-
-    Expected format for 1 component:
-        x1  x2  d
-        ...
-
-    Where x1 and x2 are coordinates and d (or d_x, d_y, d_z) are dipole components.
-
-    Args:
-        filepath: Path to dipole file
-        position_units: "angstrom" or "bohr" for coordinates
-        index_order: "C" (x2 fast) or "F" (x1 fast) for data ordering
-        dipole_components: Number of dipole components in file (1 or 3).
-            If 1, the file contains |d|^2 (dipole squared). The square root
-            is taken and placed in the z-component (index 2), with x and y
-            components set to 0.
-
-    Returns:
-        x1: Unique x1 grid values (SI: meters)
-        x2: Unique x2 grid values (SI: meters)
-        d: Dipole on 2D grid in atomic units, shape (n_x1, n_x2, 3)
-
-    Raises:
-        ValueError: If position_units or index_order are invalid
-    """
-    # Read raw data
-    x1_raw, x2_raw, d_raw = read_dipole_file_2d_raw(
-        filepath, index_order, dipole_components
-    )
-
-    # Convert position units
-    if position_units.lower() == "angstrom":
-        x1 = x1_raw * 1e-10
-        x2 = x2_raw * 1e-10
-    elif position_units.lower() == "bohr":
-        x1 = x1_raw * CONST.bohr
-        x2 = x2_raw * CONST.bohr
-    else:
-        raise ValueError(f"Unknown position units: {position_units}")
-
-    # Dipole is kept in atomic units (as in Fortran code)
-    return x1, x2, d_raw
-
-
-def read_dipole_file_2d_raw(
-    filepath: Path,
-    index_order: str = "C",
-    dipole_components: int = 3,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Read 2D dipole file without unit conversion.
-
-    Args:
-        filepath: Path to dipole file
-        index_order: "C" (x2 fast) or "F" (x1 fast) for data ordering
-        dipole_components: Number of dipole components in file (1 or 3).
-            If 1, the file contains |d|^2 (dipole squared). The square root
-            is taken and placed in the z-component (index 2), with x and y
-            components set to 0.
-
-    Returns:
-        x1: Unique x1 grid values in original units
-        x2: Unique x2 grid values in original units
-        d: Dipole on 2D grid in original units, shape (n_x1, n_x2, 3)
-
-    Raises:
-        ValueError: If index_order is not "C" or "F", or if data layout
-                    doesn't match the specified ordering
-    """
-    if dipole_components not in (1, 3):
-        raise ValueError(f"dipole_components must be 1 or 3, got {dipole_components}")
-
-    data = _loadtxt_fortran(filepath)
-
-    min_cols = 2 + dipole_components  # x1, x2, plus dipole columns
-
-    if data.ndim == 1:
-        raise ValueError(
-            f"Dipole file must have at least {min_cols} columns, got 1D array"
-        )
-
-    if data.shape[1] < min_cols:
-        raise ValueError(
-            f"Dipole file must have at least {min_cols} columns "
-            f"(x1, x2, {'d' if dipole_components == 1 else 'd_x, d_y, d_z'}), "
-            f"got {data.shape[1]}"
-        )
-
-    x1_raw = data[:, 0]
-    x2_raw = data[:, 1]
-
-    if dipole_components == 3:
-        d_raw = data[:, 2:5]  # d_x, d_y, d_z columns
-    else:
-        # Single component: file contains |d|^2, take sqrt and place in z-component
-        d_squared = data[:, 2]
-        d_raw = np.zeros((len(d_squared), 3))
-        d_raw[:, 2] = np.sqrt(d_squared)  # z-component = sqrt(|d|^2)
-
-    # Get unique grid values
-    x1_unique = np.unique(x1_raw)
-    x2_unique = np.unique(x2_raw)
-    n_x1 = len(x1_unique)
-    n_x2 = len(x2_unique)
-
-    # Validate that the data ordering matches the specified index_order
-    # This must be done BEFORE reshaping
-    _validate_index_ordering(x1_raw, x2_raw, x1_unique, x2_unique, index_order)
-
-    # Reshape according to index order
-    # d_2d has shape (n_x1, n_x2, 3)
-    if index_order.upper() == "C":
-        # x2 varies fastest (C-style, row-major)
-        d_2d = d_raw.reshape((n_x1, n_x2, 3), order="C")
-    elif index_order.upper() == "F":
-        # x1 varies fastest (Fortran-style, column-major)
-        # Need to handle the 3 components separately
-        d_2d = np.zeros((n_x1, n_x2, 3))
-        for i in range(3):
-            d_2d[:, :, i] = d_raw[:, i].reshape((n_x1, n_x2), order="F")
-    else:
-        raise ValueError(f"index_order must be 'C' or 'F', got {index_order}")
-
-    return x1_unique, x2_unique, d_2d
 
 
 def write_dipole_file_2d(

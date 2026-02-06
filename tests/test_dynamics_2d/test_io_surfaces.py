@@ -165,12 +165,13 @@ class TestReadDipoleFile2D:
             x1_read, x2_read, d_read, order = read_dipole_file_2d_raw(
                 filepath,
                 index_order="auto",
+                return_resolved_order=True,
             )
 
             assert order == "F"
             np.testing.assert_allclose(x1_read, x1)
             np.testing.assert_allclose(x2_read, x2)
-            np.testing.assert_allclose(d_read, values)
+            np.testing.assert_allclose(np.transpose(d_read, (2, 0, 1)), values)
 
     def test_read_dipole_file_2d_position_conversion(self):
         x1_ang = np.array([0.5, 0.6])
@@ -186,12 +187,13 @@ class TestReadDipoleFile2D:
                 filepath,
                 position_units="angstrom",
                 index_order="auto",
+                return_resolved_order=True,
             )
 
             assert order == "C"
             np.testing.assert_allclose(x1_si, x1_ang * 1e-10)
             np.testing.assert_allclose(x2_si, x2_ang * 1e-10)
-            np.testing.assert_allclose(d_read, values)
+            np.testing.assert_allclose(np.transpose(d_read, (2, 0, 1)), values)
 
     def test_read_dipole_file_2d_bohr_conversion(self):
         x1_bohr = np.array([1.0, 1.5])
@@ -207,8 +209,9 @@ class TestReadDipoleFile2D:
                 filepath,
                 position_units="bohr",
                 index_order="auto",
+                return_resolved_order=True,
             )
 
             np.testing.assert_allclose(x1_si, x1_bohr * CONST.bohr)
             np.testing.assert_allclose(x2_si, x2_bohr * CONST.bohr)
-            np.testing.assert_allclose(d_read, values)
+            np.testing.assert_allclose(np.transpose(d_read, (2, 0, 1)), values)
