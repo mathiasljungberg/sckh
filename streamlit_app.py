@@ -1,4 +1,4 @@
-"""Streamlit app for visualizing 2D PES files."""
+"""Streamlit app for visualizing 2D PES and dipole surface files."""
 
 from __future__ import annotations
 
@@ -17,29 +17,76 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from python_scripts.dynamics_1d.constants import CONST
-from python_scripts.dynamics_2d.io import read_pes_file_2d
+from python_scripts.dynamics_2d.io import read_surface_file_2d_raw
 
 
-st.set_page_config(page_title="PES 2D Viewer", layout="wide")
+st.set_page_config(page_title="2D Surface Viewer", layout="wide")
 
 
 @st.cache_data(show_spinner=False)
-def load_pes_from_bytes(
+def load_surface_from_bytes(
     data: bytes,
+    surface_type: str,
     position_units: str,
     energy_units: str,
     index_order: str,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Load PES using the same reader as dynamics_2d."""
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, str]:
+    """Load surface data from bytes and convert coordinates/energy to SI."""
     with tempfile.NamedTemporaryFile(suffix=".dat", delete=True) as tmp:
         tmp.write(data)
         tmp.flush()
-        return read_pes_file_2d(
+        return load_surface_from_path(
             Path(tmp.name),
+            surface_type=surface_type,
             position_units=position_units,
             energy_units=energy_units,
             index_order=index_order,
         )
+
+
+@st.cache_data(show_spinner=False)
+def load_surface_from_path(
+    path: Path,
+    surface_type: str,
+    position_units: str,
+    energy_units: str,
+    index_order: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, str]:
+    """Load surface data from path and convert to SI where relevant."""
+    if surface_type == "PES":
+        x1_raw, x2_raw, values, resolved_order = read_surface_file_2d_raw(
+            path,
+            value_columns=[2],
+            index_order=index_order,
+        )
+    else:
+        x1_raw, x2_raw, values, resolved_order = read_surface_file_2d_raw(
+            path,
+            value_columns=[2, 3, 4],
+            index_order=index_order,
+        )
+
+    if position_units.lower() == "angstrom":
+        x1_si = x1_raw * 1e-10
+        x2_si = x2_raw * 1e-10
+    elif position_units.lower() == "bohr":
+        x1_si = x1_raw * CONST.bohr
+        x2_si = x2_raw * CONST.bohr
+    else:
+        raise ValueError(f"Unknown position units: {position_units}")
+
+    if surface_type == "PES":
+        if energy_units.lower() == "hartree":
+            values_si = values * CONST.hartree
+        elif energy_units.lower() == "ev":
+            values_si = values * CONST.eV
+        else:
+            raise ValueError(f"Unknown energy units: {energy_units}")
+    else:
+        # Dipole values are kept in file units (typically atomic units).
+        values_si = values
+
+    return x1_si, x2_si, values_si, resolved_order
 
 
 def convert_positions_for_display(x: np.ndarray, units: str) -> np.ndarray:
@@ -58,48 +105,120 @@ def convert_energy_for_display(E: np.ndarray, units: str) -> np.ndarray:
     return E
 
 
-st.title("2D Potential Energy Surface Viewer")
+def dipole_quantity(dipole_components: np.ndarray, mode: str) -> tuple[np.ndarray, str]:
+    """Convert dipole component array to a scalar field for plotting."""
+    if mode == "mu_x":
+        return dipole_components[0], "Dipole (a.u.)"
+    if mode == "mu_y":
+        return dipole_components[1], "Dipole (a.u.)"
+    if mode == "mu_z":
+        return dipole_components[2], "Dipole (a.u.)"
+    if mode == "|mu_x|":
+        return np.abs(dipole_components[0]), "|Dipole| (a.u.)"
+    if mode == "|mu_y|":
+        return np.abs(dipole_components[1]), "|Dipole| (a.u.)"
+    if mode == "|mu_z|":
+        return np.abs(dipole_components[2]), "|Dipole| (a.u.)"
+    if mode == "mu_x^2 + mu_y^2 + mu_z^2":
+        return np.sum(dipole_components**2, axis=0), "Dipole^2 (a.u.^2)"
+    raise ValueError(f"Unknown dipole display mode: {mode}")
+
+
+def cut_line(
+    z: np.ndarray,
+    x1: np.ndarray,
+    x2: np.ndarray,
+    cut_direction: str,
+    fixed_index: int,
+) -> tuple[np.ndarray, np.ndarray, str, float]:
+    """Extract a 1D cut from a 2D scalar surface."""
+    if cut_direction == "x1 at fixed x2":
+        return x1, z[:, fixed_index], "x1", float(x2[fixed_index])
+    return x2, z[fixed_index, :], "x2", float(x1[fixed_index])
+
+
+st.title("2D Surface Viewer")
 
 with st.sidebar:
-    st.header("Load PES")
+    st.header("Load Surface")
+    surface_type = st.radio(
+        "Surface type",
+        ["PES", "Dipole"],
+        index=0,
+    )
     source_mode = st.radio(
         "Source",
         ["Upload file", "Local path"],
         index=0,
     )
+
     uploaded = None
     local_path = None
     if source_mode == "Upload file":
         uploaded = st.file_uploader(
-            "PES file (columns: x1 x2 E)",
+            "Surface file",
             type=["dat", "txt", "pes"],
+            help=(
+                "PES columns: x1 x2 E. Dipole columns: x1 x2 mu_x mu_y mu_z."
+            ),
         )
     else:
         local_path = st.text_input(
             "Local file path",
             value="",
-            placeholder="/path/to/pes.dat",
+            placeholder="/path/to/surface.dat",
         )
+
     position_units = st.selectbox(
         "Position units in file",
         ["angstrom", "bohr"],
         index=0,
     )
-    energy_units = st.selectbox(
-        "Energy units in file",
-        ["hartree", "ev"],
-        index=0,
-    )
+
+    if surface_type == "PES":
+        energy_units = st.selectbox(
+            "Energy units in file",
+            ["hartree", "ev"],
+            index=0,
+        )
+    else:
+        energy_units = "hartree"
+
     index_order = st.selectbox(
         "Index ordering",
-        ["C", "F"],
+        ["auto", "C", "F"],
         index=0,
-        help="C: x2 varies fastest, F: x1 varies fastest",
+        help="Auto infers whether x2-fast (C) or x1-fast (F) ordering was used.",
     )
 
     st.header("Display options")
-    zero_at_min = st.checkbox("Zero energy at minimum", value=True)
-    show_range = st.checkbox("Zoom to energy range", value=False)
+
+    if surface_type == "PES":
+        zero_at_min = st.checkbox("Zero value at minimum", value=True)
+        show_range = st.checkbox("Zoom to energy range", value=False)
+        range_slider_label = "Energy range"
+    else:
+        zero_at_min = False
+        show_range = st.checkbox("Zoom to value range", value=True)
+        range_slider_label = "Value range"
+
+    if surface_type == "Dipole":
+        dipole_mode = st.selectbox(
+            "Dipole quantity",
+            [
+                "mu_x",
+                "mu_y",
+                "mu_z",
+                "|mu_x|",
+                "|mu_y|",
+                "|mu_z|",
+                "mu_x^2 + mu_y^2 + mu_z^2",
+            ],
+            index=0,
+        )
+    else:
+        dipole_mode = "mu_x"
+
     stride = st.select_slider(
         "Downsample factor",
         options=[1, 2, 4, 6, 8, 10],
@@ -119,11 +238,11 @@ with st.sidebar:
 
 if source_mode == "Upload file":
     if not uploaded:
-        st.info("Upload a PES file to get started.")
+        st.info("Upload a surface file to get started.")
         st.stop()
 else:
     if not local_path:
-        st.info("Enter a local PES file path to get started.")
+        st.info("Enter a local surface file path to get started.")
         st.stop()
     if not Path(local_path).is_file():
         st.error("Local file path not found.")
@@ -131,59 +250,69 @@ else:
 
 try:
     if source_mode == "Upload file":
-        x1_si, x2_si, E_si = load_pes_from_bytes(
+        x1_si, x2_si, values_si, resolved_order = load_surface_from_bytes(
             uploaded.getvalue(),
+            surface_type=surface_type,
             position_units=position_units,
             energy_units=energy_units,
             index_order=index_order,
         )
     else:
-        x1_si, x2_si, E_si = read_pes_file_2d(
+        x1_si, x2_si, values_si, resolved_order = load_surface_from_path(
             Path(local_path),
+            surface_type=surface_type,
             position_units=position_units,
             energy_units=energy_units,
             index_order=index_order,
         )
 except Exception as exc:  # noqa: BLE001 - surface file errors to user
-    st.error(f"Failed to load PES: {exc}")
+    st.error(f"Failed to load surface: {exc}")
     st.stop()
 
 x1 = convert_positions_for_display(x1_si, position_units)
 x2 = convert_positions_for_display(x2_si, position_units)
-E = convert_energy_for_display(E_si, energy_units)
 
-if zero_at_min:
-    E = E - float(np.min(E))
+if surface_type == "PES":
+    z = convert_energy_for_display(values_si[0], energy_units)
+    z_label = f"Energy ({energy_units})"
+    if zero_at_min:
+        z = z - float(np.min(z))
+else:
+    z, z_label = dipole_quantity(values_si, dipole_mode)
 
-# Energy range controls (for zooming into the PES bottom)
-E_min = float(np.min(E))
-E_max = float(np.max(E))
+if index_order.lower() == "auto":
+    st.caption(f"Detected index ordering: `{resolved_order}`")
+
+z_min = float(np.min(z))
+z_max = float(np.max(z))
 if show_range:
-    E_low, E_high = st.slider(
-        "Energy range",
-        min_value=E_min,
-        max_value=E_max,
-        value=(E_min, E_min + 0.1 * (E_max - E_min)),
+    z_low, z_high = st.slider(
+        range_slider_label,
+        min_value=z_min,
+        max_value=z_max,
+        value=(z_min, z_max),
         format="%.6g",
     )
-    E_range = (E_low, E_high)
+    z_range = (z_low, z_high)
 else:
-    E_range = (E_min, E_max)
+    z_range = (z_min, z_max)
 
-# Downsample for interactive plotting
 x1_plot = x1[::stride]
 x2_plot = x2[::stride]
-E_plot = E[::stride, ::stride]
+z_plot = z[::stride, ::stride]
 
 x1_label = f"x1 ({position_units})"
 x2_label = f"x2 ({position_units})"
-E_label = f"Energy ({energy_units})"
 
 info_cols = st.columns(4)
 info_cols[0].metric("x1 points", f"{len(x1)}")
 info_cols[1].metric("x2 points", f"{len(x2)}")
-info_cols[2].metric("E min", f"{np.min(E):.6g}")
-info_cols[3].metric("E max", f"{np.max(E):.6g}")
+info_cols[2].metric("Min", f"{np.min(z):.6g}")
+info_cols[3].metric("Max", f"{np.max(z):.6g}")
+
+contour_size = (z_range[1] - z_range[0]) / contour_levels
+if contour_size <= 0:
+    contour_size = 1.0
 
 col1, col2 = st.columns(2)
 
@@ -192,10 +321,10 @@ with col1:
     surface = go.Surface(
         x=x1_plot,
         y=x2_plot,
-        z=E_plot.T,
+        z=z_plot.T,
         colorscale=colormap,
-        cmin=E_range[0],
-        cmax=E_range[1],
+        cmin=z_range[0],
+        cmax=z_range[1],
         showscale=True,
     )
     fig_surface = go.Figure(data=[surface])
@@ -203,8 +332,8 @@ with col1:
         scene=dict(
             xaxis_title=x1_label,
             yaxis_title=x2_label,
-            zaxis_title=E_label,
-            zaxis=dict(range=[E_range[0], E_range[1]]),
+            zaxis_title=z_label,
+            zaxis=dict(range=[z_range[0], z_range[1]]),
         ),
         margin=dict(l=0, r=0, t=30, b=0),
         height=620,
@@ -216,11 +345,16 @@ with col2:
     contour = go.Contour(
         x=x1_plot,
         y=x2_plot,
-        z=E_plot.T,
+        z=z_plot.T,
         colorscale=colormap,
-        zmin=E_range[0],
-        zmax=E_range[1],
-        contours=dict(showlabels=True, start=E_range[0], end=E_range[1], size=(E_range[1] - E_range[0]) / contour_levels),
+        zmin=z_range[0],
+        zmax=z_range[1],
+        contours=dict(
+            showlabels=True,
+            start=z_range[0],
+            end=z_range[1],
+            size=contour_size,
+        ),
     )
     fig_contour = go.Figure(data=[contour])
     fig_contour.update_layout(
@@ -230,3 +364,61 @@ with col2:
         height=620,
     )
     st.plotly_chart(fig_contour, use_container_width=True)
+
+st.subheader("Surface Cuts")
+cut_cols = st.columns(3)
+with cut_cols[0]:
+    cut_direction = st.radio(
+        "Cut direction",
+        ["x1 at fixed x2", "x2 at fixed x1"],
+        index=0,
+    )
+
+if cut_direction == "x1 at fixed x2":
+    with cut_cols[1]:
+        fixed_index = st.slider("x2 index", 0, len(x2) - 1, len(x2) // 2)
+    fixed_value = x2[fixed_index]
+    fixed_label = f"x2 = {fixed_value:.6g} {position_units}"
+else:
+    with cut_cols[1]:
+        fixed_index = st.slider("x1 index", 0, len(x1) - 1, len(x1) // 2)
+    fixed_value = x1[fixed_index]
+    fixed_label = f"x1 = {fixed_value:.6g} {position_units}"
+
+with cut_cols[2]:
+    st.write("Fixed coordinate")
+    st.write(fixed_label)
+
+line_x, line_y, cut_axis, cut_fixed = cut_line(
+    z=z,
+    x1=x1,
+    x2=x2,
+    cut_direction=cut_direction,
+    fixed_index=fixed_index,
+)
+
+if cut_axis == "x1":
+    line_x_label = x1_label
+    line_title = f"1D Cut: {z_label} at x2 = {cut_fixed:.6g} {position_units}"
+else:
+    line_x_label = x2_label
+    line_title = f"1D Cut: {z_label} at x1 = {cut_fixed:.6g} {position_units}"
+
+fig_cut = go.Figure(
+    data=[
+        go.Scatter(
+            x=line_x,
+            y=line_y,
+            mode="lines",
+            line=dict(width=2),
+        )
+    ]
+)
+fig_cut.update_layout(
+    title=line_title,
+    xaxis_title=line_x_label,
+    yaxis_title=z_label,
+    margin=dict(l=0, r=0, t=40, b=0),
+    height=360,
+)
+st.plotly_chart(fig_cut, use_container_width=True)
