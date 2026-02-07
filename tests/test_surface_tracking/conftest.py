@@ -137,3 +137,26 @@ def sign_flipped_3x3():
     D_flipped = D_true * flips[:, :, :, None]
 
     return E, D_flipped, D_true, flips
+
+
+@pytest.fixture
+def near_degenerate_3x3():
+    """3x3 grid with 3 states, two of which are near-degenerate.
+
+    States 0 and 1 are close in energy but have distinct dipole characters.
+    State 2 is well-separated.
+    """
+    n_x1, n_x2, n_states = 3, 3, 3
+    E = np.zeros((n_x1, n_x2, n_states))
+    D = np.zeros((n_x1, n_x2, n_states, 3))
+
+    for i in range(n_x1):
+        for j in range(n_x2):
+            E[i, j, 0] = 2.0 + 0.001 * i + 0.002 * j
+            E[i, j, 1] = 2.005 + 0.001 * i - 0.001 * j
+            E[i, j, 2] = 5.0 + 0.01 * i + 0.02 * j
+            D[i, j, 0] = [1.0, 0.1 * j, 0.0]
+            D[i, j, 1] = [0.1 * i, 1.0, 0.0]
+            D[i, j, 2] = [0.0, 0.0, 1.0]
+
+    return E, D

@@ -94,3 +94,137 @@ class TestTrackSurfaces:
         assert diag.neighbor_energy_mismatch >= 0
         assert diag.neighbor_dipole_mismatch >= 0
         assert diag.per_state_energy_roughness.shape == (2,)
+
+    def test_confidence_weighting_pipeline(self, crossing_2state_3x3):
+        """Feature A through full pipeline."""
+        E, D, E_A, E_B, D_A, D_B = crossing_2state_3x3
+        config = TrackingConfig(
+            ref_point=(0, 0), sigma_E=1.0, use_confidence=True
+        )
+        result = track_surfaces(E, D, config)
+        assert np.array_equal(result.perm[2, 2], [1, 0])
+
+    def test_priority_queue_pipeline(self, random_permuted_5x5):
+        """Feature B through full pipeline."""
+        E_perm, D_perm, E_true, D_true, perms = random_permuted_5x5
+        config = TrackingConfig(
+            ref_point=(2, 2), sigma_E=0.1, use_priority_queue=True
+        )
+        result = track_surfaces(E_perm, D_perm, config)
+        max_diff = np.max(np.abs(np.diff(result.E, axis=0)))
+        assert max_diff < 0.1
+
+    def test_multi_neighbor_pipeline(self, random_permuted_5x5):
+        """Feature C through full pipeline."""
+        E_perm, D_perm, E_true, D_true, perms = random_permuted_5x5
+        config = TrackingConfig(
+            ref_point=(2, 2), sigma_E=0.1, use_multi_neighbor=True
+        )
+        result = track_surfaces(E_perm, D_perm, config)
+        max_diff = np.max(np.abs(np.diff(result.E, axis=0)))
+        assert max_diff < 0.1
+
+    def test_all_phase1_features_combined(self, random_permuted_5x5):
+        """Features A+B+C combined through full pipeline."""
+        E_perm, D_perm, E_true, D_true, perms = random_permuted_5x5
+        config = TrackingConfig(
+            ref_point=(2, 2),
+            sigma_E=0.1,
+            use_confidence=True,
+            use_priority_queue=True,
+            use_multi_neighbor=True,
+        )
+        result = track_surfaces(E_perm, D_perm, config)
+        assert result.E.shape == (5, 5, 3)
+        max_diff = np.max(np.abs(np.diff(result.E, axis=0)))
+        assert max_diff < 0.1
+
+    def test_smart_ref_point_selection(self):
+        """Feature F: ref_point='auto' picks smooth region."""
+        n_x1, n_x2, n_states = 5, 5, 2
+        E = np.zeros((n_x1, n_x2, n_states))
+        D = np.zeros((n_x1, n_x2, n_states, 3))
+
+        for i in range(n_x1):
+            for j in range(n_x2):
+                E[i, j, 0] = 1.0 + 0.01 * i + 0.02 * j
+                E[i, j, 1] = 3.0 + 0.01 * i + 0.02 * j
+                D[i, j, 0] = [1.0, 0.0, 0.0]
+                D[i, j, 1] = [0.0, 1.0, 0.0]
+
+        config = TrackingConfig(ref_point="auto")
+        result = track_surfaces(E, D, config)
+        # Should complete and produce smooth output
+        np.testing.assert_allclose(result.E, E)
+
+    def test_subspace_tracking_pipeline(self):
+        """Feature H: subspace tracking through full pipeline."""
+        n_x1, n_x2, n_states = 3, 3, 2
+        E = np.zeros((n_x1, n_x2, n_states))
+        D = np.zeros((n_x1, n_x2, n_states, 3))
+
+        for i in range(n_x1):
+            for j in range(n_x2):
+                E[i, j, 0] = 2.0 + 0.001 * i  # near-degenerate
+                E[i, j, 1] = 2.005 + 0.001 * j
+                D[i, j, 0] = [1.0, 0.0, 0.0]
+                D[i, j, 1] = [0.0, 1.0, 0.0]
+
+        config = TrackingConfig(
+            ref_point=(1, 1),
+            use_subspace=True,
+            degen_threshold=0.1,
+            sigma_E=1.0,
+        )
+        result = track_surfaces(E, D, config)
+        assert result.E.shape == (3, 3, 2)
+
+    def test_energy_derivative_cost_pipeline(self, random_permuted_5x5):
+        """Feature I: energy-derivative cost through full pipeline."""
+        E_perm, D_perm, E_true, D_true, perms = random_permuted_5x5
+        config = TrackingConfig(
+            ref_point=(2, 2),
+            sigma_E=0.1,
+            w_dE=1.0,
+            sigma_dE=0.1,
+        )
+        result = track_surfaces(E_perm, D_perm, config)
+        max_diff = np.max(np.abs(np.diff(result.E, axis=0)))
+        assert max_diff < 0.1
+
+    def test_dipole_derivative_cost_pipeline(self, random_permuted_5x5):
+        """Feature J: dipole-derivative cost through full pipeline."""
+        E_perm, D_perm, E_true, D_true, perms = random_permuted_5x5
+        config = TrackingConfig(
+            ref_point=(2, 2),
+            sigma_E=0.1,
+            w_dD=1.0,
+            sigma_dD=0.1,
+        )
+        result = track_surfaces(E_perm, D_perm, config)
+        max_diff = np.max(np.abs(np.diff(result.E, axis=0)))
+        assert max_diff < 0.1
+
+    def test_all_features_combined(self, random_permuted_5x5):
+        """All features (A-J) combined through full pipeline."""
+        E_perm, D_perm, E_true, D_true, perms = random_permuted_5x5
+        config = TrackingConfig(
+            ref_point="auto",
+            sigma_E=0.1,
+            use_confidence=True,
+            use_priority_queue=True,
+            use_multi_neighbor=True,
+            n_repair_iter=2,
+            adaptive_sigma_E=True,
+            w_norm=0.5,
+            use_subspace=True,
+            degen_threshold=0.01,
+            w_dE=0.5,
+            sigma_dE=0.1,
+            w_dD=0.5,
+            sigma_dD=0.1,
+        )
+        result = track_surfaces(E_perm, D_perm, config)
+        assert result.E.shape == (5, 5, 3)
+        max_diff = np.max(np.abs(np.diff(result.E, axis=0)))
+        assert max_diff < 0.1
