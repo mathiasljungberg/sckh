@@ -38,7 +38,7 @@ def parse_2dscan(filepath, grid_in_input=False):
 
     Args:
         filepath: Path to the .2dscan file
-        grid_in_input: read current grid point first           
+        grid_in_input: read current grid point first
     Returns:
         nx, ny: Grid dimensions
         dx: Step size
@@ -298,6 +298,11 @@ Example:
                         help='Relative tolerance for verification (default: 1e-4)')
     parser.add_argument('--grid-in-input', action='store_true',
                         help='read the current grid point first for each geomerty')
+    parser.add_argument('--random-sign', action='store_true',
+                        help='takes the absolute values of all transition dipoles and multiplies with a random sign that is the same for all grid points in a certain transition')
+    parser.add_argument('--seed',  type=int, default = 42,
+                        help='Random seed used together with random sign')
+    
     args = parser.parse_args()
 
     input_file = Path(args.input_file)
@@ -314,6 +319,13 @@ Example:
     print(f"Origin: ({x0}, {y0})")
     print(f"Transitions: {n_trans}")
 
+    if args.random_sign:
+        rng = np.random.default_rng() 
+        signs = rng.choice(np.array([-1, 1], dtype=int), size=(n_trans,3))
+        signs[0,0] = 1 #choose x in the transition 1 to be positive to fix Gauge
+        print(signs)
+        dipoles = np.einsum('ijkl,kl->ijkl', np.abs(dipoles), signs)
+        
     if args.verify or args.verify_only:
         print("\nVerifying against existing .osc.dat files...")
         osc_dir = input_file.parent
