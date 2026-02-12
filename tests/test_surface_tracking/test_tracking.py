@@ -205,8 +205,56 @@ class TestTrackSurfaces:
         max_diff = np.max(np.abs(np.diff(result.E, axis=0)))
         assert max_diff < 0.1
 
+    def test_phase_relaxation_pipeline(self, sign_flipped_3x3):
+        """Feature L: phase relaxation through full pipeline."""
+        E, D_flipped, D_true, flips = sign_flipped_3x3
+        config = TrackingConfig(ref_point=(0, 0), n_phase_iter=5)
+        result = track_surfaces(E, D_flipped, config)
+        # After phase relaxation, all dipoles should be consistent
+        for i in range(3):
+            for j in range(3):
+                for k in range(2):
+                    dot = np.dot(result.D[0, 0, k], result.D[i, j, k])
+                    assert dot > 0, (
+                        f"Dipole at ({i},{j}), state {k} has wrong sign"
+                    )
+
+    def test_full_reassignment_pipeline(self, random_permuted_5x5):
+        """Feature M: full re-assignment repair through full pipeline."""
+        E_perm, D_perm, E_true, D_true, perms = random_permuted_5x5
+        config = TrackingConfig(
+            ref_point=(2, 2),
+            sigma_E=0.1,
+            n_reassign_iter=2,
+        )
+        result = track_surfaces(E_perm, D_perm, config)
+        max_diff = np.max(np.abs(np.diff(result.E, axis=0)))
+        assert max_diff < 0.1
+
+    def test_sweep_pipeline(self, random_permuted_5x5):
+        """Feature N: 1D sweeps through full pipeline."""
+        E_perm, D_perm, E_true, D_true, perms = random_permuted_5x5
+        config = TrackingConfig(
+            ref_point=(2, 2),
+            sigma_E=0.1,
+            n_sweep_iter=2,
+        )
+        result = track_surfaces(E_perm, D_perm, config)
+        max_diff = np.max(np.abs(np.diff(result.E, axis=0)))
+        assert max_diff < 0.1
+
+    def test_confidence_floor_pipeline(self, smooth_2state_3x3):
+        """Feature O: confidence floor through full pipeline."""
+        E, D = smooth_2state_3x3
+        config = TrackingConfig(
+            use_confidence=True,
+            confidence_floor=0.1,
+        )
+        result = track_surfaces(E, D, config)
+        np.testing.assert_allclose(result.E, E)
+
     def test_all_features_combined(self, random_permuted_5x5):
-        """All features (A-J) combined through full pipeline."""
+        """All features (A-O) combined through full pipeline."""
         E_perm, D_perm, E_true, D_true, perms = random_permuted_5x5
         config = TrackingConfig(
             ref_point="auto",
@@ -223,6 +271,10 @@ class TestTrackSurfaces:
             sigma_dE=0.1,
             w_dD=0.5,
             sigma_dD=0.1,
+            n_phase_iter=3,
+            n_reassign_iter=2,
+            n_sweep_iter=1,
+            confidence_floor=0.05,
         )
         result = track_surfaces(E_perm, D_perm, config)
         assert result.E.shape == (5, 5, 3)

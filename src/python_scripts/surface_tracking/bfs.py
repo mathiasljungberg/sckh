@@ -210,6 +210,13 @@ def bfs_assign(
         bfs_parent[bi, bj] = [ai, aj]
         bfs_order.append((bi, bj))
 
+        # Feature K: inline phase alignment with parent
+        # Align dipole signs before computing gradients so that
+        # D_tracked is phase-consistent throughout BFS.
+        for k in range(n_states):
+            if np.dot(D_tracked[bi, bj, k], D_tracked[ai, aj, k]) < 0:
+                D_tracked[bi, bj, k] *= -1
+
         # Feature I: update energy gradient estimate at B
         if energy_gradients is not None:
             energy_gradients[bi, bj] = E_tracked[bi, bj] - E_tracked[ai, aj]
@@ -406,3 +413,124 @@ def _swap_improvements_vectorized(
     cost_after = cost_after_per_nb.sum(axis=0)  # (n_pairs,)
 
     return cost_before - cost_after
+
+
+def repair_reassignment(
+    E: np.ndarray,
+    D: np.ndarray,
+    E_tracked: np.ndarray,
+    D_tracked: np.ndarray,
+    perm: np.ndarray,
+    features: Features,
+    config: TrackingConfig,
+) -> int:
+    """Full Hungarian re-assignment repair (feature M).
+
+    For each grid point, builds an averaged cost matrix from ALL neighbors
+    against the raw data at that point, runs Hungarian, and accepts the
+    new permutation if it reduces the total neighbor cost.
+
+    Modifies E_tracked, D_tracked, perm in-place.
+
+    Parameters
+    ----------
+    E : ndarray, shape (n_x1, n_x2, n_states)
+        Raw energies.
+    D : ndarray, shape (n_x1, n_x2, n_states, 3)
+        Raw dipoles.
+    E_tracked, D_tracked : ndarray
+        Tracked arrays (modified in-place).
+    perm : ndarray
+        Permutation map (modified in-place).
+    features : Features
+    config : TrackingConfig
+
+    Returns
+    -------
+    total_changes : int
+        Total number of re-assignments across all iterations.
+    """
+    n_x1, n_x2, n_states = E.shape
+    total_changes = 0
+
+    for _ in range(config.n_reassign_iter):
+        changes = 0
+
+        for i in range(n_x1):
+            for j in range(n_x2):
+                neighbors = grid_neighbors(i, j, n_x1, n_x2)
+                if not neighbors:
+                    continue
+
+                # Build averaged cost matrix: neighbors → raw data at (i,j)
+                C_avg = np.zeros((n_states, n_states))
+                for ni, nj in neighbors:
+                    C_nb = build_cost_matrix(
+                        E_tracked[ni, nj], D_tracked[ni, nj],
+                        E[i, j], D[i, j], config,
+                    )
+                    C_avg += C_nb
+                C_avg /= len(neighbors)
+
+                _, new_perm = linear_sum_assignment(C_avg)
+
+                if np.array_equal(new_perm, perm[i, j]):
+                    continue
+
+                # Evaluate: is the new assignment better?
+                # Compute total per-state neighbor cost for current and new
+                new_E = E[i, j, new_perm]
+                new_D = D[i, j, new_perm].copy()
+
+                # Phase-align new dipoles with neighbor majority
+                for k in range(n_states):
+                    agreement = sum(
+                        np.dot(new_D[k], D_tracked[ni, nj, k])
+                        for ni, nj in neighbors
+                    )
+                    if agreement < 0:
+                        new_D[k] *= -1
+
+                current_cost = _neighbor_cost(
+                    E_tracked[i, j], D_tracked[i, j],
+                    E_tracked, D_tracked, neighbors, config,
+                )
+                new_cost = _neighbor_cost(
+                    new_E, new_D,
+                    E_tracked, D_tracked, neighbors, config,
+                )
+
+                if new_cost < current_cost:
+                    E_tracked[i, j] = new_E
+                    D_tracked[i, j] = new_D
+                    perm[i, j] = new_perm
+                    changes += 1
+
+        total_changes += changes
+        if changes == 0:
+            break
+
+    return total_changes
+
+
+def _neighbor_cost(
+    E_point: np.ndarray,
+    D_point: np.ndarray,
+    E_tracked: np.ndarray,
+    D_tracked: np.ndarray,
+    neighbors: list[tuple[int, int]],
+    config: TrackingConfig,
+) -> float:
+    """Compute total per-state cost of a point against its neighbors."""
+    total = 0.0
+    for ni, nj in neighbors:
+        dE = np.abs(E_point - E_tracked[ni, nj]) / config.sigma_E
+
+        norm_p = np.linalg.norm(D_point, axis=-1)
+        norm_n = np.linalg.norm(D_tracked[ni, nj], axis=-1)
+        dot_val = np.abs(np.sum(D_point * D_tracked[ni, nj], axis=-1))
+        denom = norm_p * norm_n + config.eps
+        dD = 1.0 - dot_val / denom
+
+        total += np.sum(config.w_E * dE + config.w_D * dD)
+    return total

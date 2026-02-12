@@ -2,6 +2,8 @@
 
 import numpy as np
 
+from .bfs import grid_neighbors
+
 
 def fix_phases_bfs(
     D: np.ndarray,
@@ -48,3 +50,52 @@ def fix_phases_bfs(
                 D[bi, bj, k] *= -1
 
     return D
+
+
+def relax_phases(
+    D: np.ndarray,
+    n_iter: int,
+    min_norm: float = 1e-10,
+) -> int:
+    """Iterative neighbor-consensus phase relaxation (feature L).
+
+    For each grid point and state, flips the dipole sign if the total
+    dot-product agreement with all grid neighbors is negative.  Repeats
+    until convergence or *n_iter* iterations.
+
+    Parameters
+    ----------
+    D : ndarray, shape (n_x1, n_x2, n_states, 3)
+        Tracked dipole vectors. Modified in-place.
+    n_iter : int
+        Maximum number of relaxation iterations.
+    min_norm : float
+        Skip dipoles with norm below this threshold.
+
+    Returns
+    -------
+    total_flips : int
+        Total number of sign flips applied across all iterations.
+    """
+    n_x1, n_x2, n_states = D.shape[:3]
+    total_flips = 0
+
+    for _ in range(n_iter):
+        flips = 0
+        for i in range(n_x1):
+            for j in range(n_x2):
+                for k in range(n_states):
+                    d = D[i, j, k]
+                    if np.linalg.norm(d) < min_norm:
+                        continue
+                    agreement = 0.0
+                    for ni, nj in grid_neighbors(i, j, n_x1, n_x2):
+                        agreement += np.dot(d, D[ni, nj, k])
+                    if agreement < 0:
+                        D[i, j, k] *= -1
+                        flips += 1
+        total_flips += flips
+        if flips == 0:
+            break
+
+    return total_flips

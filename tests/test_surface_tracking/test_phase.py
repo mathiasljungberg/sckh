@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from python_scripts.surface_tracking.phase import fix_phases_bfs
+from python_scripts.surface_tracking.phase import fix_phases_bfs, relax_phases
 
 
 class TestFixPhasesBfs:
@@ -85,3 +85,64 @@ class TestFixPhasesBfs:
         fix_phases_bfs(D, bfs_order, bfs_parent)
         np.testing.assert_allclose(D[1, 0, 0], [1.0, 0.0, 0.0])
         np.testing.assert_allclose(D[1, 0, 1], [0.0, 1.0, 0.0])
+
+
+class TestRelaxPhases:
+    """Feature L: iterative neighbor-consensus phase relaxation."""
+
+    def test_relax_fixes_isolated_flip(self):
+        """A single flipped point surrounded by consistent neighbors should be fixed."""
+        D = np.zeros((3, 3, 1, 3))
+        D[:, :, 0] = [1.0, 0.0, 0.0]
+        # Flip the center point
+        D[1, 1, 0] = [-1.0, 0.0, 0.0]
+
+        total_flips = relax_phases(D, n_iter=5)
+        assert total_flips > 0
+        # Center should now agree with neighbors
+        np.testing.assert_allclose(D[1, 1, 0], [1.0, 0.0, 0.0])
+
+    def test_relax_converges_immediately_if_consistent(self):
+        """Already-consistent grid should produce zero flips."""
+        D = np.zeros((3, 3, 2, 3))
+        D[:, :, 0] = [1.0, 0.0, 0.0]
+        D[:, :, 1] = [0.0, 1.0, 0.0]
+
+        total_flips = relax_phases(D, n_iter=5)
+        assert total_flips == 0
+
+    def test_relax_off_when_zero_iters(self):
+        """n_iter=0 means no relaxation, even if flips needed."""
+        D = np.zeros((3, 3, 1, 3))
+        D[:, :, 0] = [1.0, 0.0, 0.0]
+        D[1, 1, 0] = [-1.0, 0.0, 0.0]  # flipped
+        D_orig = D.copy()
+
+        total_flips = relax_phases(D, n_iter=0)
+        assert total_flips == 0
+        np.testing.assert_array_equal(D, D_orig)
+
+    def test_relax_skips_weak_dipoles(self):
+        """Near-zero dipoles should not be flipped."""
+        D = np.zeros((3, 1, 1, 3))
+        D[0, 0, 0] = [1.0, 0.0, 0.0]
+        D[1, 0, 0] = [-1e-15, 0.0, 0.0]  # tiny
+        D[2, 0, 0] = [1.0, 0.0, 0.0]
+        D_mid_orig = D[1, 0, 0].copy()
+
+        relax_phases(D, n_iter=5)
+        np.testing.assert_array_equal(D[1, 0, 0], D_mid_orig)
+
+    def test_relax_multiple_states_independent(self):
+        """Each state should be relaxed independently."""
+        D = np.zeros((3, 3, 2, 3))
+        D[:, :, 0] = [1.0, 0.0, 0.0]
+        D[:, :, 1] = [0.0, 1.0, 0.0]
+        # Flip center for state 0 only
+        D[1, 1, 0] = [-1.0, 0.0, 0.0]
+
+        relax_phases(D, n_iter=5)
+        # State 0 center should be fixed
+        np.testing.assert_allclose(D[1, 1, 0], [1.0, 0.0, 0.0])
+        # State 1 should be unchanged
+        np.testing.assert_allclose(D[1, 1, 1], [0.0, 1.0, 0.0])

@@ -357,3 +357,82 @@ class TestDipoleDerivativeCost:
         config_off = TrackingConfig(w_dD=0.0)
         C_off = build_cost_matrix(E, D, E, D, config_off)
         np.testing.assert_allclose(C, C_off)
+
+
+class TestConfidenceFloor:
+    """Feature O: confidence floor for weak dipoles."""
+
+    def test_weak_dipoles_zero_cost(self):
+        """Both dipoles below D_ref should produce zero dipole cost."""
+        E = np.array([1.0, 3.0])
+        # Very weak dipoles in different directions
+        D_A = np.array([[0.001, 0.0, 0.0], [0.0, 0.001, 0.0]])
+        D_B = np.array([[0.0, 0.001, 0.0], [0.001, 0.0, 0.0]])
+        conf_A = np.array([0.01, 0.01])
+        conf_B = np.array([0.01, 0.01])
+
+        # With confidence floor: dipole cost zeroed out
+        config = TrackingConfig(
+            w_E=0.0, w_D=1.0, use_confidence=True,
+            confidence_floor=0.1, D_ref=0.1,
+        )
+        C = build_cost_matrix(E, D_A, E, D_B, config,
+                              conf_A=conf_A, conf_B=conf_B)
+        # All dipole costs should be zero (weak dipoles)
+        np.testing.assert_allclose(C, 0.0, atol=1e-12)
+
+    def test_strong_dipoles_unaffected(self):
+        """Strong dipoles should still get normal cost."""
+        E = np.array([1.0, 3.0])
+        D_A = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+        D_B = np.array([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0]])  # swapped
+        conf_A = np.array([1.0, 1.0])
+        conf_B = np.array([1.0, 1.0])
+
+        config = TrackingConfig(
+            w_E=0.0, w_D=1.0, use_confidence=True,
+            confidence_floor=0.1, D_ref=0.1,
+        )
+        C = build_cost_matrix(E, D_A, E, D_B, config,
+                              conf_A=conf_A, conf_B=conf_B)
+        # Strong dipoles: diagonal should have high cost (swapped dirs)
+        assert C[0, 0] > 0.5
+        assert C[1, 1] > 0.5
+
+    def test_floor_off_by_default(self):
+        """confidence_floor=0 means current weighting behavior."""
+        E = np.array([1.0, 3.0])
+        D_A = np.array([[0.001, 0.0, 0.0], [0.0, 0.001, 0.0]])
+        D_B = np.array([[0.0, 0.001, 0.0], [0.001, 0.0, 0.0]])
+        conf = np.array([0.01, 0.01])
+
+        config_floor = TrackingConfig(
+            w_E=0.0, w_D=1.0, use_confidence=True,
+            confidence_floor=0.0, D_ref=0.1,
+        )
+        config_no_floor = TrackingConfig(
+            w_E=0.0, w_D=1.0, use_confidence=True,
+            D_ref=0.1,
+        )
+        C1 = build_cost_matrix(E, D_A, E, D_B, config_floor,
+                               conf_A=conf, conf_B=conf)
+        C2 = build_cost_matrix(E, D_A, E, D_B, config_no_floor,
+                               conf_A=conf, conf_B=conf)
+        np.testing.assert_allclose(C1, C2)
+
+    def test_floor_zeros_norm_cost(self):
+        """Confidence floor should also zero out norm cost for weak dipoles."""
+        E = np.array([1.0, 3.0])
+        D_A = np.array([[0.005, 0.0, 0.0], [0.0, 0.003, 0.0]])
+        D_B = np.array([[0.0, 0.008, 0.0], [0.006, 0.0, 0.0]])
+        conf_A = np.array([0.05, 0.03])
+        conf_B = np.array([0.08, 0.06])
+
+        config = TrackingConfig(
+            w_E=0.0, w_D=0.0, w_norm=1.0, sigma_norm=0.1,
+            use_confidence=True, confidence_floor=0.1, D_ref=0.1,
+        )
+        C = build_cost_matrix(E, D_A, E, D_B, config,
+                              conf_A=conf_A, conf_B=conf_B)
+        # All norm costs should be zero (all dipoles weak)
+        np.testing.assert_allclose(C, 0.0, atol=1e-12)

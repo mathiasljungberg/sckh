@@ -117,15 +117,24 @@ def build_cost_matrix(
     c_D = 1.0 - dot_AB / denom
 
     # Feature A: confidence weighting on dipole cost
+    # Feature O: confidence floor — zero out dipole cost for very weak dipoles
+    weak_mask = None
     if config.use_confidence and conf_A is not None and conf_B is not None:
         conf_weight = np.minimum(conf_A[:, None], conf_B[None, :])
-        c_D = c_D * conf_weight
+        if config.confidence_floor > 0:
+            weak_mask = conf_weight < config.confidence_floor
+            c_D[weak_mask] = 0.0
+            c_D[~weak_mask] *= conf_weight[~weak_mask]
+        else:
+            c_D = c_D * conf_weight
 
     C = config.w_E * c_E + config.w_D * c_D
 
     # Feature G: dipole-norm similarity cost
     if config.w_norm > 0:
         c_norm = np.abs(norm_A[:, None] - norm_B[None, :]) / config.sigma_norm
+        if weak_mask is not None:
+            c_norm[weak_mask] = 0.0
         C += config.w_norm * c_norm
 
     # Optional oscillator strength cost
@@ -152,6 +161,8 @@ def build_cost_matrix(
             np.linalg.norm(diff_pos, axis=-1),
             np.linalg.norm(diff_neg, axis=-1),
         )
+        if weak_mask is not None:
+            dist[weak_mask] = 0.0
         C += config.w_dD * dist / config.sigma_dD
 
     # Energy gate: block assignments with large energy difference

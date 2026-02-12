@@ -47,3 +47,14 @@ class TrackingConfig:
     # J: Dipole-derivative continuity cost
     w_dD: float = 0.0
     sigma_dD: float = 0.1
+    # K: Inline phase alignment during BFS (always on, no toggle needed)
+    # L: Iterative neighbor-consensus phase relaxation
+    n_phase_iter: int = 0
+
+    # --- Phase 4 toggles ---
+    # M: Full Hungarian re-assignment repair
+    n_reassign_iter: int = 0
+    # N: 1D row/column sweep consistency pass
+    n_sweep_iter: int = 0
+    # O: Confidence floor - zero out dipole cost when both dipoles are weak
+    confidence_floor: float = 0.0

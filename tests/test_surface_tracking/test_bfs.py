@@ -6,6 +6,7 @@ from python_scripts.surface_tracking.bfs import (
     bfs_assign,
     grid_neighbors,
     repair_assignments,
+    repair_reassignment,
 )
 from python_scripts.surface_tracking.config import TrackingConfig
 from python_scripts.surface_tracking.cost import precompute_features
@@ -325,3 +326,87 @@ class TestRepairAssignments:
         result = track_surfaces(E_perm, D_perm, config)
         max_diff = np.max(np.abs(np.diff(result.E, axis=0)))
         assert max_diff < 0.1
+
+
+class TestInlinePhaseAlignment:
+    """Feature K: inline phase alignment during BFS."""
+
+    def test_d_tracked_has_consistent_signs(self):
+        """D_tracked should have phase-consistent dipoles after BFS (before phase fix)."""
+        n_x1, n_x2, n_states = 3, 3, 2
+        E = np.zeros((n_x1, n_x2, n_states))
+        D = np.zeros((n_x1, n_x2, n_states, 3))
+
+        for i in range(n_x1):
+            for j in range(n_x2):
+                E[i, j, 0] = 1.0 + 0.01 * i + 0.02 * j
+                E[i, j, 1] = 3.0 + 0.01 * i + 0.02 * j
+                # Alternate sign flips in the raw data
+                sign = -1 if (i + j) % 2 == 1 else 1
+                D[i, j, 0] = [sign * 1.0, 0.0, 0.0]
+                D[i, j, 1] = [0.0, sign * 1.0, 0.0]
+
+        config = TrackingConfig(ref_point=(1, 1))
+        features = precompute_features(E, D, config)
+        _, D_t, _, _, _, _ = bfs_assign(E, D, features, config)
+
+        # After BFS with inline phase alignment, all dipoles should
+        # agree in sign with the reference point
+        ref_d0 = D_t[1, 1, 0]
+        ref_d1 = D_t[1, 1, 1]
+        for i in range(n_x1):
+            for j in range(n_x2):
+                assert np.dot(D_t[i, j, 0], ref_d0) > 0, (
+                    f"State 0 at ({i},{j}) has wrong sign after BFS"
+                )
+                assert np.dot(D_t[i, j, 1], ref_d1) > 0, (
+                    f"State 1 at ({i},{j}) has wrong sign after BFS"
+                )
+
+
+class TestRepairReassignment:
+    """Feature M: full Hungarian re-assignment repair."""
+
+    def test_fixes_fully_wrong_permutation(self):
+        """A deliberately wrong full permutation should be fixed."""
+        n_x1, n_x2, n_states = 3, 3, 2
+        E = np.zeros((n_x1, n_x2, n_states))
+        D = np.zeros((n_x1, n_x2, n_states, 3))
+
+        for i in range(n_x1):
+            for j in range(n_x2):
+                E[i, j, 0] = 1.0 + 0.01 * i + 0.02 * j
+                E[i, j, 1] = 3.0 + 0.01 * i + 0.02 * j
+                D[i, j, 0] = [1.0, 0.0, 0.0]
+                D[i, j, 1] = [0.0, 1.0, 0.0]
+
+        config = TrackingConfig(ref_point=(1, 1), n_reassign_iter=3)
+        features = precompute_features(E, D, config)
+        E_t, D_t, perm, _, _, _ = bfs_assign(E, D, features, config)
+
+        # Deliberately corrupt assignment at (0, 0): swap ALL states
+        E_t[0, 0, 0], E_t[0, 0, 1] = E_t[0, 0, 1].copy(), E_t[0, 0, 0].copy()
+        D_t[0, 0, 0], D_t[0, 0, 1] = D_t[0, 0, 1].copy(), D_t[0, 0, 0].copy()
+        perm[0, 0] = [1, 0]
+
+        total = repair_reassignment(E, D, E_t, D_t, perm, features, config)
+        assert total > 0
+        np.testing.assert_array_equal(perm[0, 0], [0, 1])
+
+    def test_no_change_on_smooth_surface(self, smooth_2state_3x3):
+        """Smooth surface should produce zero changes."""
+        E, D = smooth_2state_3x3
+        config = TrackingConfig(ref_point=(1, 1), n_reassign_iter=3)
+        features = precompute_features(E, D, config)
+        E_t, D_t, perm, _, _, _ = bfs_assign(E, D, features, config)
+        total = repair_reassignment(E, D, E_t, D_t, perm, features, config)
+        assert total == 0
+
+    def test_off_by_default(self, smooth_2state_3x3):
+        """n_reassign_iter=0 means no re-assignment."""
+        E, D = smooth_2state_3x3
+        config = TrackingConfig(ref_point=(1, 1), n_reassign_iter=0)
+        features = precompute_features(E, D, config)
+        E_t, D_t, perm, _, _, _ = bfs_assign(E, D, features, config)
+        total = repair_reassignment(E, D, E_t, D_t, perm, features, config)
+        assert total == 0

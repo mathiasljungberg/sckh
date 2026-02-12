@@ -4,11 +4,12 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .bfs import bfs_assign, repair_assignments
+from .bfs import bfs_assign, repair_assignments, repair_reassignment
 from .config import TrackingConfig
 from .cost import precompute_features
 from .diagnostics import DiagnosticReport, compute_diagnostics
-from .phase import fix_phases_bfs
+from .phase import fix_phases_bfs, relax_phases
+from .sweeps import sweep_cols, sweep_rows
 
 
 @dataclass
@@ -134,11 +135,33 @@ def track_surfaces(
         bfs_assign(E, D, features, config)
     )
 
-    # Feature D: post-assignment repair pass
+    # Feature D: post-assignment swap repair (fast)
     if config.n_repair_iter > 0:
         repair_assignments(E_tracked, D_tracked, perm, features, config)
 
+    # Feature M: full Hungarian re-assignment repair
+    if config.n_reassign_iter > 0:
+        repair_reassignment(
+            E, D, E_tracked, D_tracked, perm, features, config
+        )
+
+    # Feature N: 1D row/column sweep consistency
+    for _ in range(config.n_sweep_iter):
+        row_changes = sweep_rows(
+            E, D, E_tracked, D_tracked, perm, features, config
+        )
+        col_changes = sweep_cols(
+            E, D, E_tracked, D_tracked, perm, features, config
+        )
+        if row_changes + col_changes == 0:
+            break
+
     fix_phases_bfs(D_tracked, bfs_order, bfs_parent)
+
+    # Feature L: iterative neighbor-consensus phase relaxation
+    if config.n_phase_iter > 0:
+        relax_phases(D_tracked, config.n_phase_iter)
+
     diagnostics = compute_diagnostics(E_tracked, D_tracked, cost_at_assignment)
 
     return TrackingResult(
