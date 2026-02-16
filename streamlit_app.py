@@ -198,6 +198,16 @@ def add_uploaded_entry(filename: str, file_bytes: bytes) -> None:
     )
 
 
+def remove_all_uploaded_entries() -> None:
+    """Remove every upload-backed entry and clear uploader-related state."""
+    st.session_state.active_entries = [
+        entry for entry in st.session_state.active_entries if entry.get("source") != "upload"
+    ]
+    st.session_state.uploaded_files_store = {}
+    st.session_state.processed_upload_signatures = set()
+    st.session_state.uploader_nonce += 1
+
+
 def duplicate_entry(original: dict[str, object]) -> None:
     """Duplicate an existing active entry preserving its source."""
     source = str(original.get("source", "path"))
@@ -259,6 +269,18 @@ with st.sidebar:
         help="Upload one or more surface files.",
         key=f"surface_uploader_{st.session_state.uploader_nonce}",
     )
+
+    upload_entry_count = sum(
+        1 for entry in st.session_state.active_entries if entry.get("source") == "upload"
+    )
+    if st.button(
+        f"Remove all uploaded files ({upload_entry_count})",
+        use_container_width=True,
+        disabled=upload_entry_count == 0 and not st.session_state.uploaded_files_store,
+    ):
+        remove_all_uploaded_entries()
+        st.rerun()
+
     if not uploaded_files:
         st.session_state.processed_upload_signatures = set()
     else:
