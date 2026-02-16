@@ -33,12 +33,13 @@ def parse_header(lines, idx=0):
     return nx, ny, dx, x0, y0, idx + 4
 
 
-def parse_2dscan(filepath, grid_in_input=False):
+def parse_2dscan(filepath, grid_in_input=False, absolute_transitions=True):
     """Parse a .2dscan file and extract all data.
 
     Args:
         filepath: Path to the .2dscan file
         grid_in_input: read current grid point first
+        absolute_transitions: make all transitions positive 
     Returns:
         nx, ny: Grid dimensions
         dx: Step size
@@ -98,6 +99,9 @@ def parse_2dscan(filepath, grid_in_input=False):
                 dipoles[j, i, k, 1] = float(trans_data[2])  # μy
                 dipoles[j, i, k, 2] = float(trans_data[3])  # μz
                 idx += 1
+    
+    if absolute_transitions:
+        transition_energies = np.abs(transition_energies)
 
     return (nx, ny, dx, x0, y0, ground_energies, excited_energies,
             binding_energies, transition_energies, dipoles)
