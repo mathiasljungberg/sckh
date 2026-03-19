@@ -11,9 +11,9 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-SRC_ROOT = Path(__file__).resolve().parent / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+SRC_PYTHON = Path(__file__).resolve().parent.parent / "src" / "python"
+if str(SRC_PYTHON) not in sys.path:
+    sys.path.insert(0, str(SRC_PYTHON))
 
 from dynamics_1d.constants import CONST
 from dynamics_2d.io import read_surface_file_2d_raw
