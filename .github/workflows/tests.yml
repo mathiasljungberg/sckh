@@ -1,0 +1,48 @@
+name: Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [master]
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run Python tests
+        run: uv run pytest -v
+
+  fortran-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Install Fortran build dependencies
+        run: sudo apt-get update && sudo apt-get install -y gfortran libblas-dev liblapack-dev libfftw3-dev
+
+      - name: Build Fortran code
+        run: cmake -B build src/fortran && cmake --build build
+
+      - name: Run Fortran tests
+        run: uv run pytest -m fortran -v
