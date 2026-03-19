@@ -84,6 +84,8 @@ program vib_finite_diff
   ! fourier grid with sin cos, fast
   eigval=0.0_wp
   eigvec=0.0_wp
+  deallocate(eigvec)
+  allocate(eigvec(npoints,npoints))
   call solve_fourier_grid_real(dx, y_new, eigval, eigvec, mu, "SI", "fast")  
   
   write(6,*) eigval(1:nstates) * const % cm 
