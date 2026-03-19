@@ -4,10 +4,10 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from python_scripts.dynamics_1d.constants import CONST
-from python_scripts.dynamics_1d.pes import PES1D, create_harmonic_pes
-from python_scripts.dynamics_1d.dipole import Dipole1D, create_constant_dipole
-from python_scripts.dynamics_1d.vibrational import solve_vibrational
+from dynamics_1d.constants import CONST
+from dynamics_1d.pes import PES1D, create_harmonic_pes
+from dynamics_1d.dipole import Dipole1D, create_constant_dipole
+from dynamics_1d.vibrational import solve_vibrational
 
 
 @pytest.fixture

@@ -5,21 +5,21 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from python_scripts.dynamics_1d.trajectory import (
+from dynamics_1d.trajectory import (
     TrajectoryResult,
     EnsembleResult,
     DynamicsRunner,
 )
-from python_scripts.dynamics_1d.config import (
+from dynamics_1d.config import (
     DynamicsConfig,
     GridConfig,
     TimeConfig,
     SamplingConfig,
 )
-from python_scripts.dynamics_1d.spectrum_config import FullConfig, SpectrumConfig
-from python_scripts.dynamics_1d.pes import create_harmonic_pes
-from python_scripts.dynamics_1d.vibrational import solve_vibrational
-from python_scripts.dynamics_1d.constants import CONST
+from dynamics_1d.spectrum_config import FullConfig, SpectrumConfig
+from dynamics_1d.pes import create_harmonic_pes
+from dynamics_1d.vibrational import solve_vibrational
+from dynamics_1d.constants import CONST
 
 
 @pytest.fixture

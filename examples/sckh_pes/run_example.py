@@ -14,7 +14,7 @@ Usage:
 
 from pathlib import Path
 
-import python_scripts.dynamics_1d as dyn
+import dynamics_1d as dyn
 
 
 def main():

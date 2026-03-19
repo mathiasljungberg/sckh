@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from python_scripts.kh_1d.amplitude import (
+from kh_1d.amplitude import (
     compute_amplitude_F_res,
     compute_amplitude_F_res_loop,
     compute_amplitude_F_nonres,

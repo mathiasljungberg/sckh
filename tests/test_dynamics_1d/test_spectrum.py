@@ -5,8 +5,8 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from python_scripts.dynamics_1d.constants import CONST
-from python_scripts.dynamics_1d.spectrum import (
+from dynamics_1d.constants import CONST
+from dynamics_1d.spectrum import (
     compute_energy_phase,
     compute_F_if,
     get_frequency_grid,
@@ -225,7 +225,7 @@ class TestSpectrumIO:
 
     def test_write_and_read_spectrum(self):
         """Test writing spectrum to file."""
-        from python_scripts.dynamics_1d.io import write_spectrum
+        from dynamics_1d.io import write_spectrum
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = Path(tmpdir) / "spectrum.dat"
@@ -242,7 +242,7 @@ class TestSpectrumIO:
 
     def test_write_spectrum_per_final(self):
         """Test writing per-final-state spectra."""
-        from python_scripts.dynamics_1d.io import write_spectrum_per_final
+        from dynamics_1d.io import write_spectrum_per_final
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath_base = Path(tmpdir) / "spectrum"
@@ -267,7 +267,7 @@ class TestSpectrumConfigValidation:
 
     def test_invalid_dipole_mode(self):
         """Should raise error for invalid dipole mode."""
-        from python_scripts.dynamics_1d.spectrum_config import SpectrumConfig
+        from dynamics_1d.spectrum_config import SpectrumConfig
 
         with pytest.raises(ValueError, match="dipole_mode"):
             SpectrumConfig(
@@ -278,7 +278,7 @@ class TestSpectrumConfigValidation:
 
     def test_dipole_mode_requires_files(self):
         """DIPOLE mode requires dipole_final_list."""
-        from python_scripts.dynamics_1d.spectrum_config import SpectrumConfig
+        from dynamics_1d.spectrum_config import SpectrumConfig
 
         with pytest.raises(ValueError, match="dipole_final_list"):
             SpectrumConfig(
@@ -290,7 +290,7 @@ class TestSpectrumConfigValidation:
 
     def test_fc_mode_no_dipole_required(self):
         """FC mode should not require dipole files."""
-        from python_scripts.dynamics_1d.spectrum_config import SpectrumConfig
+        from dynamics_1d.spectrum_config import SpectrumConfig
 
         config = SpectrumConfig(
             gamma_fwhm=0.1,
@@ -303,7 +303,7 @@ class TestSpectrumConfigValidation:
 
     def test_gamma_hwhm_property(self):
         """Test gamma_hwhm property."""
-        from python_scripts.dynamics_1d.spectrum_config import SpectrumConfig
+        from dynamics_1d.spectrum_config import SpectrumConfig
 
         config = SpectrumConfig(
             gamma_fwhm=0.2,
@@ -320,7 +320,7 @@ class TestFortranDFormat:
 
     def test_loadtxt_fortran_d_format(self):
         """Test reading files with Fortran D-format exponents."""
-        from python_scripts.dynamics_1d.io import _loadtxt_fortran
+        from dynamics_1d.io import _loadtxt_fortran
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = Path(tmpdir) / "test.dat"
@@ -333,7 +333,7 @@ class TestFortranDFormat:
 
     def test_loadtxt_fortran_lowercase_d(self):
         """Test reading files with lowercase d exponents."""
-        from python_scripts.dynamics_1d.io import _loadtxt_fortran
+        from dynamics_1d.io import _loadtxt_fortran
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = Path(tmpdir) / "test.dat"
@@ -346,7 +346,7 @@ class TestFortranDFormat:
 
     def test_loadtxt_fortran_standard_e_format(self):
         """Test that standard E-format still works."""
-        from python_scripts.dynamics_1d.io import _loadtxt_fortran
+        from dynamics_1d.io import _loadtxt_fortran
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = Path(tmpdir) / "test.dat"
@@ -363,7 +363,7 @@ class TestCompatibilityMode:
 
     def test_invalid_compatibility_mode(self):
         """Should raise error for invalid compatibility mode."""
-        from python_scripts.dynamics_1d.spectrum_config import SpectrumConfig
+        from dynamics_1d.spectrum_config import SpectrumConfig
 
         with pytest.raises(ValueError, match="compatibility_mode"):
             SpectrumConfig(
@@ -375,7 +375,7 @@ class TestCompatibilityMode:
 
     def test_valid_compatibility_modes(self):
         """Both 'standard' and 'fortran' should be valid."""
-        from python_scripts.dynamics_1d.spectrum_config import SpectrumConfig
+        from dynamics_1d.spectrum_config import SpectrumConfig
 
         for mode in ["standard", "fortran", "STANDARD", "FORTRAN"]:
             config = SpectrumConfig(
@@ -388,7 +388,7 @@ class TestCompatibilityMode:
 
     def test_default_compatibility_mode(self):
         """Default compatibility_mode should be 'standard'."""
-        from python_scripts.dynamics_1d.spectrum_config import SpectrumConfig
+        from dynamics_1d.spectrum_config import SpectrumConfig
 
         config = SpectrumConfig(
             gamma_fwhm=0.1,
@@ -399,7 +399,7 @@ class TestCompatibilityMode:
 
     def test_sampling_config_compatibility_mode(self):
         """Test SamplingConfig accepts compatibility_mode."""
-        from python_scripts.dynamics_1d.config import SamplingConfig
+        from dynamics_1d.config import SamplingConfig
 
         config = SamplingConfig(mode=1, npoints_x=10, npoints_mom=10, compatibility_mode="fortran")
         assert config.compatibility_mode == "fortran"
@@ -409,7 +409,7 @@ class TestCompatibilityMode:
 
     def test_load_full_config_compatibility_mode(self):
         """Test that compatibility_mode is loaded from YAML."""
-        from python_scripts.dynamics_1d.spectrum_config import load_full_config
+        from dynamics_1d.spectrum_config import load_full_config
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
@@ -456,12 +456,12 @@ spectrum:
 
     def test_e_mean_standard_vs_fortran(self):
         """Test that E_mean calculation differs between modes."""
-        from python_scripts.dynamics_1d.spectrum import SpectrumCalculator
-        from python_scripts.dynamics_1d.spectrum_config import FullConfig, SpectrumConfig
-        from python_scripts.dynamics_1d.config import (
+        from dynamics_1d.spectrum import SpectrumCalculator
+        from dynamics_1d.spectrum_config import FullConfig, SpectrumConfig
+        from dynamics_1d.config import (
             DynamicsConfig, GridConfig, TimeConfig, SamplingConfig
         )
-        from python_scripts.dynamics_1d.trajectory import TrajectoryResult
+        from dynamics_1d.trajectory import TrajectoryResult
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
@@ -545,12 +545,12 @@ class TestPESEnergyShift:
 
     def test_pes_lp_corr_shifts_final_states(self):
         """Test that pes_lp_corr shifts all final state PES energies."""
-        from python_scripts.dynamics_1d.spectrum import SpectrumCalculator
-        from python_scripts.dynamics_1d.spectrum_config import (
+        from dynamics_1d.spectrum import SpectrumCalculator
+        from dynamics_1d.spectrum_config import (
             FullConfig,
             SpectrumConfig,
         )
-        from python_scripts.dynamics_1d.config import (
+        from dynamics_1d.config import (
             DynamicsConfig,
             GridConfig,
             TimeConfig,
@@ -614,7 +614,7 @@ class TestPESEnergyShift:
             E_f1_shifted = calc.pes_f[0].energy(x_test)
 
             # Load expected from correction file
-            from python_scripts.dynamics_1d.io import read_pes_file
+            from dynamics_1d.io import read_pes_file
             x_exp, E_exp = read_pes_file(pes_corr, units="angstrom")
             pes_exp = calc.pes_f[0].__class__(x=x_exp, E=E_exp)
             E_expected = pes_exp.energy(x_test)
@@ -631,12 +631,12 @@ class TestPESEnergyShift:
 
     def test_no_shift_without_pes_lp_corr(self):
         """Test that PES energies are unchanged when pes_lp_corr is not set."""
-        from python_scripts.dynamics_1d.spectrum import SpectrumCalculator
-        from python_scripts.dynamics_1d.spectrum_config import (
+        from dynamics_1d.spectrum import SpectrumCalculator
+        from dynamics_1d.spectrum_config import (
             FullConfig,
             SpectrumConfig,
         )
-        from python_scripts.dynamics_1d.config import (
+        from dynamics_1d.config import (
             DynamicsConfig,
             GridConfig,
             TimeConfig,

@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from python_scripts.dynamics_1d.pes import PES1D, create_harmonic_pes
-from python_scripts.dynamics_1d.constants import CONST
+from dynamics_1d.pes import PES1D, create_harmonic_pes
+from dynamics_1d.constants import CONST
 
 
 class TestPES1D:

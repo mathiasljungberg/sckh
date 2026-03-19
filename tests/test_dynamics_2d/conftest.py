@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from python_scripts.dynamics_1d.constants import CONST
+from dynamics_1d.constants import CONST
 
 
 @pytest.fixture
@@ -62,7 +62,7 @@ def fine_position_grid_2d():
 @pytest.fixture
 def harmonic_pes_2d(position_grid_2d, harmonic_params_2d):
     """2D separable harmonic potential energy surface."""
-    from python_scripts.dynamics_2d.pes import create_harmonic_pes_2d
+    from dynamics_2d.pes import create_harmonic_pes_2d
 
     x1, x2 = position_grid_2d
     return create_harmonic_pes_2d(

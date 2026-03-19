@@ -5,12 +5,12 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from python_scripts.kh_1d.config import (
+from kh_1d.config import (
     GridConfig, BroadeningConfig, FrequencyGridConfig, KHConfig,
     load_config, save_config,
 )
-from python_scripts.kh_1d.spectrum import KHCalculator, KHResult, VibrationalState
-from python_scripts.dynamics_1d.constants import CONST
+from kh_1d.spectrum import KHCalculator, KHResult, VibrationalState
+from dynamics_1d.constants import CONST
 
 
 class TestConfig:

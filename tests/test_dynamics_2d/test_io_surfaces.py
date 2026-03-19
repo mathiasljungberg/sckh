@@ -6,12 +6,12 @@ import tempfile
 import numpy as np
 import pytest
 
-from python_scripts.dynamics_2d.io import (
+from dynamics_2d.io import (
     read_dipole_file_2d,
     read_dipole_file_2d_raw,
     read_surface_file_2d_raw,
 )
-from python_scripts.dynamics_1d.constants import CONST
+from dynamics_1d.constants import CONST
 
 
 def _write_surface_file(
