@@ -33,7 +33,7 @@ def parse_header(lines, idx=0):
     return nx, ny, dx, x0, y0, idx + 4
 
 
-def parse_2dscan(filepath, grid_in_input=False, absolute_transitions=True):
+def parse_2dscan(filepath, grid_in_input=False, absolute_transitions=True, abs_dipole_list=None):
     """Parse a .2dscan file and extract all data.
 
     Args:
@@ -102,6 +102,10 @@ def parse_2dscan(filepath, grid_in_input=False, absolute_transitions=True):
     
     if absolute_transitions:
         transition_energies = np.abs(transition_energies)
+
+    if abs_dipole_list is not None: 
+        for i in abs_dipole_list:
+            dipoles[:,:,i,:] =  np.abs(dipoles[:,:,i,:])  
 
     return (nx, ny, dx, x0, y0, ground_energies, excited_energies,
             binding_energies, transition_energies, dipoles)
@@ -277,6 +281,13 @@ def verify_with_osc_files(nx, ny, dx, x0, y0, transition_energies, dipoles,
 
     return all_passed
 
+def comma_separated_ints(value):
+    try:
+        return [int(x) for x in value.split(",")]
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"Invalid comma-separated list of integers: '{value}'"
+        )
 
 def main():
     parser = argparse.ArgumentParser(
@@ -306,7 +317,12 @@ Example:
                         help='takes the absolute values of all transition dipoles and multiplies with a random sign that is the same for all grid points in a certain transition')
     parser.add_argument('--seed',  type=int, default = 42,
                         help='Random seed used together with random sign')
-    
+    parser.add_argument(
+        "--abs-dipole-list",
+        type=comma_separated_ints,
+        help="Comma-separated list of indices (e.g. 1,2,5)"
+    )
+
     args = parser.parse_args()
 
     input_file = Path(args.input_file)
@@ -316,7 +332,7 @@ Example:
 
     print(f"Parsing {input_file}...")
     (nx, ny, dx, x0, y0, ground_energies, excited_energies,
-     binding_energies, transition_energies, dipoles) = parse_2dscan(input_file, args.grid_in_input)
+     binding_energies, transition_energies, dipoles) = parse_2dscan(input_file, grid_in_input=args.grid_in_input, abs_dipole_list=args.abs_dipole_list)
 
     n_trans = dipoles.shape[2]
     print(f"Grid: {nx} x {ny}, step: {dx}")
