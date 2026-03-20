@@ -9,7 +9,7 @@ This example demonstrates:
 
 Usage:
     cd examples/sckh_pes
-    python run_example.py
+    uv run python run_example.py
 """
 
 from pathlib import Path
