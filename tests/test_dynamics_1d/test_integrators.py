@@ -3,13 +3,13 @@
 import numpy as np
 import pytest
 
-from python_scripts.dynamics_1d.integrators import (
+from dynamics_1d.integrators import (
     velocity_verlet_step,
     run_trajectory,
     compute_kinetic_energy,
     compute_total_energy,
 )
-from python_scripts.dynamics_1d.constants import CONST
+from dynamics_1d.constants import CONST
 
 
 class TestVelocityVerletStep:

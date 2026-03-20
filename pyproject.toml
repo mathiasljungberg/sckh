@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "sckh"
 version = "0.1.0"
@@ -20,4 +24,12 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src/python"]
+markers = [
+    "fortran: Fortran integration tests (require compiled binaries and SCKH_PATH)",
+]
+addopts = "-m 'not fortran'"
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["src/python"]

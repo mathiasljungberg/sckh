@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from python_scripts.kh_1d.dipole_matrix import (
+from kh_1d.dipole_matrix import (
     compute_fc_overlap,
     compute_dipole_overlap,
     compute_transition_dipoles_fc,
@@ -13,9 +13,9 @@ from python_scripts.kh_1d.dipole_matrix import (
     compute_transition_dipoles_full_loop,
     compute_dipole_matrix_elements,
 )
-from python_scripts.dynamics_1d.vibrational import solve_vibrational
-from python_scripts.dynamics_1d.pes import create_harmonic_pes
-from python_scripts.dynamics_1d.constants import CONST
+from dynamics_1d.vibrational import solve_vibrational
+from dynamics_1d.pes import create_harmonic_pes
+from dynamics_1d.constants import CONST
 
 
 class TestFCOverlap:

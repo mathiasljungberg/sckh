@@ -9,12 +9,12 @@ This example demonstrates:
 
 Usage:
     cd examples/sckh_pes
-    python run_example.py
+    uv run python run_example.py
 """
 
 from pathlib import Path
 
-import python_scripts.dynamics_1d as dyn
+import dynamics_1d as dyn
 
 
 def main():

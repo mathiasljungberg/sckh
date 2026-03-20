@@ -3,84 +3,104 @@ sckh
 
 Programs for calculation of XAS and XES including vibrational effects
 
-The main development is done in the src directory, and the code pieces will be moved there evenutally. 
-Right now the following routines are avaiable in the main program:
+Fortran programs:
+
+- **XAS** - quantum mechanical Fermi Golden Rule for vibrational effects in XAS, 1D PES
+- **KH** - quantum mechanical Kramers-Heisenberg equations for vibrational effects in XES, 1D PES
+- **KH_resonant** - resonant KH, 1D PES
+- **KH_resonant_el** - resonant KH, electronic part only (no vibrations)
+- **SCKH** - semiclassical KH for XES, using external trajectories
+- **SCKH_PES** - semiclassical KH for XES, using 1D PES
+
+Python packages:
+
+- **dynamics_1d** - classical dynamics on 1D PES with Fourier grid vibrational solver
+- **dynamics_2d** - 2D polynomial PES with spline interpolation
+- **kh_1d** - 1D Kramers-Heisenberg calculations
 
 
-XAS - quantum mechanical solution of the Fermi Golden Rule for vibrational effects in XAS, 1d PES.
-KH - quantum mechanical solution of the Kramers-Heisenberg equations for vibrational effects in XES, 1d PES.
-KH_resonant - resonant KH, 1d PES.
-KH_resonant_el - resoant KH, only electronic part, no vibrations.
-SCKH  - semiclassical solution of the KH equations for XES, using external trajectories.
-SCKH_PES  - semiclassical solution of the KH equations for XES, using 1d PES. 
+Directory structure
+===================
 
-Next is to get the non-adiabatic effects working, as well as the resonant semiclassical case.
-For the time being specialized working programs can be found in the util directory.
-
-Working codes (in util directory):
-
-KH    - quantum mechanical solution of the Kramers-Heisenberg equations for vibrational effects in XES
-SCKH  - semiclassical solution of the KH equations for XES
-sinc_DVR  - solution of 1d vibrational problem on a grid with a sinc DVR
-DVR_PO  - potential optimized DV
-Kramers-Heisenberg_resonant - like KH but for the resonant case (in the SCKH_resonant folder)
-
-these codes lack a logical build sequence right now...
-
-Codes under development (in util directory):
-
-XAS_nonadiabatic  - XAS and XAS including nonadiabatic effects. Also attempt to unify codes into one
-SCKH_resonant  - like SCKH but for the reoannt case
-
-
-Python modules
-==============
-
-The `src/python_scripts/` directory contains Python implementations:
-
-- `dynamics_1d/` - Classical dynamics on 1D PES with Fourier grid vibrational solver
-- `dynamics_2d.py` - 2D polynomial PES with spline interpolation
+```
+src/
+├── fortran/            # Fortran source code and CMakeLists.txt
+├── python/             # Python packages (dynamics_1d, dynamics_2d, kh_1d, tools)
+tests/
+├── test_dynamics_1d/   # Python tests
+├── test_dynamics_2d/
+├── test_kh_1d/
+├── testsuite/          # Fortran integration tests
+scripts/                # Streamlit app for 2D surface visualization
+examples/               # Example configurations and data
+utils/                  # Legacy standalone programs (archived, see utils/README.md)
+```
 
 
 Installation
 ============
 
 ```bash
-# Create virtual environment (using uv)
-uv venv
-source .venv/bin/activate
-
-# Install package in editable mode with dev dependencies
-uv pip install -e ".[dev]"
+# Install Python package with dev dependencies
+uv sync --extra dev
 ```
 
-Or without uv:
+
+Building Fortran code
+=====================
+
+Requires a Fortran compiler (gfortran or ifort), BLAS, LAPACK, and FFTW3.
+
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+cmake -B build src/fortran
+cmake --build build
 ```
 
-The editable install (`-e`) means changes to the code are immediately available without reinstalling.
+This places the compiled binaries (`sckh_main`, `vib_finite_diff`, etc.) in the `build/` directory.
+
+To build a single executable:
+
+```bash
+cmake --build build --target sckh_main
+```
+
+CMake options can be passed to customize the build, e.g.:
+
+```bash
+cmake -B build src/fortran -DCMAKE_Fortran_COMPILER=gfortran -DFFTW_LIB="-L/usr/lib -lfftw3 -lm"
+```
 
 
 Testing
 =======
 
+All tests are run via pytest. By default, only Python tests run.
+
 Python tests
 ------------
 
 ```bash
-# Run all Python tests
-pytest tests/ -v
+# Run Python tests (default)
+uv run pytest
 
 # Run with coverage report
-pytest tests/ --cov=python_scripts --cov-report=term
+uv run pytest --cov=dynamics_1d --cov-report=term
 ```
 
 Fortran tests
 -------------
 
-The Fortran test suite uses a custom test runner. See `tests/testsuite/README` for details.
+Fortran tests require compiled binaries in `build/` (see above).
+
+```bash
+# Run Fortran integration tests only
+uv run pytest -m fortran
+
+# Run all tests (Python + Fortran)
+uv run pytest -o "addopts="
+```
+
+The Fortran tests automatically look for binaries in `build/` at the project root.
+This can be overridden by setting the `SCKH_PATH` environment variable.
 
 

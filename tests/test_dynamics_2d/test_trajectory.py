@@ -5,21 +5,21 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from python_scripts.dynamics_1d.constants import CONST
-from python_scripts.dynamics_2d.trajectory import (
+from dynamics_1d.constants import CONST
+from dynamics_2d.trajectory import (
     TrajectoryResult2D,
     EnsembleResult2D,
     DynamicsRunner2D,
 )
-from python_scripts.dynamics_2d.config import (
+from dynamics_2d.config import (
     DynamicsConfig2D,
     FullConfig2D,
     GridConfig2D,
     TimeConfig,
     SamplingConfig2D,
 )
-from python_scripts.dynamics_2d.vibrational import ProductGroundState
-from python_scripts.dynamics_2d.io import write_pes_file_2d
+from dynamics_2d.vibrational import ProductGroundState
+from dynamics_2d.io import write_pes_file_2d
 
 
 class TestTrajectoryResult2D:
@@ -277,7 +277,7 @@ class TestDynamicsRunner2D:
 
         # Check energy conservation for first trajectory
         traj = result.trajectories[0]
-        from python_scripts.dynamics_2d.integrators import compute_total_energy_2d
+        from dynamics_2d.integrators import compute_total_energy_2d
 
         E_total = compute_total_energy_2d(
             traj.x1,

@@ -17,6 +17,14 @@ build/
 # Pytest
 .pytest_cache/
 
-# fortran mod files
+# Fortran build artifacts
 *.mod
+*.o
+*.exe
+
+# Virtual environment
+.venv/
+
+# Test run directories
+rundir/
 

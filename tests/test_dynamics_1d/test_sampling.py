@@ -3,14 +3,14 @@
 import numpy as np
 import pytest
 
-from python_scripts.dynamics_1d.sampling import (
+from dynamics_1d.sampling import (
     sample_even,
     sample_random,
     compute_momentum_distribution,
     sample_momenta,
     create_initial_conditions,
 )
-from python_scripts.dynamics_1d.constants import CONST
+from dynamics_1d.constants import CONST
 
 
 @pytest.fixture

@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from python_scripts.dynamics_1d import (
+from dynamics_1d import (
     load_full_config,
     SpectrumCalculator,
     trajectory,

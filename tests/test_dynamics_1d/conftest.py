@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from python_scripts.dynamics_1d.constants import CONST
+from dynamics_1d.constants import CONST
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def fine_position_grid():
 @pytest.fixture
 def harmonic_pes(position_grid, harmonic_params):
     """Harmonic potential energy surface on the standard grid."""
-    from python_scripts.dynamics_1d.pes import create_harmonic_pes
+    from dynamics_1d.pes import create_harmonic_pes
 
     return create_harmonic_pes(
         position_grid,

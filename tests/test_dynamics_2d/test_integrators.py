@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from python_scripts.dynamics_2d.integrators import (
+from dynamics_2d.integrators import (
     velocity_verlet_step_2d,
     run_trajectory_2d,
     compute_kinetic_energy_2d,

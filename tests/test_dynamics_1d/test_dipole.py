@@ -5,7 +5,7 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from python_scripts.dynamics_1d.dipole import (
+from dynamics_1d.dipole import (
     Dipole1D,
     create_constant_dipole,
     create_dipole_from_file,
@@ -173,7 +173,7 @@ class TestDipoleFileIO:
 
     def test_read_dipole_bohr_units(self):
         """Test reading dipole file with bohr units."""
-        from python_scripts.dynamics_1d.constants import CONST
+        from dynamics_1d.constants import CONST
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = Path(tmpdir) / "dipole.dat"

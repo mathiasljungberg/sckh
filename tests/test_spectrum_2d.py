@@ -5,7 +5,7 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from python_scripts.dynamics_2d import (
+from dynamics_2d import (
     CONST,
     Dipole2D,
     create_dipole_from_file_2d,
@@ -21,7 +21,7 @@ from python_scripts.dynamics_2d import (
     SamplingConfig2D,
     TrajectoryResult2D,
 )
-from python_scripts.dynamics_2d.io import (
+from dynamics_2d.io import (
     read_dipole_file_2d,
     write_dipole_file_2d,
     read_dipole_file_2d_raw,
@@ -301,7 +301,7 @@ class TestSpectrumCalculator2D:
         pes_final = create_harmonic_pes_2d(x1, x2, x1_0, x2_0, k, k, E_final)
 
         # Write PES files
-        from python_scripts.dynamics_2d.io import write_pes_file_2d
+        from dynamics_2d.io import write_pes_file_2d
 
         write_pes_file_2d(
             tmp_path / "pes_initial_2d.dat", x1, x2, pes_initial.E
@@ -481,7 +481,7 @@ class TestDipoleModes:
         x1_0, x2_0 = 1.5e-10, 1.5e-10
         k = 50.0
 
-        from python_scripts.dynamics_2d.io import write_pes_file_2d
+        from dynamics_2d.io import write_pes_file_2d
 
         pes_initial = create_harmonic_pes_2d(x1, x2, x1_0, x2_0, k, k, 0.0)
         pes_intermediate = create_harmonic_pes_2d(x1, x2, x1_0, x2_0, k, k, 520 * CONST.eV)

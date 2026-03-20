@@ -5,9 +5,9 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from python_scripts.dynamics_2d.pes import PES2D, create_harmonic_pes_2d, create_pes_from_file_2d
-from python_scripts.dynamics_2d.io import write_pes_file_2d, read_pes_file_2d
-from python_scripts.dynamics_1d.constants import CONST
+from dynamics_2d.pes import PES2D, create_harmonic_pes_2d, create_pes_from_file_2d
+from dynamics_2d.io import write_pes_file_2d, read_pes_file_2d
+from dynamics_1d.constants import CONST
 
 
 class TestPES2D:

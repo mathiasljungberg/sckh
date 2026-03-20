@@ -3,14 +3,14 @@
 import numpy as np
 import pytest
 
-from python_scripts.dynamics_1d.vibrational import (
+from dynamics_1d.vibrational import (
     build_kinetic_matrix_fast,
     build_kinetic_matrix_vectorized,
     solve_vibrational,
     harmonic_eigenvalues,
     harmonic_omega_from_k,
 )
-from python_scripts.dynamics_1d.constants import CONST
+from dynamics_1d.constants import CONST
 
 
 class TestBuildKineticMatrix:
