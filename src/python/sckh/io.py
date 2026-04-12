@@ -1,13 +1,14 @@
 """I/O for SCKH trajectories and spectrum data."""
 
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import Iterable, List, Optional, TYPE_CHECKING
 
 import numpy as np
 
 from dynamics_1d.constants import CONST
 
 if TYPE_CHECKING:
+    from .spectrum import SpectrumResult
     from .trajectory import SCKHTrajectory
 
 
@@ -226,3 +227,42 @@ def write_spectrum_per_final(
             sigma_f[j],
             header=f"omega(eV)  sigma_f (final state {j + 1})",
         )
+
+
+def read_sckh_trajectories(
+    paths: Iterable[Path],
+) -> List["SCKHTrajectory"]:
+    """Read a list of SCKH trajectory files.
+
+    Convenience wrapper around :func:`read_sckh_trajectory` that removes
+    the need for callers to write an explicit loop over a list of file
+    paths.
+
+    Args:
+        paths: Iterable of paths to SCKH trajectory files.
+
+    Returns:
+        List of SCKHTrajectory objects in the same order as ``paths``.
+    """
+    return [read_sckh_trajectory(Path(p)) for p in paths]
+
+
+def write_spectrum_result(
+    filepath_base: Path,
+    result: "SpectrumResult",
+) -> None:
+    """Write the total and per-final-state spectra from a SpectrumResult.
+
+    Produces:
+        - ``{filepath_base}.dat`` — total spectrum (omega, sigma_tot)
+        - ``{filepath_base}_final_{j+1}.dat`` — one file per final state
+
+    Args:
+        filepath_base: Base path for output files (no extension). A
+            directory prefix is respected, e.g. ``rundir/my_spec`` writes
+            ``rundir/my_spec.dat`` and ``rundir/my_spec_final_*.dat``.
+        result: SpectrumResult with ``omega``, ``sigma_tot``, ``sigma_f``.
+    """
+    base = Path(filepath_base)
+    write_spectrum(Path(f"{base}.dat"), result.omega, result.sigma_tot)
+    write_spectrum_per_final(base, result.omega, result.sigma_f)

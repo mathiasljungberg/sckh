@@ -7,9 +7,9 @@ are imported lazily to avoid circular dependencies.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 
 import yaml
 
@@ -39,12 +39,35 @@ class SpectrumConfig:
 
 
 @dataclass
+class SCKHRunConfig:
+    """Configuration for a pure-SCKH workflow (no dynamics, no interpolation).
+
+    Used when the spectrum is computed directly from pre-computed SCKH
+    trajectory files (e.g. produced by the Fortran ``sckh_main`` binary
+    or by prior Python dynamics + interpolation runs).
+
+    Attributes:
+        gamma_fwhm: Lifetime broadening FWHM in eV.
+        trajectory_files: List of SCKH trajectory file paths.
+        outfile: Base name for output spectrum files (no extension).
+            Produces ``{outfile}.dat`` plus ``{outfile}_final_*.dat``.
+    """
+
+    gamma_fwhm: float
+    trajectory_files: List[Path] = field(default_factory=list)
+    outfile: str = "sckh_spectrum"
+
+
+@dataclass
 class FullConfig:
     """Unified configuration for dynamics, interpolation, and spectrum.
 
     Supports both 1D and 2D dynamics via dimension-tagged fields.
     Exactly one of dynamics1d/dynamics2d should be set, and the
     matching interpolation config if surface interpolation is needed.
+
+    For pure-SCKH workflows (spectrum from pre-computed trajectories),
+    use the ``sckh`` field instead.
     """
 
     dynamics1d: Optional[DynamicsConfig] = None
@@ -52,6 +75,7 @@ class FullConfig:
     interpolation1d: Optional[InterpolationConfig] = None
     interpolation2d: Optional[object] = None  # InterpolationConfig2D
     spectrum: Optional[SpectrumConfig] = None
+    sckh: Optional[SCKHRunConfig] = None
 
 
 def load_full_config(yaml_path: Path) -> FullConfig:
@@ -91,8 +115,13 @@ def load_full_config(yaml_path: Path) -> FullConfig:
     from dynamics_1d.config import DynamicsConfig, GridConfig, TimeConfig, SamplingConfig
     from dynamics_1d.spectrum_config import InterpolationConfig
 
+    yaml_path = Path(yaml_path)
     with open(yaml_path) as f:
         data = yaml.safe_load(f)
+
+    # Pure-SCKH workflow: no dynamics needed, just trajectory files + gamma.
+    if "sckh" in data:
+        return FullConfig(sckh=_parse_sckh(data["sckh"], yaml_path.parent))
 
     # Detect format: new (dynamics1d/dynamics2d) vs legacy (dynamics)
     if "dynamics1d" in data:
@@ -129,7 +158,8 @@ def load_full_config(yaml_path: Path) -> FullConfig:
 
     else:
         raise ValueError(
-            "YAML must contain 'dynamics1d', 'dynamics2d', or 'dynamics' section"
+            "YAML must contain one of: 'sckh', 'dynamics1d', 'dynamics2d', "
+            "or 'dynamics' section"
         )
 
 
@@ -190,6 +220,13 @@ def save_full_config(config: FullConfig, yaml_path: Path) -> None:
             spec_data["dt"] = config.spectrum.dt
         data["spectrum"] = spec_data
 
+    if config.sckh is not None:
+        data["sckh"] = {
+            "gamma_fwhm": config.sckh.gamma_fwhm,
+            "trajectory_files": [str(p) for p in config.sckh.trajectory_files],
+            "outfile": config.sckh.outfile,
+        }
+
     with open(yaml_path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
@@ -245,4 +282,20 @@ def _parse_spectrum(spec_data: dict) -> SpectrumConfig:
     return SpectrumConfig(
         gamma_fwhm=spec_data["gamma_fwhm"],
         dt=spec_data.get("dt"),
+    )
+
+
+def _parse_sckh(sckh_data: dict, base_dir: Path) -> SCKHRunConfig:
+    """Parse pure-SCKH config from YAML data.
+
+    Trajectory file paths are resolved relative to ``base_dir`` (the
+    directory containing the YAML file) so that absolute paths are
+    available to callers regardless of their working directory.
+    """
+    return SCKHRunConfig(
+        gamma_fwhm=sckh_data["gamma_fwhm"],
+        trajectory_files=[
+            (base_dir / p).resolve() for p in sckh_data.get("trajectory_files", [])
+        ],
+        outfile=sckh_data.get("outfile", "sckh_spectrum"),
     )

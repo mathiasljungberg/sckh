@@ -17,6 +17,7 @@ Typical workflow::
 from .trajectory import SCKHTrajectory
 from .config import (
     SpectrumConfig,
+    SCKHRunConfig,
     FullConfig,
     load_full_config,
     save_full_config,
@@ -31,10 +32,12 @@ from .spectrum import (
 )
 from .io import (
     read_sckh_trajectory,
+    read_sckh_trajectories,
     write_sckh_trajectory,
     read_sckh_trajectory_list,
     write_spectrum,
     write_spectrum_per_final,
+    write_spectrum_result,
 )
 
 __all__ = [
@@ -42,6 +45,7 @@ __all__ = [
     "SCKHTrajectory",
     # Config
     "SpectrumConfig",
+    "SCKHRunConfig",
     "FullConfig",
     "load_full_config",
     "save_full_config",
@@ -54,8 +58,10 @@ __all__ = [
     "compute_spectrum_from_sckh",
     # I/O
     "read_sckh_trajectory",
+    "read_sckh_trajectories",
     "write_sckh_trajectory",
     "read_sckh_trajectory_list",
     "write_spectrum",
     "write_spectrum_per_final",
+    "write_spectrum_result",
 ]
