@@ -93,7 +93,7 @@ class DynamicsRunner:
 
     def __init__(self, config: FullConfig):
         self.full_config = config
-        self.config = config.dynamics
+        self.config = config.dynamics1d
 
         # Use dynamics config for setup
         dyn = self.config

@@ -10,7 +10,8 @@ from pathlib import Path
 
 from dynamics_1d import (
     load_full_config,
-    SpectrumCalculator,
+    SurfaceInterpolator,
+    SCKHSpectrumCalculator,
     trajectory,
 )
 
@@ -23,20 +24,35 @@ REFERENCE_DIR = FIXTURES_DIR / "reference"
 def _fix_paths(config):
     """Convert relative paths in config to absolute paths based on fixtures dir."""
     # Fix dynamics paths
-    config.dynamics.pes_initial = FIXTURES_DIR / config.dynamics.pes_initial.name
-    config.dynamics.pes_dynamics = FIXTURES_DIR / config.dynamics.pes_dynamics.name
+    config.dynamics1d.pes_initial = FIXTURES_DIR / config.dynamics1d.pes_initial.name
+    config.dynamics1d.pes_dynamics = FIXTURES_DIR / config.dynamics1d.pes_dynamics.name
 
-    # Fix spectrum paths
-    config.spectrum.pes_final_list = [
-        FIXTURES_DIR / p.name for p in config.spectrum.pes_final_list
+    # Fix interpolation paths
+    config.interpolation1d.pes_final_list = [
+        FIXTURES_DIR / p.name for p in config.interpolation1d.pes_final_list
     ]
-    config.spectrum.dipole_final_list = [
-        FIXTURES_DIR / p.name for p in config.spectrum.dipole_final_list
+    config.interpolation1d.dipole_final_list = [
+        FIXTURES_DIR / p.name for p in config.interpolation1d.dipole_final_list
     ]
-    if config.spectrum.pes_lp_corr:
-        config.spectrum.pes_lp_corr = FIXTURES_DIR / config.spectrum.pes_lp_corr.name
+    if config.interpolation1d.pes_lp_corr:
+        config.interpolation1d.pes_lp_corr = FIXTURES_DIR / config.interpolation1d.pes_lp_corr.name
 
     return config
+
+
+def _run_spectrum(config):
+    """Run dynamics + interpolation + spectrum calculation."""
+    runner = trajectory.DynamicsRunner(config)
+    result_dyn = runner.run(verbose=False)
+
+    interp = SurfaceInterpolator(config)
+    interp.load_surfaces()
+    sckh_trajs = interp.trajectories_to_sckh(result_dyn.trajectories)
+    E_mean = interp.compute_mean_transition_energy(result_dyn.trajectories)
+    D_ni = interp.compute_D_ni()
+
+    calc = SCKHSpectrumCalculator(config)
+    return calc.compute_spectrum(sckh_trajs, E_mean=E_mean, D_ni=D_ni)
 
 
 class TestFortranCompatibility:
@@ -47,8 +63,8 @@ class TestFortranCompatibility:
         """Load config and set to fortran compatibility mode."""
         config = load_full_config(FIXTURES_DIR / "dynamics.yaml")
         config = _fix_paths(config)
-        config.spectrum.compatibility_mode = "fortran"
-        config.dynamics.sampling.compatibility_mode = "fortran"
+        config.interpolation1d.compatibility_mode = "fortran"
+        config.dynamics1d.sampling.compatibility_mode = "fortran"
         return config
 
     @pytest.fixture
@@ -59,14 +75,7 @@ class TestFortranCompatibility:
 
     def test_spectrum_matches_fortran_reference(self, config_fortran_mode, fortran_reference):
         """Test that Python (fortran mode) matches Fortran output."""
-        # Run dynamics
-        runner = trajectory.DynamicsRunner(config_fortran_mode)
-        result_dyn = runner.run(verbose=False)
-
-        # Compute spectrum
-        calculator = SpectrumCalculator(config_fortran_mode)
-        calculator.load_surfaces()
-        result_sp = calculator.compute_spectrum(result_dyn.trajectories)
+        result_sp = _run_spectrum(config_fortran_mode)
 
         # Compare frequency grids
         assert len(result_sp.omega) == len(fortran_reference["omega"])
@@ -110,7 +119,6 @@ class TestFortranCompatibility:
         )
 
         # Compare RMS difference in significant region
-        # Interpolate to common grid for detailed comparison
         omega_common = np.linspace(
             max(result_sp.omega[0], fortran_reference["omega"][0]),
             min(result_sp.omega[-1], fortran_reference["omega"][-1]),
@@ -133,9 +141,9 @@ class TestFortranCompatibility:
         runner = trajectory.DynamicsRunner(config_fortran_mode)
         result_dyn = runner.run(verbose=False)
 
-        calculator = SpectrumCalculator(config_fortran_mode)
-        calculator.load_surfaces()
-        E_mean = calculator.compute_mean_transition_energy(result_dyn.trajectories)
+        interp = SurfaceInterpolator(config_fortran_mode)
+        interp.load_surfaces()
+        E_mean = interp.compute_mean_transition_energy(result_dyn.trajectories)
 
         # Expected E_mean from Fortran (approximately 519.3 eV based on previous runs)
         assert 518 < E_mean < 521, f"E_mean={E_mean:.2f} eV is outside expected range"
@@ -146,8 +154,8 @@ class TestFortranCompatibility:
         result_dyn = runner.run(verbose=False)
 
         expected_n_traj = (
-            config_fortran_mode.dynamics.sampling.npoints_x
-            * config_fortran_mode.dynamics.sampling.npoints_mom
+            config_fortran_mode.dynamics1d.sampling.npoints_x
+            * config_fortran_mode.dynamics1d.sampling.npoints_mom
         )
         assert len(result_dyn.trajectories) == expected_n_traj
 
@@ -156,7 +164,7 @@ class TestFortranCompatibility:
         runner = trajectory.DynamicsRunner(config_fortran_mode)
         result_dyn = runner.run(verbose=False)
 
-        expected_nsteps = config_fortran_mode.dynamics.time.nsteps
+        expected_nsteps = config_fortran_mode.dynamics1d.time.nsteps
         for traj in result_dyn.trajectories:
             assert len(traj.time) == expected_nsteps
             assert len(traj.x) == expected_nsteps
@@ -170,13 +178,13 @@ class TestStandardVsFortranMode:
         """Load config for both modes."""
         config_standard = load_full_config(FIXTURES_DIR / "dynamics.yaml")
         config_standard = _fix_paths(config_standard)
-        config_standard.spectrum.compatibility_mode = "standard"
-        config_standard.dynamics.sampling.compatibility_mode = "standard"
+        config_standard.interpolation1d.compatibility_mode = "standard"
+        config_standard.dynamics1d.sampling.compatibility_mode = "standard"
 
         config_fortran = load_full_config(FIXTURES_DIR / "dynamics.yaml")
         config_fortran = _fix_paths(config_fortran)
-        config_fortran.spectrum.compatibility_mode = "fortran"
-        config_fortran.dynamics.sampling.compatibility_mode = "fortran"
+        config_fortran.interpolation1d.compatibility_mode = "fortran"
+        config_fortran.dynamics1d.sampling.compatibility_mode = "fortran"
 
         return {"standard": config_standard, "fortran": config_fortran}
 
@@ -185,12 +193,7 @@ class TestStandardVsFortranMode:
         results = {}
 
         for mode, config in configs.items():
-            runner = trajectory.DynamicsRunner(config)
-            result_dyn = runner.run(verbose=False)
-
-            calculator = SpectrumCalculator(config)
-            calculator.load_surfaces()
-            result_sp = calculator.compute_spectrum(result_dyn.trajectories)
+            result_sp = _run_spectrum(config)
             results[mode] = result_sp
 
         for mode, result in results.items():
@@ -211,12 +214,7 @@ class TestStandardVsFortranMode:
         results = {}
 
         for mode, config in configs.items():
-            runner = trajectory.DynamicsRunner(config)
-            result_dyn = runner.run(verbose=False)
-
-            calculator = SpectrumCalculator(config)
-            calculator.load_surfaces()
-            result_sp = calculator.compute_spectrum(result_dyn.trajectories)
+            result_sp = _run_spectrum(config)
             results[mode] = result_sp
 
         # Peak positions should be within 1 eV

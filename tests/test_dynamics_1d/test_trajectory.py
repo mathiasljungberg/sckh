@@ -16,7 +16,7 @@ from dynamics_1d.config import (
     TimeConfig,
     SamplingConfig,
 )
-from dynamics_1d.spectrum_config import FullConfig, SpectrumConfig
+from dynamics_1d.spectrum_config import FullConfig, InterpolationConfig
 from dynamics_1d.pes import create_harmonic_pes
 from dynamics_1d.vibrational import solve_vibrational
 from dynamics_1d.constants import CONST
@@ -49,14 +49,13 @@ def harmonic_config(tmp_path):
         outfile="test_dynamics",
     )
 
-    # Minimal spectrum config (not used in dynamics tests)
-    spectrum_config = SpectrumConfig(
-        gamma_fwhm=0.1,
+    # Minimal interpolation config (not used in dynamics tests)
+    interp_config = InterpolationConfig(
         dipole_mode="FC",
         pes_final_list=[pes_file],
     )
 
-    return FullConfig(dynamics=dynamics_config, spectrum=spectrum_config)
+    return FullConfig(dynamics1d=dynamics_config, interpolation1d=interp_config)
 
 
 class TestTrajectoryResult:

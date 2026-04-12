@@ -8,7 +8,7 @@ import numpy as np
 
 from dynamics_1d.constants import CONST
 
-from .config import DynamicsConfig2D, FullConfig2D
+from .config import DynamicsConfig2D, FullConfig
 from .integrators import run_trajectory_2d
 from .pes import PES2D, create_pes_from_file_2d
 from .sampling import create_initial_conditions_2d, get_n_trajectories
@@ -118,7 +118,7 @@ class DynamicsRunner2D:
         result = runner.run()
     """
 
-    def __init__(self, config: FullConfig2D):
+    def __init__(self, config: FullConfig):
         self.full_config = config
         self.config = config.dynamics2d
 

@@ -13,7 +13,7 @@ from dynamics_2d.trajectory import (
 )
 from dynamics_2d.config import (
     DynamicsConfig2D,
-    FullConfig2D,
+    FullConfig,
     GridConfig2D,
     TimeConfig,
     SamplingConfig2D,
@@ -160,7 +160,7 @@ class TestDynamicsRunner2D:
 
     def test_runner_initialization(self, temp_pes_files):
         """Test DynamicsRunner2D initialization."""
-        config = FullConfig2D(
+        config = FullConfig(
             dynamics2d=DynamicsConfig2D(
                 mu1=1.0,
                 mu2=2.0,
@@ -187,7 +187,7 @@ class TestDynamicsRunner2D:
 
     def test_solve_ground_state(self, temp_pes_files):
         """Test ground state solver with PES slicing."""
-        config = FullConfig2D(
+        config = FullConfig(
             dynamics2d=DynamicsConfig2D(
                 mu1=1.0,
                 mu2=2.0,
@@ -217,7 +217,7 @@ class TestDynamicsRunner2D:
 
     def test_run_trajectories(self, temp_pes_files):
         """Test running ensemble of trajectories."""
-        config = FullConfig2D(
+        config = FullConfig(
             dynamics2d=DynamicsConfig2D(
                 mu1=1.0,
                 mu2=2.0,
@@ -252,7 +252,7 @@ class TestDynamicsRunner2D:
 
     def test_energy_conservation_in_run(self, temp_pes_files):
         """Test that trajectories conserve energy."""
-        config = FullConfig2D(
+        config = FullConfig(
             dynamics2d=DynamicsConfig2D(
                 mu1=1.0,
                 mu2=2.0,

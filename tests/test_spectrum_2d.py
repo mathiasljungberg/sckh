@@ -12,15 +12,17 @@ from dynamics_2d import (
     create_constant_dipole_2d,
     PES2D,
     create_harmonic_pes_2d,
-    SpectrumConfig2D,
-    SpectrumCalculator2D,
+    InterpolationConfig2D,
+    SurfaceInterpolator2D,
+    SCKHSpectrumCalculator,
     DynamicsConfig2D,
-    FullConfig2D,
+    FullConfig,
     GridConfig2D,
     TimeConfig,
     SamplingConfig2D,
     TrajectoryResult2D,
 )
+from dynamics_1d.spectrum_config import SpectrumConfig
 from dynamics_2d.io import (
     read_dipole_file_2d,
     write_dipole_file_2d,
@@ -254,16 +256,16 @@ class TestDipoleFileIO:
 
 
 class TestSpectrumConfig2D:
-    """Test SpectrumConfig2D dataclass."""
+    """Test InterpolationConfig2D and SpectrumConfig."""
 
     def test_gamma_hwhm_conversion(self):
         """Test FWHM to HWHM conversion."""
-        config = SpectrumConfig2D(gamma_fwhm=0.36)
+        config = SpectrumConfig(gamma_fwhm=0.36)
         assert config.gamma_hwhm == pytest.approx(0.18)
 
     def test_default_values(self):
         """Test default configuration values."""
-        config = SpectrumConfig2D(gamma_fwhm=0.18)
+        config = InterpolationConfig2D()
         assert config.dipole_mode == "DIPOLE"
         assert config.compatibility_mode == "standard"
         assert config.pes_final_list == []
@@ -329,18 +331,18 @@ class TestSpectrumCalculator2D:
             pes_initial=tmp_path / "pes_initial_2d.dat",
         )
 
-        # Create spectrum config
-        spectrum_config = SpectrumConfig2D(
-            gamma_fwhm=0.36,
+        # Create interpolation config
+        interp_config = InterpolationConfig2D(
             dipole_mode="FC",
             pes_final_list=[tmp_path / "pes_final_2d.dat"],
             dipole_final_list=[tmp_path / "dipole_2d.dat"],
         )
 
         # Create full config
-        full_config = FullConfig2D(
+        full_config = FullConfig(
             dynamics2d=dynamics_config,
-            spectrum=spectrum_config,
+            interpolation2d=interp_config,
+            spectrum=SpectrumConfig(gamma_fwhm=0.36),
         )
 
         return full_config, tmp_path
@@ -349,19 +351,19 @@ class TestSpectrumCalculator2D:
         """Test loading PES and dipole surfaces."""
         full_config, _ = harmonic_setup
 
-        calc = SpectrumCalculator2D(full_config)
-        calc.load_surfaces()
+        interp = SurfaceInterpolator2D(full_config)
+        interp.load_surfaces()
 
-        assert calc.pes_n is not None
-        assert len(calc.pes_f) == 1
-        assert len(calc.dipoles) == 1
+        assert interp.pes_n is not None
+        assert len(interp.pes_f) == 1
+        assert len(interp.dipoles) == 1
 
     def test_interpolate_along_trajectory(self, harmonic_setup):
         """Test interpolation of energies and dipoles along trajectory."""
         full_config, _ = harmonic_setup
 
-        calc = SpectrumCalculator2D(full_config)
-        calc.load_surfaces()
+        interp = SurfaceInterpolator2D(full_config)
+        interp.load_surfaces()
 
         # Create a simple trajectory
         nsteps = 64
@@ -378,21 +380,21 @@ class TestSpectrumCalculator2D:
             x1_0=x1[0], x2_0=x2[0], p1_0=0.0, p2_0=0.0
         )
 
-        interp = calc.interpolate_along_trajectory(traj)
+        result = interp.interpolate_along_trajectory(traj)
 
-        assert "E_n" in interp
-        assert "E_f" in interp
-        assert "D_fn" in interp
-        assert interp["E_n"].shape == (nsteps,)
-        assert interp["E_f"].shape == (1, nsteps)
-        assert interp["D_fn"].shape == (1, nsteps, 3)
+        assert "E_n" in result
+        assert "E_f" in result
+        assert "D_fn" in result
+        assert result["E_n"].shape == (nsteps,)
+        assert result["E_f"].shape == (1, nsteps)
+        assert result["D_fn"].shape == (1, nsteps, 3)
 
     def test_compute_mean_transition_energy(self, harmonic_setup):
         """Test mean transition energy calculation."""
         full_config, _ = harmonic_setup
 
-        calc = SpectrumCalculator2D(full_config)
-        calc.load_surfaces()
+        interp = SurfaceInterpolator2D(full_config)
+        interp.load_surfaces()
 
         # Create dummy trajectory
         nsteps = 64
@@ -406,17 +408,17 @@ class TestSpectrumCalculator2D:
             x1_0=x1[0], x2_0=x2[0], p1_0=0.0, p2_0=0.0
         )
 
-        E_mean = calc.compute_mean_transition_energy([traj])
+        E_mean = interp.compute_mean_transition_energy([traj])
 
         # Should be approximately E_intermediate - E_final = 520 - 510 = 10 eV
         assert E_mean == pytest.approx(10.0, rel=0.01)
 
     def test_compute_spectrum(self, harmonic_setup):
-        """Test full spectrum calculation."""
+        """Test full spectrum calculation via two-step workflow."""
         full_config, tmp_path = harmonic_setup
 
-        calc = SpectrumCalculator2D(full_config)
-        calc.load_surfaces()
+        interp = SurfaceInterpolator2D(full_config)
+        interp.load_surfaces()
 
         # Create simple trajectories
         nsteps = 128
@@ -433,7 +435,12 @@ class TestSpectrumCalculator2D:
             )
             trajectories.append(traj)
 
-        result = calc.compute_spectrum(trajectories)
+        sckh_trajs = interp.trajectories_to_sckh(trajectories)
+        E_mean = interp.compute_mean_transition_energy(trajectories)
+        D_ni = interp.compute_D_ni()
+
+        calc = SCKHSpectrumCalculator(full_config)
+        result = calc.compute_spectrum(sckh_trajs, E_mean=E_mean, D_ni=D_ni)
 
         assert result.omega is not None
         assert result.sigma_tot is not None
@@ -447,8 +454,8 @@ class TestSpectrumCalculator2D:
         """Test saving spectrum results."""
         full_config, tmp_path = harmonic_setup
 
-        calc = SpectrumCalculator2D(full_config)
-        calc.load_surfaces()
+        interp = SurfaceInterpolator2D(full_config)
+        interp.load_surfaces()
 
         # Create simple trajectory
         nsteps = 64
@@ -462,11 +469,15 @@ class TestSpectrumCalculator2D:
             x1_0=x1[0], x2_0=x2[0], p1_0=0.0, p2_0=0.0
         )
 
-        result = calc.compute_spectrum([traj])
+        sckh_trajs = interp.trajectories_to_sckh([traj])
+        E_mean = interp.compute_mean_transition_energy([traj])
+
+        calc = SCKHSpectrumCalculator(full_config)
+        result = calc.compute_spectrum(sckh_trajs, E_mean=E_mean)
         calc.save_results(result, tmp_path / "output")
 
         # Check files exist
-        assert (tmp_path / "output" / f"{full_config.dynamics2d.outfile}_sigma.dat").exists()
+        assert (tmp_path / "output" / "spectrum_sigma.dat").exists()
 
 
 class TestDipoleModes:
@@ -515,41 +526,39 @@ class TestDipoleModes:
         """Test Franck-Condon mode (constant dipole = 1)."""
         dynamics_config, tmp_path = basic_setup
 
-        spectrum_config = SpectrumConfig2D(
-            gamma_fwhm=0.36,
+        interp_config = InterpolationConfig2D(
             dipole_mode="FC",
             pes_final_list=[tmp_path / "pes_f.dat"],
             dipole_final_list=[],  # Not needed for FC mode
         )
 
-        full_config = FullConfig2D(dynamics2d=dynamics_config, spectrum=spectrum_config)
-        calc = SpectrumCalculator2D(full_config)
-        calc.load_surfaces()
+        full_config = FullConfig(dynamics2d=dynamics_config, interpolation2d=interp_config)
+        interp = SurfaceInterpolator2D(full_config)
+        interp.load_surfaces()
 
-        assert len(calc.dipoles) == 1
+        assert len(interp.dipoles) == 1
         # FC mode should give constant dipole = 1
-        d = calc.dipoles[0].dipole(1.5e-10, 1.5e-10)
+        d = interp.dipoles[0].dipole(1.5e-10, 1.5e-10)
         np.testing.assert_allclose(d, [1.0, 1.0, 1.0])
 
     def test_dipole_mode(self, basic_setup):
         """Test full position-dependent dipole mode."""
         dynamics_config, tmp_path = basic_setup
 
-        spectrum_config = SpectrumConfig2D(
-            gamma_fwhm=0.36,
+        interp_config = InterpolationConfig2D(
             dipole_mode="DIPOLE",
             pes_final_list=[tmp_path / "pes_f.dat"],
             dipole_final_list=[tmp_path / "dipole.dat"],
         )
 
-        full_config = FullConfig2D(dynamics2d=dynamics_config, spectrum=spectrum_config)
-        calc = SpectrumCalculator2D(full_config)
-        calc.load_surfaces()
+        full_config = FullConfig(dynamics2d=dynamics_config, interpolation2d=interp_config)
+        interp = SurfaceInterpolator2D(full_config)
+        interp.load_surfaces()
 
-        assert len(calc.dipoles) == 1
+        assert len(interp.dipoles) == 1
         # Dipole should vary with position
-        d_center = calc.dipoles[0].dipole(1.5e-10, 1.5e-10)
-        d_off = calc.dipoles[0].dipole(1.7e-10, 1.7e-10)
+        d_center = interp.dipoles[0].dipole(1.5e-10, 1.5e-10)
+        d_off = interp.dipoles[0].dipole(1.7e-10, 1.7e-10)
         # Should not be exactly equal
         assert not np.allclose(d_center, d_off)
 
@@ -557,16 +566,15 @@ class TestDipoleModes:
         """Test dipole frozen at equilibrium mode."""
         dynamics_config, tmp_path = basic_setup
 
-        spectrum_config = SpectrumConfig2D(
-            gamma_fwhm=0.36,
+        interp_config = InterpolationConfig2D(
             dipole_mode="DIPOLE_X0",
             pes_final_list=[tmp_path / "pes_f.dat"],
             dipole_final_list=[tmp_path / "dipole.dat"],
         )
 
-        full_config = FullConfig2D(dynamics2d=dynamics_config, spectrum=spectrum_config)
-        calc = SpectrumCalculator2D(full_config)
-        calc.load_surfaces()
+        full_config = FullConfig(dynamics2d=dynamics_config, interpolation2d=interp_config)
+        interp = SurfaceInterpolator2D(full_config)
+        interp.load_surfaces()
 
         # Create trajectory away from equilibrium
         nsteps = 32
@@ -581,11 +589,11 @@ class TestDipoleModes:
             x1_0=x1[0], x2_0=x2[0], p1_0=0.0, p2_0=0.0
         )
 
-        interp = calc.interpolate_along_trajectory(traj)
+        result = interp.interpolate_along_trajectory(traj)
 
         # In DIPOLE_X0 mode, dipole should be constant along trajectory
         # (frozen at equilibrium value)
-        D_fn = interp["D_fn"][0]  # First (only) final state
+        D_fn = result["D_fn"][0]  # First (only) final state
         # All time steps should have same dipole
         for i in range(1, nsteps):
             np.testing.assert_allclose(D_fn[i], D_fn[0], rtol=1e-10)

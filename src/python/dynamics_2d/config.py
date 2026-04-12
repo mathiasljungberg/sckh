@@ -86,11 +86,10 @@ class DynamicsConfig2D:
 
 
 @dataclass
-class SpectrumConfig2D:
-    """Configuration for 2D spectrum calculation.
+class InterpolationConfig2D:
+    """Configuration for 2D surface interpolation (PES + dipole evaluation).
 
     Attributes:
-        gamma_fwhm: Broadening full-width at half-maximum in eV
         dipole_mode: "DIPOLE", "FC", or "DIPOLE_X0"
         pes_final_list: List of paths to final state PES files
         dipole_final_list: List of paths to final state dipole files
@@ -102,7 +101,6 @@ class SpectrumConfig2D:
         dipole_components: Number of dipole components in file (1 or 3)
     """
 
-    gamma_fwhm: float  # Broadening FWHM in eV
     dipole_mode: str = "DIPOLE"  # "DIPOLE", "FC", or "DIPOLE_X0"
     pes_final_list: List[Path] = field(default_factory=list)
     dipole_final_list: List[Path] = field(default_factory=list)
@@ -113,32 +111,23 @@ class SpectrumConfig2D:
     compatibility_mode: str = "standard"
     dipole_components: int = 3  # 1 or 3
 
-    @property
-    def gamma_hwhm(self) -> float:
-        """Convert FWHM to HWHM (half-width at half-maximum)."""
-        return self.gamma_fwhm / 2.0
+
+# Backwards compatibility
+SpectrumConfig2D = InterpolationConfig2D
 
 
-@dataclass
-class FullConfig2D:
-    """Combined configuration for 2D dynamics.
-
-    This class wraps DynamicsConfig2D and allows for future extension
-    with spectrum calculation (similar to 1D FullConfig).
-    """
-
-    dynamics2d: DynamicsConfig2D
-    spectrum: Optional[SpectrumConfig2D] = None
+from sckh.config import FullConfig
 
 
-def load_config(yaml_path: Path) -> FullConfig2D:
+
+def load_config(yaml_path: Path) -> FullConfig:
     """Load configuration from YAML file.
 
     Args:
         yaml_path: Path to YAML configuration file
 
     Returns:
-        FullConfig2D object with dynamics2d and optional spectrum parameters
+        FullConfig object with dynamics2d and optional spectrum parameters
 
     Example YAML format:
         dynamics2d:
@@ -185,37 +174,50 @@ def load_config(yaml_path: Path) -> FullConfig2D:
         outfile=dyn_data.get("outfile", "dynamics_2d_out"),
     )
 
-    # Parse optional spectrum config
-    spectrum_config = None
-    if "spectrum" in data:
-        spec_data = data["spectrum"]
-        spectrum_config = SpectrumConfig2D(
-            gamma_fwhm=spec_data["gamma_fwhm"],
-            dipole_mode=spec_data.get("dipole_mode", "DIPOLE"),
+    # Parse optional interpolation config (legacy key: "spectrum")
+    interp_config = None
+    spec_config = None
+    interp_data = data.get("interpolation2d") or data.get("spectrum")
+    if interp_data:
+        interp_config = InterpolationConfig2D(
+            dipole_mode=interp_data.get("dipole_mode", "DIPOLE"),
             pes_final_list=[
-                Path(p) for p in spec_data.get("pes_final_list", [])
+                Path(p) for p in interp_data.get("pes_final_list", [])
             ],
             dipole_final_list=[
-                Path(p) for p in spec_data.get("dipole_final_list", [])
+                Path(p) for p in interp_data.get("dipole_final_list", [])
             ],
-            pes_intermediate=Path(spec_data["pes_intermediate"]) if spec_data.get("pes_intermediate") else None,
-            pes_lp_corr=Path(spec_data["pes_lp_corr"]) if spec_data.get("pes_lp_corr") else None,
-            dipole_initial=Path(spec_data["dipole_initial"]) if spec_data.get("dipole_initial") else None,
+            pes_intermediate=Path(interp_data["pes_intermediate"]) if interp_data.get("pes_intermediate") else None,
+            pes_lp_corr=Path(interp_data["pes_lp_corr"]) if interp_data.get("pes_lp_corr") else None,
+            dipole_initial=Path(interp_data["dipole_initial"]) if interp_data.get("dipole_initial") else None,
             trajectory_files=[
-                Path(p) for p in spec_data.get("trajectory_files", [])
-            ] if spec_data.get("trajectory_files") else None,
-            compatibility_mode=spec_data.get("compatibility_mode", "standard"),
-            dipole_components=spec_data.get("dipole_components", 3),
+                Path(p) for p in interp_data.get("trajectory_files", [])
+            ] if interp_data.get("trajectory_files") else None,
+            compatibility_mode=interp_data.get("compatibility_mode", "standard"),
+            dipole_components=interp_data.get("dipole_components", 3),
         )
 
-    return FullConfig2D(dynamics2d=dynamics_config, spectrum=spectrum_config)
+    # Parse spectrum config (gamma_fwhm can be in "spectrum" section or legacy combined)
+    spec_data = data.get("spectrum", {})
+    if spec_data.get("gamma_fwhm") is not None:
+        from sckh.config import SpectrumConfig
+        spec_config = SpectrumConfig(
+            gamma_fwhm=spec_data["gamma_fwhm"],
+            dt=spec_data.get("dt"),
+        )
+
+    return FullConfig(
+        dynamics2d=dynamics_config,
+        interpolation2d=interp_config,
+        spectrum=spec_config,
+    )
 
 
-def save_config(config: FullConfig2D, yaml_path: Path) -> None:
+def save_config(config: FullConfig, yaml_path: Path) -> None:
     """Save configuration to YAML file.
 
     Args:
-        config: FullConfig2D object
+        config: FullConfig object
         yaml_path: Path to output YAML file
     """
     dyn = config.dynamics2d
@@ -253,25 +255,32 @@ def save_config(config: FullConfig2D, yaml_path: Path) -> None:
         },
     }
 
+    # Add interpolation config if present
+    if config.interpolation2d is not None:
+        interp = config.interpolation2d
+        interp_data = {
+            "dipole_mode": interp.dipole_mode,
+            "pes_final_list": [str(p) for p in interp.pes_final_list],
+            "dipole_final_list": [str(p) for p in interp.dipole_final_list],
+            "compatibility_mode": interp.compatibility_mode,
+            "dipole_components": interp.dipole_components,
+        }
+        if interp.pes_intermediate:
+            interp_data["pes_intermediate"] = str(interp.pes_intermediate)
+        if interp.pes_lp_corr:
+            interp_data["pes_lp_corr"] = str(interp.pes_lp_corr)
+        if interp.dipole_initial:
+            interp_data["dipole_initial"] = str(interp.dipole_initial)
+        if interp.trajectory_files:
+            interp_data["trajectory_files"] = [str(p) for p in interp.trajectory_files]
+        data["interpolation2d"] = interp_data
+
     # Add spectrum config if present
     if config.spectrum is not None:
-        spec = config.spectrum
-        data["spectrum"] = {
-            "gamma_fwhm": spec.gamma_fwhm,
-            "dipole_mode": spec.dipole_mode,
-            "pes_final_list": [str(p) for p in spec.pes_final_list],
-            "dipole_final_list": [str(p) for p in spec.dipole_final_list],
-            "compatibility_mode": spec.compatibility_mode,
-            "dipole_components": spec.dipole_components,
-        }
-        if spec.pes_intermediate:
-            data["spectrum"]["pes_intermediate"] = str(spec.pes_intermediate)
-        if spec.pes_lp_corr:
-            data["spectrum"]["pes_lp_corr"] = str(spec.pes_lp_corr)
-        if spec.dipole_initial:
-            data["spectrum"]["dipole_initial"] = str(spec.dipole_initial)
-        if spec.trajectory_files:
-            data["spectrum"]["trajectory_files"] = [str(p) for p in spec.trajectory_files]
+        spec_data = {"gamma_fwhm": config.spectrum.gamma_fwhm}
+        if config.spectrum.dt is not None:
+            spec_data["dt"] = config.spectrum.dt
+        data["spectrum"] = spec_data
 
     with open(yaml_path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)

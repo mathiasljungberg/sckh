@@ -6,6 +6,8 @@ simulations on 2D potential energy surfaces with two degrees of freedom
 (potentially different masses). Initial conditions are sampled from
 quantum mechanical ground state distributions using a product wavefunction
 approximation.
+
+Spectrum computation itself lives in the ``sckh`` package.
 """
 
 from .config import (
@@ -13,8 +15,8 @@ from .config import (
     TimeConfig,
     SamplingConfig2D,
     DynamicsConfig2D,
-    SpectrumConfig2D,
-    FullConfig2D,
+    InterpolationConfig2D,
+    SpectrumConfig2D,  # backwards compat alias
     load_config,
     save_config,
 )
@@ -28,14 +30,14 @@ from .trajectory import (
     EnsembleResult2D,
     DynamicsRunner2D,
 )
-from .spectrum import SpectrumCalculator2D
+from .interpolation import SurfaceInterpolator2D, SpectrumCalculator2D
 from .io import read_pes_file_2d, read_dipole_file_2d
 
 # Re-export constants from dynamics_1d
 from dynamics_1d.constants import CONST
 
-# Re-export SpectrumResult from dynamics_1d (same format for 1D and 2D)
-from dynamics_1d.spectrum import SpectrumResult
+# Re-export shared types from sckh package
+from sckh import SCKHTrajectory, SpectrumResult, SCKHSpectrumCalculator, FullConfig
 
 __all__ = [
     # Constants
@@ -45,8 +47,9 @@ __all__ = [
     "TimeConfig",
     "SamplingConfig2D",
     "DynamicsConfig2D",
+    "InterpolationConfig2D",
     "SpectrumConfig2D",
-    "FullConfig2D",
+    "FullConfig",
     "load_config",
     "save_config",
     # PES
@@ -68,8 +71,12 @@ __all__ = [
     "TrajectoryResult2D",
     "EnsembleResult2D",
     "DynamicsRunner2D",
-    # Spectrum
+    # Surface interpolation
+    "SurfaceInterpolator2D",
     "SpectrumCalculator2D",
+    # Spectrum (re-exported from sckh)
+    "SCKHSpectrumCalculator",
+    "SCKHTrajectory",
     "SpectrumResult",
     # I/O
     "read_pes_file_2d",

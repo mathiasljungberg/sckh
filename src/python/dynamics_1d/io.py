@@ -1,7 +1,7 @@
 """File I/O for PES, trajectory, dipole, and spectrum data."""
 
 from pathlib import Path
-from typing import Tuple, Optional, TYPE_CHECKING
+from typing import Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -261,48 +261,12 @@ def read_trajectory_file(filepath: Path) -> "TrajectoryResult":
     )
 
 
-def write_spectrum(
-    filepath: Path,
-    omega: np.ndarray,
-    sigma: np.ndarray,
-    header: Optional[str] = None,
-) -> None:
-    """Write spectrum to file in Fortran-compatible format.
-
-    Args:
-        filepath: Output file path
-        omega: Frequency array in eV
-        sigma: Cross-section array (same length as omega)
-        header: Optional header comment
-    """
-    if header is None:
-        header = "omega(eV)  sigma"
-
-    data = np.column_stack([omega, sigma])
-    np.savetxt(filepath, data, header=header, fmt="%16.6E", comments="# ")
-
-
-def write_spectrum_per_final(
-    filepath_base: Path,
-    omega: np.ndarray,
-    sigma_f: np.ndarray,
-) -> None:
-    """Write per-final-state spectra to files.
-
-    Creates files: {filepath_base}_final_1.dat, {filepath_base}_final_2.dat, etc.
-
-    Args:
-        filepath_base: Base path for output files (without extension)
-        omega: Frequency array in eV
-        sigma_f: Cross-section array (n_final, n_omega)
-    """
-    n_final = sigma_f.shape[0]
-
-    for j in range(n_final):
-        filepath = Path(f"{filepath_base}_final_{j + 1}.dat")
-        write_spectrum(
-            filepath,
-            omega,
-            sigma_f[j],
-            header=f"omega(eV)  sigma_f (final state {j + 1})",
-        )
+# Spectrum and SCKH trajectory I/O have moved to sckh.io.
+# Re-exported here for backwards compatibility.
+from sckh.io import (
+    write_spectrum,
+    write_spectrum_per_final,
+    read_sckh_trajectory,
+    write_sckh_trajectory,
+    read_sckh_trajectory_list,
+)

@@ -267,22 +267,20 @@ class TestSpectrumConfigValidation:
 
     def test_invalid_dipole_mode(self):
         """Should raise error for invalid dipole mode."""
-        from dynamics_1d.spectrum_config import SpectrumConfig
+        from dynamics_1d.spectrum_config import InterpolationConfig
 
         with pytest.raises(ValueError, match="dipole_mode"):
-            SpectrumConfig(
-                gamma_fwhm=0.1,
+            InterpolationConfig(
                 dipole_mode="INVALID",
                 pes_final_list=[Path("pes.dat")],
             )
 
     def test_dipole_mode_requires_files(self):
         """DIPOLE mode requires dipole_final_list."""
-        from dynamics_1d.spectrum_config import SpectrumConfig
+        from dynamics_1d.spectrum_config import InterpolationConfig
 
         with pytest.raises(ValueError, match="dipole_final_list"):
-            SpectrumConfig(
-                gamma_fwhm=0.1,
+            InterpolationConfig(
                 dipole_mode="DIPOLE",
                 pes_final_list=[Path("pes.dat")],
                 dipole_final_list=[],  # Empty list
@@ -290,10 +288,9 @@ class TestSpectrumConfigValidation:
 
     def test_fc_mode_no_dipole_required(self):
         """FC mode should not require dipole files."""
-        from dynamics_1d.spectrum_config import SpectrumConfig
+        from dynamics_1d.spectrum_config import InterpolationConfig
 
-        config = SpectrumConfig(
-            gamma_fwhm=0.1,
+        config = InterpolationConfig(
             dipole_mode="FC",
             pes_final_list=[Path("pes.dat")],
             dipole_final_list=[],
@@ -305,11 +302,7 @@ class TestSpectrumConfigValidation:
         """Test gamma_hwhm property."""
         from dynamics_1d.spectrum_config import SpectrumConfig
 
-        config = SpectrumConfig(
-            gamma_fwhm=0.2,
-            dipole_mode="FC",
-            pes_final_list=[Path("pes.dat")],
-        )
+        config = SpectrumConfig(gamma_fwhm=0.2)
 
         assert config.gamma_hwhm == 0.1
         assert config.gamma_fwhm == 0.2
@@ -363,11 +356,10 @@ class TestCompatibilityMode:
 
     def test_invalid_compatibility_mode(self):
         """Should raise error for invalid compatibility mode."""
-        from dynamics_1d.spectrum_config import SpectrumConfig
+        from dynamics_1d.spectrum_config import InterpolationConfig
 
         with pytest.raises(ValueError, match="compatibility_mode"):
-            SpectrumConfig(
-                gamma_fwhm=0.1,
+            InterpolationConfig(
                 dipole_mode="FC",
                 pes_final_list=[Path("pes.dat")],
                 compatibility_mode="invalid_mode",
@@ -375,11 +367,10 @@ class TestCompatibilityMode:
 
     def test_valid_compatibility_modes(self):
         """Both 'standard' and 'fortran' should be valid."""
-        from dynamics_1d.spectrum_config import SpectrumConfig
+        from dynamics_1d.spectrum_config import InterpolationConfig
 
         for mode in ["standard", "fortran", "STANDARD", "FORTRAN"]:
-            config = SpectrumConfig(
-                gamma_fwhm=0.1,
+            config = InterpolationConfig(
                 dipole_mode="FC",
                 pes_final_list=[Path("pes.dat")],
                 compatibility_mode=mode,
@@ -388,10 +379,9 @@ class TestCompatibilityMode:
 
     def test_default_compatibility_mode(self):
         """Default compatibility_mode should be 'standard'."""
-        from dynamics_1d.spectrum_config import SpectrumConfig
+        from dynamics_1d.spectrum_config import InterpolationConfig
 
-        config = SpectrumConfig(
-            gamma_fwhm=0.1,
+        config = InterpolationConfig(
             dipole_mode="FC",
             pes_final_list=[Path("pes.dat")],
         )
@@ -451,13 +441,13 @@ spectrum:
             config = load_full_config(yaml_file)
 
             # Both should have fortran mode
-            assert config.spectrum.compatibility_mode == "fortran"
-            assert config.dynamics.sampling.compatibility_mode == "fortran"
+            assert config.interpolation1d.compatibility_mode == "fortran"
+            assert config.dynamics1d.sampling.compatibility_mode == "fortran"
 
     def test_e_mean_standard_vs_fortran(self):
         """Test that E_mean calculation differs between modes."""
-        from dynamics_1d.spectrum import SpectrumCalculator
-        from dynamics_1d.spectrum_config import FullConfig, SpectrumConfig
+        from dynamics_1d.spectrum import SurfaceInterpolator
+        from dynamics_1d.spectrum_config import FullConfig, InterpolationConfig, SpectrumConfig
         from dynamics_1d.config import (
             DynamicsConfig, GridConfig, TimeConfig, SamplingConfig
         )
@@ -484,7 +474,7 @@ spectrum:
             # Create configs for both modes
             def make_config(mode):
                 return FullConfig(
-                    dynamics=DynamicsConfig(
+                    dynamics1d=DynamicsConfig(
                         mu=1.0,
                         grid=GridConfig(start=0.5, dx=0.2, npoints=11),
                         time=TimeConfig(dt=1.0, nsteps=20),
@@ -493,12 +483,12 @@ spectrum:
                         pes_dynamics=pes_dyn,
                         units="angstrom",
                     ),
-                    spectrum=SpectrumConfig(
-                        gamma_fwhm=0.1,
+                    interpolation1d=InterpolationConfig(
                         dipole_mode="FC",
                         pes_final_list=[pes_final],
                         compatibility_mode=mode,
                     ),
+                    spectrum=SpectrumConfig(gamma_fwhm=0.1),
                 )
 
             # Create mock trajectory with enough points and varying positions
@@ -519,11 +509,11 @@ spectrum:
             )
 
             # Calculate E_mean with both modes
-            calc_standard = SpectrumCalculator(make_config("standard"))
+            calc_standard = SurfaceInterpolator(make_config("standard"))
             calc_standard.load_surfaces()
             E_mean_standard = calc_standard.compute_mean_transition_energy([traj])
 
-            calc_fortran = SpectrumCalculator(make_config("fortran"))
+            calc_fortran = SurfaceInterpolator(make_config("fortran"))
             calc_fortran.load_surfaces()
             E_mean_fortran = calc_fortran.compute_mean_transition_energy([traj])
 
@@ -545,10 +535,10 @@ class TestPESEnergyShift:
 
     def test_pes_lp_corr_shifts_final_states(self):
         """Test that pes_lp_corr shifts all final state PES energies."""
-        from dynamics_1d.spectrum import SpectrumCalculator
+        from dynamics_1d.spectrum import SurfaceInterpolator
         from dynamics_1d.spectrum_config import (
             FullConfig,
-            SpectrumConfig,
+            InterpolationConfig,
         )
         from dynamics_1d.config import (
             DynamicsConfig,
@@ -593,16 +583,15 @@ class TestPESEnergyShift:
                 pes_dynamics=pes_init,
                 units="angstrom",
             )
-            spectrum_config = SpectrumConfig(
-                gamma_fwhm=0.1,
+            interp_config = InterpolationConfig(
                 dipole_mode="FC",
                 pes_final_list=[pes_f1, pes_f2],
                 pes_lp_corr=pes_corr,
             )
-            config = FullConfig(dynamics=dynamics_config, spectrum=spectrum_config)
+            config = FullConfig(dynamics1d=dynamics_config, interpolation1d=interp_config)
 
             # Create calculator and load surfaces
-            calc = SpectrumCalculator(config)
+            calc = SurfaceInterpolator(config)
             calc.load_surfaces()
 
             # The shift should be E_corr - E_f1 = -0.3 (in Hartree)
@@ -631,10 +620,10 @@ class TestPESEnergyShift:
 
     def test_no_shift_without_pes_lp_corr(self):
         """Test that PES energies are unchanged when pes_lp_corr is not set."""
-        from dynamics_1d.spectrum import SpectrumCalculator
+        from dynamics_1d.spectrum import SurfaceInterpolator
         from dynamics_1d.spectrum_config import (
             FullConfig,
-            SpectrumConfig,
+            InterpolationConfig,
         )
         from dynamics_1d.config import (
             DynamicsConfig,
@@ -664,15 +653,14 @@ class TestPESEnergyShift:
                 pes_dynamics=pes_init,
                 units="angstrom",
             )
-            spectrum_config = SpectrumConfig(
-                gamma_fwhm=0.1,
+            interp_config = InterpolationConfig(
                 dipole_mode="FC",
                 pes_final_list=[pes_f1],
                 # No pes_lp_corr
             )
-            config = FullConfig(dynamics=dynamics_config, spectrum=spectrum_config)
+            config = FullConfig(dynamics1d=dynamics_config, interpolation1d=interp_config)
 
-            calc = SpectrumCalculator(config)
+            calc = SurfaceInterpolator(config)
             calc.load_surfaces()
 
             # Check that energy at minimum matches original file
