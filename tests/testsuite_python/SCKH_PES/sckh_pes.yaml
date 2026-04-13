@@ -1,0 +1,40 @@
+dynamics1d:
+  mu: 1.0078825
+  grid:
+    start: 0.5
+    dx: 0.025
+    npoints: 77
+  time:
+    dt: 0.1
+    nsteps: 512
+  sampling:
+    mode: 1
+    npoints_x: 10
+    npoints_mom: 10
+    compatibility_mode: fortran
+  pes_initial: input/test_energy_tot.dat
+  pes_dynamics: input/test_energy_tot_exc.dat
+  units: angstrom
+  outfile: testout
+
+interpolation1d:
+  dipole_mode: DIPOLE
+  pes_final_list:
+    - input/pesfile_9.dat
+    - input/pesfile_8.dat
+    - input/pesfile_7.dat
+    - input/pesfile_6.dat
+    - input/pesfile_5.dat
+    - input/pesfile_4.dat
+  dipole_final_list:
+    - input/dipolefile_9.dat
+    - input/dipolefile_8.dat
+    - input/dipolefile_7.dat
+    - input/dipolefile_6.dat
+    - input/dipolefile_5.dat
+    - input/dipolefile_4.dat
+  pes_lp_corr: input/test_lp_lp_energy.dat
+  compatibility_mode: fortran
+
+spectrum:
+  gamma_fwhm: 0.18

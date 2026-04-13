@@ -115,13 +115,15 @@ def load_full_config(yaml_path: Path) -> FullConfig:
     from dynamics_1d.config import DynamicsConfig, GridConfig, TimeConfig, SamplingConfig
     from dynamics_1d.spectrum_config import InterpolationConfig
 
-    yaml_path = Path(yaml_path)
+    yaml_path = Path(yaml_path).resolve()
     with open(yaml_path) as f:
         data = yaml.safe_load(f)
 
+    base_dir = yaml_path.parent
+
     # Pure-SCKH workflow: no dynamics needed, just trajectory files + gamma.
     if "sckh" in data:
-        return FullConfig(sckh=_parse_sckh(data["sckh"], yaml_path.parent))
+        return FullConfig(sckh=_parse_sckh(data["sckh"], base_dir))
 
     # Detect format: new (dynamics1d/dynamics2d) vs legacy (dynamics)
     if "dynamics1d" in data:
@@ -135,8 +137,8 @@ def load_full_config(yaml_path: Path) -> FullConfig:
         )
 
         return FullConfig(
-            dynamics1d=_parse_dynamics1d(dyn_data, compat_mode),
-            interpolation1d=_parse_interpolation(interp_data, compat_mode) if interp_data else None,
+            dynamics1d=_parse_dynamics1d(dyn_data, compat_mode, base_dir),
+            interpolation1d=_parse_interpolation(interp_data, compat_mode, base_dir) if interp_data else None,
             spectrum=_parse_spectrum(spec_data) if spec_data.get("gamma_fwhm") else None,
         )
 
@@ -151,8 +153,8 @@ def load_full_config(yaml_path: Path) -> FullConfig:
         )
 
         return FullConfig(
-            dynamics1d=_parse_dynamics1d(dyn_data, compat_mode),
-            interpolation1d=_parse_interpolation(combined, compat_mode),
+            dynamics1d=_parse_dynamics1d(dyn_data, compat_mode, base_dir),
+            interpolation1d=_parse_interpolation(combined, compat_mode, base_dir),
             spectrum=_parse_spectrum(combined) if combined.get("gamma_fwhm") else None,
         )
 
@@ -231,8 +233,18 @@ def save_full_config(config: FullConfig, yaml_path: Path) -> None:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
 
-def _parse_dynamics1d(dyn_data: dict, compat_mode: str):
-    """Parse 1D dynamics config from YAML data."""
+def _resolve(p, base_dir: Path) -> Path:
+    """Resolve a YAML path string against ``base_dir`` if relative."""
+    path = Path(p)
+    return path if path.is_absolute() else (base_dir / path)
+
+
+def _parse_dynamics1d(dyn_data: dict, compat_mode: str, base_dir: Path):
+    """Parse 1D dynamics config from YAML data.
+
+    Relative file paths are resolved against ``base_dir`` so the YAML is
+    portable regardless of the caller's working directory.
+    """
     from dynamics_1d.config import DynamicsConfig, GridConfig, TimeConfig, SamplingConfig
 
     sampling_data = dyn_data.get("sampling", {})
@@ -243,33 +255,40 @@ def _parse_dynamics1d(dyn_data: dict, compat_mode: str):
         grid=GridConfig(**dyn_data["grid"]),
         time=TimeConfig(**dyn_data["time"]),
         sampling=SamplingConfig(**sampling_data),
-        pes_initial=Path(dyn_data["pes_initial"]),
-        pes_dynamics=Path(dyn_data["pes_dynamics"]),
+        pes_initial=_resolve(dyn_data["pes_initial"], base_dir),
+        pes_dynamics=_resolve(dyn_data["pes_dynamics"], base_dir),
         units=dyn_data.get("units", "angstrom"),
         outfile=dyn_data.get("outfile", "dynamics_out"),
     )
 
 
-def _parse_interpolation(interp_data: dict, compat_mode: str):
-    """Parse interpolation config from YAML data."""
+def _parse_interpolation(interp_data: dict, compat_mode: str, base_dir: Path):
+    """Parse interpolation config from YAML data.
+
+    Relative file paths are resolved against ``base_dir``.
+    """
     from dynamics_1d.spectrum_config import InterpolationConfig
 
     return InterpolationConfig(
         dipole_mode=interp_data.get("dipole_mode", "DIPOLE"),
-        pes_final_list=[Path(p) for p in interp_data.get("pes_final_list", [])],
-        dipole_final_list=[Path(p) for p in interp_data.get("dipole_final_list", [])],
+        pes_final_list=[
+            _resolve(p, base_dir) for p in interp_data.get("pes_final_list", [])
+        ],
+        dipole_final_list=[
+            _resolve(p, base_dir) for p in interp_data.get("dipole_final_list", [])
+        ],
         dipole_initial=(
-            Path(interp_data["dipole_initial"])
+            _resolve(interp_data["dipole_initial"], base_dir)
             if interp_data.get("dipole_initial")
             else None
         ),
         trajectory_files=(
-            [Path(p) for p in interp_data["trajectory_files"]]
+            [_resolve(p, base_dir) for p in interp_data["trajectory_files"]]
             if interp_data.get("trajectory_files")
             else None
         ),
         pes_lp_corr=(
-            Path(interp_data["pes_lp_corr"])
+            _resolve(interp_data["pes_lp_corr"], base_dir)
             if interp_data.get("pes_lp_corr")
             else None
         ),
@@ -295,7 +314,7 @@ def _parse_sckh(sckh_data: dict, base_dir: Path) -> SCKHRunConfig:
     return SCKHRunConfig(
         gamma_fwhm=sckh_data["gamma_fwhm"],
         trajectory_files=[
-            (base_dir / p).resolve() for p in sckh_data.get("trajectory_files", [])
+            _resolve(p, base_dir) for p in sckh_data.get("trajectory_files", [])
         ],
         outfile=sckh_data.get("outfile", "sckh_spectrum"),
     )
