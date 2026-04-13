@@ -21,7 +21,7 @@ from .dipole import Dipole1D, create_dipole_from_file, create_constant_dipole
 from .spectrum_config import InterpolationConfig
 from .sckh_trajectory import sckh_trajectory_from_dynamics_1d
 from .interpolation import SurfaceInterpolator, SpectrumCalculator
-from .workflow import compute_spectrum_1d
+from .workflow import SCKHInputs1D, compute_sckh_trajectories_1d
 
 # Lazy re-exports from the sckh package (backwards compatibility).
 # Defined via module __getattr__ so that ``import sckh`` does not trigger
@@ -92,7 +92,8 @@ __all__ = [
     "SurfaceInterpolator",
     "SpectrumCalculator",
     # Workflow
-    "compute_spectrum_1d",
+    "SCKHInputs1D",
+    "compute_sckh_trajectories_1d",
     # Spectrum (re-exported from sckh)
     "SpectrumResult",
     "SCKHSpectrumCalculator",

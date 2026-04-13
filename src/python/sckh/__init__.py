@@ -37,7 +37,6 @@ from .io import (
     read_sckh_trajectory_list,
     write_spectrum,
     write_spectrum_per_final,
-    write_spectrum_result,
 )
 
 __all__ = [
@@ -63,5 +62,4 @@ __all__ = [
     "read_sckh_trajectory_list",
     "write_spectrum",
     "write_spectrum_per_final",
-    "write_spectrum_result",
 ]

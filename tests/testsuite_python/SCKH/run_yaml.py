@@ -11,10 +11,10 @@ import shutil
 from pathlib import Path
 
 from sckh import (
-    compute_spectrum_from_sckh,
+    SCKHSpectrumCalculator,
+    SpectrumConfig,
     load_full_config,
     read_sckh_trajectories,
-    write_spectrum_result,
 )
 
 
@@ -30,8 +30,10 @@ def main() -> None:
     cfg = load_full_config(HERE / "sckh.yaml").sckh
 
     trajs = read_sckh_trajectories(cfg.trajectory_files)
-    result = compute_spectrum_from_sckh(trajs, gamma_hwhm=cfg.gamma_fwhm / 2)
-    write_spectrum_result(RUNDIR / cfg.outfile, result)
+
+    calc = SCKHSpectrumCalculator(SpectrumConfig(gamma_fwhm=cfg.gamma_fwhm))
+    result = calc.compute_spectrum(trajs)
+    calc.write_spectrum_result(RUNDIR / cfg.outfile, result)
 
 
 if __name__ == "__main__":

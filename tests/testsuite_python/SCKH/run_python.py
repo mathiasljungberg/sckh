@@ -13,9 +13,9 @@ import shutil
 from pathlib import Path
 
 from sckh import (
-    compute_spectrum_from_sckh,
+    SCKHSpectrumCalculator,
+    SpectrumConfig,
     read_sckh_trajectories,
-    write_spectrum_result,
 )
 
 
@@ -38,8 +38,10 @@ def main() -> None:
     RUNDIR.mkdir()
 
     trajs = read_sckh_trajectories(TRAJECTORY_FILES)
-    result = compute_spectrum_from_sckh(trajs, gamma_hwhm=GAMMA_FWHM / 2)
-    write_spectrum_result(RUNDIR / "pentamer_XES_sigma", result)
+
+    calc = SCKHSpectrumCalculator(SpectrumConfig(gamma_fwhm=GAMMA_FWHM))
+    result = calc.compute_spectrum(trajs)
+    calc.write_spectrum_result(RUNDIR / "pentamer_XES_sigma", result)
 
 
 if __name__ == "__main__":

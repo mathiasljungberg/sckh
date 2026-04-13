@@ -8,7 +8,6 @@ import numpy as np
 from dynamics_1d.constants import CONST
 
 if TYPE_CHECKING:
-    from .spectrum import SpectrumResult
     from .trajectory import SCKHTrajectory
 
 
@@ -247,22 +246,3 @@ def read_sckh_trajectories(
     return [read_sckh_trajectory(Path(p)) for p in paths]
 
 
-def write_spectrum_result(
-    filepath_base: Path,
-    result: "SpectrumResult",
-) -> None:
-    """Write the total and per-final-state spectra from a SpectrumResult.
-
-    Produces:
-        - ``{filepath_base}.dat`` — total spectrum (omega, sigma_tot)
-        - ``{filepath_base}_final_{j+1}.dat`` — one file per final state
-
-    Args:
-        filepath_base: Base path for output files (no extension). A
-            directory prefix is respected, e.g. ``rundir/my_spec`` writes
-            ``rundir/my_spec.dat`` and ``rundir/my_spec_final_*.dat``.
-        result: SpectrumResult with ``omega``, ``sigma_tot``, ``sigma_f``.
-    """
-    base = Path(filepath_base)
-    write_spectrum(Path(f"{base}.dat"), result.omega, result.sigma_tot)
-    write_spectrum_per_final(base, result.omega, result.sigma_f)

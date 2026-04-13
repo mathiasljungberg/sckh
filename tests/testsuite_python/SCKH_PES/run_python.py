@@ -1,10 +1,16 @@
 """Standalone SCKH_PES spectrum example — pure Python API.
 
-Builds a :class:`FullConfig` in Python and runs the full SCKH workflow
-(dynamics → surface interpolation → FFT spectrum) in a single call.
-Reads PES and dipole surfaces from ``./input/`` and writes the computed
-spectrum files to ``./rundir/``.  Usable as a copy-pasteable example of
-the high-level 1D dynamics + SCKH API.
+Builds a :class:`FullConfig` in Python, runs the 1D dynamics +
+surface-interpolation stage to produce SCKH trajectories, then feeds
+those into the SCKH spectrum calculator.  Reads PES and dipole
+surfaces from ``./input/`` and writes the computed spectrum files to
+``./rundir/``.
+
+The two stages are kept explicit so that the script doubles as a
+copy-pasteable example of both packages:
+
+    dynamics_1d  →  SCKH trajectories (+ E_mean, D_ni)
+    sckh         →  spectrum
 
 Run directly as::
 
@@ -14,7 +20,7 @@ Run directly as::
 import shutil
 from pathlib import Path
 
-from dynamics_1d import compute_spectrum_1d
+from dynamics_1d import compute_sckh_trajectories_1d
 from dynamics_1d.config import (
     DynamicsConfig,
     GridConfig,
@@ -22,7 +28,7 @@ from dynamics_1d.config import (
     TimeConfig,
 )
 from dynamics_1d.spectrum_config import InterpolationConfig
-from sckh import FullConfig, SpectrumConfig, write_spectrum_result
+from sckh import FullConfig, SCKHSpectrumCalculator, SpectrumConfig
 
 
 HERE = Path(__file__).resolve().parent
@@ -74,8 +80,19 @@ def main() -> None:
     RUNDIR.mkdir()
 
     config = build_config()
-    result = compute_spectrum_1d(config)
-    write_spectrum_result(RUNDIR / "testout_sigma", result)
+
+    # Stage 1: dynamics + surface interpolation → SCKH trajectories.
+    inputs = compute_sckh_trajectories_1d(config)
+
+    # Stage 2: SCKH spectrum from those trajectories.
+    calc = SCKHSpectrumCalculator(config)
+    result = calc.compute_spectrum(
+        inputs.trajectories,
+        E_mean=inputs.E_mean,
+        D_ni=inputs.D_ni,
+    )
+
+    calc.write_spectrum_result(RUNDIR / "testout_sigma", result)
 
 
 if __name__ == "__main__":

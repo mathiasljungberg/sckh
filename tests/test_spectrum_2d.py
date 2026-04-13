@@ -474,10 +474,12 @@ class TestSpectrumCalculator2D:
 
         calc = SCKHSpectrumCalculator(full_config)
         result = calc.compute_spectrum(sckh_trajs, E_mean=E_mean)
-        calc.save_results(result, tmp_path / "output")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        calc.write_spectrum_result(output_dir / "spectrum", result)
 
         # Check files exist
-        assert (tmp_path / "output" / "spectrum_sigma.dat").exists()
+        assert (output_dir / "spectrum.dat").exists()
 
 
 class TestDipoleModes:

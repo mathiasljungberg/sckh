@@ -211,33 +211,27 @@ class SCKHSpectrumCalculator:
             D_ni=D_ni,
         )
 
-    def save_results(
+    def write_spectrum_result(
         self,
+        filepath_base: Path,
         result: SpectrumResult,
-        output_dir: Path,
-        basename: str = "spectrum",
     ) -> None:
-        """Save spectrum results to files.
+        """Write total and per-final-state spectra from a SpectrumResult.
+
+        Produces:
+            - ``{filepath_base}.dat`` — total spectrum (omega, sigma_tot)
+            - ``{filepath_base}_final_{j+1}.dat`` — one file per final state
 
         Args:
-            result: SpectrumResult from compute_spectrum()
-            output_dir: Directory for output files
-            basename: Prefix for output filenames
+            filepath_base: Base path for output files (no extension). A
+                directory prefix is respected, e.g. ``rundir/my_spec``
+                writes ``rundir/my_spec.dat`` and
+                ``rundir/my_spec_final_*.dat``.
+            result: SpectrumResult with ``omega``, ``sigma_tot``, ``sigma_f``.
         """
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        write_spectrum(
-            output_dir / f"{basename}_sigma.dat",
-            result.omega,
-            result.sigma_tot,
-        )
-
-        write_spectrum_per_final(
-            output_dir / f"{basename}_sigma",
-            result.omega,
-            result.sigma_f,
-        )
+        base = Path(filepath_base)
+        write_spectrum(Path(f"{base}.dat"), result.omega, result.sigma_tot)
+        write_spectrum_per_final(base, result.omega, result.sigma_f)
 
 
 def compute_spectrum_from_sckh(
