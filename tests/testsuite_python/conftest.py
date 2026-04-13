@@ -1,4 +1,4 @@
-"""Shared fixtures and helpers for the Python testsuite.
+"""Shared fixtures for the Python testsuite.
 
 These tests validate the Python implementation against Fortran reference output,
 reusing the same input files and reference data from the Fortran testsuite.

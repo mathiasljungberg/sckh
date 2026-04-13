@@ -25,6 +25,10 @@ build/
 # Virtual environment
 .venv/
 
+# Local AI/tooling state
+.claude
+.gemeni
+.codex
+
 # Test run directories
 rundir/
-
