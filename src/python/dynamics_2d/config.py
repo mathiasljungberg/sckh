@@ -154,6 +154,15 @@ def load_config(yaml_path: Path) -> FullConfig:
             - "dipole_2_2d.dat"
           compatibility_mode: "standard"
     """
+    yaml_path = Path(yaml_path).resolve()
+    base_dir = yaml_path.parent
+
+    def _resolve(path_str: str) -> Path:
+        path = Path(path_str)
+        if path.is_absolute():
+            return path
+        return (base_dir / path).resolve()
+
     with open(yaml_path) as f:
         data = yaml.safe_load(f)
 
@@ -166,8 +175,8 @@ def load_config(yaml_path: Path) -> FullConfig:
         grid_x2=GridConfig2D(**dyn_data["grid_x2"]),
         time=TimeConfig(**dyn_data["time"]),
         sampling=SamplingConfig2D(**dyn_data.get("sampling", {})),
-        pes_dynamics=Path(dyn_data["pes_dynamics"]),
-        pes_initial=Path(dyn_data["pes_initial"]),
+        pes_dynamics=_resolve(dyn_data["pes_dynamics"]),
+        pes_initial=_resolve(dyn_data["pes_initial"]),
         position_units=dyn_data.get("position_units", "angstrom"),
         energy_units=dyn_data.get("energy_units", "hartree"),
         index_order=dyn_data.get("index_order", "C"),
@@ -182,16 +191,16 @@ def load_config(yaml_path: Path) -> FullConfig:
         interp_config = InterpolationConfig2D(
             dipole_mode=interp_data.get("dipole_mode", "DIPOLE"),
             pes_final_list=[
-                Path(p) for p in interp_data.get("pes_final_list", [])
+                _resolve(p) for p in interp_data.get("pes_final_list", [])
             ],
             dipole_final_list=[
-                Path(p) for p in interp_data.get("dipole_final_list", [])
+                _resolve(p) for p in interp_data.get("dipole_final_list", [])
             ],
-            pes_intermediate=Path(interp_data["pes_intermediate"]) if interp_data.get("pes_intermediate") else None,
-            pes_lp_corr=Path(interp_data["pes_lp_corr"]) if interp_data.get("pes_lp_corr") else None,
-            dipole_initial=Path(interp_data["dipole_initial"]) if interp_data.get("dipole_initial") else None,
+            pes_intermediate=_resolve(interp_data["pes_intermediate"]) if interp_data.get("pes_intermediate") else None,
+            pes_lp_corr=_resolve(interp_data["pes_lp_corr"]) if interp_data.get("pes_lp_corr") else None,
+            dipole_initial=_resolve(interp_data["dipole_initial"]) if interp_data.get("dipole_initial") else None,
             trajectory_files=[
-                Path(p) for p in interp_data.get("trajectory_files", [])
+                _resolve(p) for p in interp_data.get("trajectory_files", [])
             ] if interp_data.get("trajectory_files") else None,
             compatibility_mode=interp_data.get("compatibility_mode", "standard"),
             dipole_components=interp_data.get("dipole_components", 3),
