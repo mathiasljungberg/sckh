@@ -31,7 +31,23 @@ from .trajectory import (
     DynamicsRunner2D,
 )
 from .interpolation import SurfaceInterpolator2D, SpectrumCalculator2D
-from .io import read_pes_file_2d, read_dipole_file_2d
+from .density import (
+    TrajectoryDensityResult2D,
+    fwhm_to_sigma,
+    gaussian_2d_on_grid,
+    positions_to_grid_density,
+    trajectories_density_at_step,
+    trajectories_density_timeseries,
+    ensemble_density_at_step,
+    ensemble_density_timeseries,
+)
+from .io import (
+    read_pes_file_2d,
+    read_dipole_file_2d,
+    read_trajectories_2d,
+    write_density_2d,
+    write_density_timeseries,
+)
 
 # Re-export constants from dynamics_1d
 from dynamics_1d.constants import CONST
@@ -78,7 +94,19 @@ __all__ = [
     "SCKHSpectrumCalculator",
     "SCKHTrajectory",
     "SpectrumResult",
+    # Density
+    "TrajectoryDensityResult2D",
+    "fwhm_to_sigma",
+    "gaussian_2d_on_grid",
+    "positions_to_grid_density",
+    "trajectories_density_at_step",
+    "trajectories_density_timeseries",
+    "ensemble_density_at_step",
+    "ensemble_density_timeseries",
     # I/O
     "read_pes_file_2d",
     "read_dipole_file_2d",
+    "read_trajectories_2d",
+    "write_density_2d",
+    "write_density_timeseries",
 ]

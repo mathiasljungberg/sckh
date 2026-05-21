@@ -1,13 +1,14 @@
 """File I/O for 2D PES, dipole surfaces, trajectory, and ground state data."""
 
 from pathlib import Path
-from typing import Sequence, Tuple, Optional, TYPE_CHECKING
+from typing import List, Sequence, Tuple, Optional, TYPE_CHECKING
 
 import numpy as np
 
 from dynamics_1d.constants import CONST
 
 if TYPE_CHECKING:
+    from .density import TrajectoryDensityResult2D
     from .trajectory import TrajectoryResult2D
     from .vibrational import ProductGroundState
 
@@ -428,6 +429,26 @@ def read_trajectory_2d(filepath: Path) -> "TrajectoryResult2D":
     )
 
 
+def read_trajectories_2d(
+    directory: Path,
+    basename: str,
+) -> List["TrajectoryResult2D"]:
+    """Read all trajectory files written by ``DynamicsRunner2D.save_results``.
+
+    Args:
+        directory: Directory containing trajectory files.
+        basename: File-name prefix (matches ``DynamicsConfig2D.outfile``).
+            Files are expected to be named ``{basename}_traj_*.dat``.
+
+    Returns:
+        List of TrajectoryResult2D in sorted filename order. Empty list if
+        no matching files are found.
+    """
+    directory = Path(directory)
+    files = sorted(directory.glob(f"{basename}_traj_*.dat"))
+    return [read_trajectory_2d(f) for f in files]
+
+
 def write_ground_state_2d(
     filepath: Path,
     ground_state: "ProductGroundState",
@@ -570,6 +591,53 @@ def write_dipole_file_2d(
     np.savetxt(filepath, data, header=header, fmt="%16.8E")
 
 
+def _write_scalar_field_2d(
+    filepath: Path,
+    x1: np.ndarray,
+    x2: np.ndarray,
+    values: np.ndarray,
+    *,
+    header: str,
+    position_units: str,
+    index_order: str,
+) -> None:
+    """Write a 2D scalar field as `x1  x2  value` rows.
+
+    Args:
+        filepath: Output file path
+        x1: Grid points for x1 (SI: meters)
+        x2: Grid points for x2 (SI: meters)
+        values: Field on the 2D grid, shape (len(x1), len(x2)), already in
+            the desired output units
+        header: Full header text (may be multi-line; np.savetxt prepends '# ')
+        position_units: "angstrom" or "bohr" for output coordinates
+        index_order: "C" (x2 fast) or "F" (x1 fast) for data ordering
+    """
+    if position_units.lower() == "angstrom":
+        x1_out = x1 * 1e10
+        x2_out = x2 * 1e10
+    elif position_units.lower() == "bohr":
+        x1_out = x1 / CONST.bohr
+        x2_out = x2 / CONST.bohr
+    else:
+        raise ValueError(f"Unknown position units: {position_units}")
+
+    rows = []
+    if index_order.upper() == "C":
+        for i in range(len(x1_out)):
+            for j in range(len(x2_out)):
+                rows.append([x1_out[i], x2_out[j], values[i, j]])
+    elif index_order.upper() == "F":
+        for j in range(len(x2_out)):
+            for i in range(len(x1_out)):
+                rows.append([x1_out[i], x2_out[j], values[i, j]])
+    else:
+        raise ValueError(f"index_order must be 'C' or 'F', got {index_order}")
+
+    data = np.array(rows)
+    np.savetxt(filepath, data, header=header, fmt="%16.8E")
+
+
 def write_pes_file_2d(
     filepath: Path,
     x1: np.ndarray,
@@ -593,16 +661,6 @@ def write_pes_file_2d(
     Raises:
         ValueError: If position_units, energy_units, or index_order are invalid
     """
-    # Convert from SI to output units
-    if position_units.lower() == "angstrom":
-        x1_out = x1 * 1e10
-        x2_out = x2 * 1e10
-    elif position_units.lower() == "bohr":
-        x1_out = x1 / CONST.bohr
-        x2_out = x2 / CONST.bohr
-    else:
-        raise ValueError(f"Unknown position units: {position_units}")
-
     if energy_units.lower() == "hartree":
         E_out = E / CONST.hartree
     elif energy_units.lower() == "ev":
@@ -610,21 +668,115 @@ def write_pes_file_2d(
     else:
         raise ValueError(f"Unknown energy units: {energy_units}")
 
-    # Create output array with proper ordering
-    rows = []
-    if index_order.upper() == "C":
-        # x2 varies fastest
-        for i in range(len(x1_out)):
-            for j in range(len(x2_out)):
-                rows.append([x1_out[i], x2_out[j], E_out[i, j]])
-    elif index_order.upper() == "F":
-        # x1 varies fastest
-        for j in range(len(x2_out)):
-            for i in range(len(x1_out)):
-                rows.append([x1_out[i], x2_out[j], E_out[i, j]])
-    else:
-        raise ValueError(f"index_order must be 'C' or 'F', got {index_order}")
-
-    data = np.array(rows)
     header = f"# x1({position_units}) x2({position_units}) E({energy_units})"
-    np.savetxt(filepath, data, header=header, fmt="%16.8E")
+    _write_scalar_field_2d(
+        filepath,
+        x1,
+        x2,
+        E_out,
+        header=header,
+        position_units=position_units,
+        index_order=index_order,
+    )
+
+
+def write_density_2d(
+    filepath: Path,
+    x1_grid: np.ndarray,
+    x2_grid: np.ndarray,
+    density: np.ndarray,
+    *,
+    time: Optional[float] = None,
+    step_index: Optional[int] = None,
+    fwhm_SI: Optional[float] = None,
+    position_units: str = "angstrom",
+    index_order: str = "C",
+) -> None:
+    """Write a 2D trajectory density (SI: 1/m^2) to file.
+
+    Args:
+        filepath: Output file path
+        x1_grid: Grid points for x1 (SI: meters)
+        x2_grid: Grid points for x2 (SI: meters)
+        density: Density on the 2D grid (SI: 1/m^2), shape (len(x1), len(x2))
+        time: Time of the snapshot (SI: seconds); written into header as fs
+        step_index: Step index for the snapshot; written into header
+        fwhm_SI: FWHM used for Gaussian broadening (SI: meters); written into
+            header in `position_units`
+        position_units: "angstrom" or "bohr" for output coordinates
+        index_order: "C" (x2 fast) or "F" (x1 fast) for data ordering
+    """
+    pu = position_units.lower()
+    if pu == "angstrom":
+        rho_out = density * 1e-20  # 1/m^2 -> 1/Angstrom^2
+        fwhm_user = fwhm_SI * 1e10 if fwhm_SI is not None else None
+    elif pu == "bohr":
+        rho_out = density * (CONST.bohr ** 2)  # 1/m^2 -> 1/Bohr^2
+        fwhm_user = fwhm_SI / CONST.bohr if fwhm_SI is not None else None
+    else:
+        raise ValueError(f"Unknown position units: {position_units}")
+
+    header_lines = []
+    if time is not None:
+        header_lines.append(f"time(fs) = {time * 1e15:.10E}")
+    if step_index is not None:
+        header_lines.append(f"step_index = {int(step_index)}")
+    if fwhm_user is not None:
+        header_lines.append(f"fwhm({position_units}) = {fwhm_user:.10E}")
+    header_lines.append(
+        f"x1({position_units}) x2({position_units}) rho(1/{position_units}^2)"
+    )
+    header = "\n".join(header_lines)
+
+    _write_scalar_field_2d(
+        filepath,
+        x1_grid,
+        x2_grid,
+        rho_out,
+        header=header,
+        position_units=position_units,
+        index_order=index_order,
+    )
+
+
+def write_density_timeseries(
+    output_dir: Path,
+    result: "TrajectoryDensityResult2D",
+    *,
+    basename: str = "density",
+    position_units: str = "angstrom",
+    index_order: str = "C",
+) -> List[Path]:
+    """Write one density file per time step in a TrajectoryDensityResult2D.
+
+    Args:
+        output_dir: Directory for the per-step files (created if missing).
+        result: TrajectoryDensityResult2D from ensemble_density_timeseries().
+        basename: Filename prefix; files are named
+            f"{basename}_step_{step_index:06d}.dat".
+        position_units: "angstrom" or "bohr" for output coordinates.
+        index_order: "C" (x2 fast) or "F" (x1 fast).
+
+    Returns:
+        List of written file paths, one per time step (in the same order as
+        result.step_indices).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    paths: List[Path] = []
+    for i, step in enumerate(result.step_indices):
+        path = output_dir / f"{basename}_step_{int(step):06d}.dat"
+        write_density_2d(
+            path,
+            result.x1_grid,
+            result.x2_grid,
+            result.density[i],
+            time=float(result.time[i]),
+            step_index=int(step),
+            fwhm_SI=result.fwhm_SI,
+            position_units=position_units,
+            index_order=index_order,
+        )
+        paths.append(path)
+    return paths
