@@ -32,7 +32,11 @@ def assert_runner_matches_reference(case_dir: Path, runner: str) -> None:
 
         ref = np.loadtxt(ref_path)
         out = np.loadtxt(out_path)
+        # Reference files are stored with ~9 significant figures (%.8E) and the
+        # ground-state eigenvector solve is sensitive to the LAPACK/BLAS backend,
+        # so results vary at the ~1e-6 level across platforms. Use tolerances
+        # that absorb this cross-platform noise while still catching regressions.
         np.testing.assert_allclose(
-            out, ref, atol=1e-12, rtol=1e-10,
+            out, ref, atol=1e-8, rtol=1e-5,
             err_msg=f"Mismatch in {ref_path.name}",
         )
